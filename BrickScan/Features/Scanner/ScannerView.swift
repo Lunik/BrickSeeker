@@ -3,8 +3,8 @@ import SwiftUI
 struct ScannerView: View {
     @State private var viewModel = ScannerViewModel()
     @State private var showHistory = false
-    @State private var showAccountSheet = false
-    @Binding var isAuthenticated: Bool
+    @State private var showSettings = false
+    @State private var hasAPIKey = KeychainService.shared.hasAPIKey
 
     var body: some View {
         NavigationStack {
@@ -13,6 +13,10 @@ struct ScannerView: View {
                     .ignoresSafeArea()
 
                 ScanOverlayView(state: viewModel.state)
+
+                if !hasAPIKey {
+                    apiKeyWarningBanner
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -29,12 +33,10 @@ struct ScannerView: View {
                         } label: {
                             Image(systemName: viewModel.torchOn ? "bolt.fill" : "bolt.slash")
                         }
-                        Menu {
-                            Button("Compte & Confidentialité") {
-                                showAccountSheet = true
-                            }
+                        Button {
+                            showSettings = true
                         } label: {
-                            Image(systemName: "ellipsis.circle")
+                            Image(systemName: "gearshape")
                         }
                     }
                 }
@@ -42,8 +44,10 @@ struct ScannerView: View {
             .sheet(isPresented: $showHistory) {
                 Text("Historique")
             }
-            .sheet(isPresented: $showAccountSheet) {
-                PrivacyDetailView(isAuthenticated: $isAuthenticated)
+            .sheet(isPresented: $showSettings, onDismiss: {
+                hasAPIKey = KeychainService.shared.hasAPIKey
+            }) {
+                SettingsView()
             }
             .sheet(isPresented: setDetailBinding) {
                 if case .found(let legoSet, let userSet) = viewModel.state {
@@ -68,6 +72,29 @@ struct ScannerView: View {
         }
         .onAppear { viewModel.onAppear() }
         .onDisappear { viewModel.onDisappear() }
+    }
+
+    private var apiKeyWarningBanner: some View {
+        VStack {
+            Button {
+                showSettings = true
+            } label: {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                    Text("API Key Rebrickable non configurée")
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                }
+                .font(.footnote.bold())
+                .padding(12)
+                .background(Color(hex: "FFD700"))
+                .foregroundStyle(.black)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+            }
+            Spacer()
+        }
     }
 
     private var setDetailBinding: Binding<Bool> {

@@ -2,10 +2,9 @@ import SwiftUI
 import SafariServices
 
 struct PrivacyDetailView: View {
-    @Binding var isAuthenticated: Bool
     @Environment(\.dismiss) private var dismiss
     @State private var showSafari = false
-    @State private var showLogoutConfirmation = false
+    @State private var showResetConfirmation = false
 
     var body: some View {
         NavigationStack {
@@ -14,14 +13,12 @@ struct PrivacyDetailView: View {
                     Label("Ce qui est stocké", systemImage: "internaldrive")
                         .font(.headline)
                     Text("API Key Rebrickable : dans le Keychain iOS")
-                    Text("Token de session : dans le Keychain iOS")
                     Text("Sets scannés récemment : dans la base SwiftData locale, sur l'appareil uniquement")
                 }
 
                 Section {
                     Label("Ce qui n'est jamais stocké", systemImage: "xmark.shield")
                         .font(.headline)
-                    Text("Votre mot de passe Rebrickable : effacé immédiatement après connexion")
                     Text("Aucune donnée n'est envoyée à un serveur tiers autre que Rebrickable")
                 }
 
@@ -31,8 +28,8 @@ struct PrivacyDetailView: View {
                     Button("Gérer votre API Key sur Rebrickable") {
                         showSafari = true
                     }
-                    Button("Se déconnecter", role: .destructive) {
-                        showLogoutConfirmation = true
+                    Button("Réinitialiser BrickScan", role: .destructive) {
+                        showResetConfirmation = true
                     }
                 }
             }
@@ -47,28 +44,29 @@ struct PrivacyDetailView: View {
                 SafariView(url: URL(string: "https://rebrickable.com/settings/")!)
             }
             .confirmationDialog(
-                "Se déconnecter ?",
-                isPresented: $showLogoutConfirmation,
+                "Réinitialiser BrickScan ?",
+                isPresented: $showResetConfirmation,
                 titleVisibility: .visible
             ) {
-                Button("Se déconnecter", role: .destructive) {
-                    logout()
+                Button("Réinitialiser", role: .destructive) {
+                    reset()
                 }
                 Button("Annuler", role: .cancel) {}
+            } message: {
+                Text("Supprime l'API Key enregistrée et l'historique des sets scannés.")
             }
         }
     }
 
-    private func logout() {
+    private func reset() {
         KeychainService.shared.clearAll()
-        NotificationCenter.default.post(name: .didLogout, object: nil)
-        isAuthenticated = false
+        NotificationCenter.default.post(name: .didReset, object: nil)
         dismiss()
     }
 }
 
 extension Notification.Name {
-    static let didLogout = Notification.Name("BrickScan.didLogout")
+    static let didReset = Notification.Name("BrickScan.didReset")
 }
 
 private struct SafariView: UIViewControllerRepresentable {
