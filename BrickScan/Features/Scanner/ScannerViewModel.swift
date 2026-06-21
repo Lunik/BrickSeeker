@@ -101,7 +101,6 @@ final class ScannerViewModel {
         state = .processing
         Task {
             state = .found(legoSet, await fetchCollectionStatus(for: legoSet.setNum))
-            ScanFeedback.playSetFoundSound()
         }
     }
 
@@ -166,6 +165,7 @@ final class ScannerViewModel {
         }
 
         candidateDetected = true
+        ScanFeedback.playCandidateDetectedSound()
         debounceTask?.cancel()
         debounceTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 1_500_000_000)
@@ -187,7 +187,6 @@ final class ScannerViewModel {
             switch resolution {
             case .found(let legoSet):
                 state = .found(legoSet, await fetchCollectionStatus(for: legoSet.setNum))
-                ScanFeedback.playSetFoundSound()
             case .ambiguous(let sets):
                 state = .ambiguous(sets)
             case .notFound:
