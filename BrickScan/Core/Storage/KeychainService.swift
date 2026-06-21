@@ -47,8 +47,8 @@ final class KeychainService: @unchecked Sendable {
         SecItemDelete(query as CFDictionary)
     }
 
-    var hasCredentials: Bool {
-        load(key: .apiKey) != nil && load(key: .userToken) != nil
+    var hasAPIKey: Bool {
+        load(key: .apiKey) != nil
     }
 
     func clearAll() {
