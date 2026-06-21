@@ -13,9 +13,9 @@ struct SettingsView: View {
                     HStack {
                         Group {
                             if isAPIKeyVisible {
-                                TextField("Rebrickable API Key", text: $viewModel.apiKey)
+                                TextField("API Key", text: $viewModel.apiKey)
                             } else {
-                                SecureField("Rebrickable API Key", text: $viewModel.apiKey)
+                                SecureField("API Key", text: $viewModel.apiKey)
                             }
                         }
                         .textInputAutocapitalization(.never)
@@ -46,7 +46,7 @@ struct SettingsView: View {
                         TextField("Nom d'utilisateur ou email", text: $viewModel.username)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
-                        SecureField("Mot de passe Rebrickable", text: $viewModel.password)
+                        SecureField("Mot de passe", text: $viewModel.password)
 
                         if let errorMessage = viewModel.linkAccountErrorMessage {
                             Text(errorMessage)
