@@ -24,6 +24,7 @@ targets:
         NSCameraUsageDescription: "BrickScan utilise la caméra pour scanner les boîtes et manuels LEGO"
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        UILaunchScreen: {}
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.lunik.brickscan
