@@ -149,6 +149,27 @@ final class RebrickableRepositoryTests: XCTestCase {
         XCTAssertNil(userSet)
     }
 
+    func testFetchUserSetFoundDecodesNestedSet() async throws {
+        KeychainService.shared.save(key: .userToken, value: "test_token")
+        defer { KeychainService.shared.delete(key: .userToken) }
+
+        MockURLProtocol.requestHandler = { request in
+            self.response(status: 200, json: [
+                "set": [
+                    "set_num": "42143-1", "name": "Ferrari", "year": 2022,
+                    "theme_id": 1, "num_parts": 3778, "set_img_url": NSNull(), "set_url": NSNull()
+                ],
+                "quantity": 1,
+                "include_spares": false,
+                "list_id": 7
+            ])
+        }
+
+        let userSet = try await repository.fetchUserSet(setNum: "42143-1")
+        XCTAssertEqual(userSet?.setNum, "42143-1")
+        XCTAssertEqual(userSet?.listId, 7)
+    }
+
     func testForbiddenWithoutStoredPasswordPropagatesError() async {
         KeychainService.shared.save(key: .userToken, value: "expired_token")
         defer { KeychainService.shared.delete(key: .userToken) }

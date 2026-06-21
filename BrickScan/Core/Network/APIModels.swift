@@ -38,15 +38,17 @@ struct PaginatedResponse<T: Codable>: Codable {
 }
 
 struct UserSet: Codable, Hashable {
-    let setNum: String
+    let legoSet: LegoSet
     let quantity: Int
-    let incSpares: Bool
+    let includeSpares: Bool
     let listId: Int?
 
+    var setNum: String { legoSet.setNum }
+
     enum CodingKeys: String, CodingKey {
-        case setNum = "set_num"
+        case legoSet = "set"
         case quantity
-        case incSpares = "inc_spares"
+        case includeSpares = "include_spares"
         case listId = "list_id"
     }
 }
