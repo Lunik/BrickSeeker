@@ -1,10 +1,12 @@
 import SwiftUI
+import PhotosUI
 
 struct ScannerView: View {
     @State private var viewModel = ScannerViewModel()
     @State private var showHistory = false
     @State private var showSettings = false
     @State private var hasAPIKey = KeychainService.shared.hasAPIKey
+    @State private var selectedPhotoItem: PhotosPickerItem?
 
     var body: some View {
         NavigationStack {
@@ -20,10 +22,15 @@ struct ScannerView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        showHistory = true
-                    } label: {
-                        Image(systemName: "clock.arrow.circlepath")
+                    HStack {
+                        Button {
+                            showHistory = true
+                        } label: {
+                            Image(systemName: "clock.arrow.circlepath")
+                        }
+                        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                            Image(systemName: "photo.on.rectangle")
+                        }
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -72,6 +79,16 @@ struct ScannerView: View {
         }
         .onAppear { viewModel.onAppear() }
         .onDisappear { viewModel.onDisappear() }
+        .onChange(of: selectedPhotoItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self),
+                   let cgImage = UIImage(data: data)?.cgImage {
+                    viewModel.importImage(cgImage)
+                }
+                selectedPhotoItem = nil
+            }
+        }
     }
 
     private var apiKeyWarningBanner: some View {

@@ -83,6 +83,34 @@ final class ScannerViewModel {
         isPaused = false
     }
 
+    func importImage(_ cgImage: CGImage) {
+        debounceTask?.cancel()
+        isPaused = true
+        state = .processing
+
+        barcodeScanner.detectBarcode(in: cgImage) { [weak self] barcodeValue in
+            Task { @MainActor in
+                if let barcodeValue {
+                    let candidate = SetNumberExtractor.extractFromBarcode(barcodeValue)
+                    await self?.resolveSet(candidate)
+                    return
+                }
+
+                self?.ocrScanner.recognizeText(in: cgImage) { texts in
+                    Task { @MainActor in
+                        let candidates = SetNumberExtractor.extractFromOCR(texts)
+                        if let first = candidates.first {
+                            await self?.resolveSet(first)
+                        } else {
+                            self?.state = .notFound
+                            self?.isPaused = false
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private func handleFrame(_ pixelBuffer: CVPixelBuffer) {
         guard !isPaused else { return }
 
