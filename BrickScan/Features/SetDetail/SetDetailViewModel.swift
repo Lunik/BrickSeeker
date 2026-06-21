@@ -27,11 +27,16 @@ final class SetDetailViewModel {
         return false
     }
 
+    // Adding/moving a set to a custom list (e.g. a wishlist) is independent from
+    // actual collection ownership, so the collection badge is refreshed from the
+    // real /users/{token}/sets/ endpoint afterward instead of being inferred from
+    // the setlist response.
     @MainActor
     func addToList(listId: Int, listName: String) async {
         await perform {
-            self.collectionStatus = .inCollection(try await self.repository.addSetToList(setNum: self.legoSet.setNum, listId: listId))
+            _ = try await self.repository.addSetToList(setNum: self.legoSet.setNum, listId: listId)
             self.toastMessage = "Set ajouté à \(listName)"
+            await self.refreshCollectionStatus()
         }
     }
 
@@ -41,10 +46,9 @@ final class SetDetailViewModel {
             return
         }
         await perform {
-            self.collectionStatus = .inCollection(
-                try await self.repository.moveSetToList(setNum: self.legoSet.setNum, fromListId: fromListId, toListId: listId)
-            )
+            _ = try await self.repository.moveSetToList(setNum: self.legoSet.setNum, fromListId: fromListId, toListId: listId)
             self.toastMessage = "Set déplacé vers \(listName)"
+            await self.refreshCollectionStatus()
         }
     }
 
@@ -62,6 +66,11 @@ final class SetDetailViewModel {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
+        await refreshCollectionStatus()
+    }
+
+    @MainActor
+    private func refreshCollectionStatus() async {
         do {
             let userSet = try await repository.fetchUserSet(setNum: legoSet.setNum)
             collectionStatus = userSet.map(CollectionStatus.inCollection) ?? .notInCollection

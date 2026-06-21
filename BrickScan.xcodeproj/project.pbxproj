@@ -81,7 +81,7 @@
 		BF45FD65690AFE22D9D4A877 /* CollectionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionViewModel.swift; sourceTree = "<group>"; };
 		C0DE88A7E6A7604FC6E0FAC6 /* ScanOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanOverlayView.swift; sourceTree = "<group>"; };
 		CAD799DED9E1B077511E4862 /* SwiftDataModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataModels.swift; sourceTree = "<group>"; };
-		DD8A2A14CCE12EF312B2C29B /* BrickScan.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BrickScan.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DD8A2A14CCE12EF312B2C29B /* BrickScan.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BrickScan.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DEDD8ECBD1E23AF7269D79BA /* SetNumberExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetNumberExtractor.swift; sourceTree = "<group>"; };
 		EA5934B5009A112CCEABA878 /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModel.swift; sourceTree = "<group>"; };
 		EF41CF6ADECF89768CA7AF45 /* OCRScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRScanner.swift; sourceTree = "<group>"; };
@@ -330,6 +330,12 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					45E4F74E36D243A876C2E0F3 = {
+						DevelopmentTeam = 9DGL7A2DYM;
+						ProvisioningStyle = Automatic;
+					};
+				};
 			};
 			buildConfigurationList = 4F8DC96C3639EA08B72F2AAA /* Build configuration list for PBXProject "BrickScan" */;
 			developmentRegion = en;
@@ -583,6 +589,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 9DGL7A2DYM;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = BrickScan/Resources/Info.plist;
@@ -602,6 +609,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 9DGL7A2DYM;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = BrickScan/Resources/Info.plist;
