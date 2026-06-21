@@ -45,6 +45,25 @@ real shape for most of the collection-management endpoints already.
   collection metadata — see `UserSet` in `APIModels.swift` for the precedent), get the *exact*
   key name and structure before writing the `Codable` model — guessing field names here is what
   caused the original bug.
+- If you genuinely cannot pin down a write endpoint's response shape (e.g.
+  `POST /users/{user_token}/setlists/{list_id}/sets/` has an inconsistent/undocumented success
+  body even after checking both specs), and the caller doesn't need any field from it, don't
+  decode it — use `NetworkClient.post(path:formBody:)` (the non-generic overload; checks HTTP
+  status only) and re-fetch real state through a read endpoint you *have* verified. This is what
+  `addSetToList`/`moveSetToList` do now, after strict decoding caused a production bug where the
+  add succeeded server-side but the UI showed a decoding error.
 - Add or update a `MockURLProtocol`-based test in `Tests/BrickScanTests/RebrickableRepositoryTests.swift`
   that exercises a *successful* decode of the real shape, not just error-path tests — the
   nested-`UserSet` bug existed for a long time because no test ever decoded a real 200 response.
+  Conversely, if you intentionally stop decoding a response, the test should assert that an
+  arbitrary/unexpected body does NOT cause a thrown error.
+
+## Don't assume API capabilities that "should" exist
+
+Rebrickable's `setlists` endpoints are lists of sets you **own** — there is no API support for
+generic custom/wishlist lists independent of ownership. This was discovered by manually
+reviewing the live API/site, not by reading docs more carefully; a wishlist feature was built on
+top of the wrong assumption and had to be reverted. Before building a feature on an endpoint's
+*implied* semantics, verify what it actually represents (read the full `description` field; if
+still unclear, ask the user to confirm against the live site/API) rather than inferring it from
+the path name alone.

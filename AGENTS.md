@@ -79,11 +79,26 @@ Known gotchas already paid for — don't rediscover them:
 - `POST /users/{user_token}/sets/` has **no `list_id` parameter** — it auto-picks a list.
   To target a specific list you need `POST /users/{user_token}/setlists/{list_id}/sets/`.
   There is no endpoint to change a set's list directly; "moving" a set means DELETE from the
-  old list + POST to the new one. **`RebrickableRepository.addSetToList`/`moveSetToList` still
-  use the wrong endpoint as of this writing** — see the open task before relying on them.
+  old list + POST to the new one (`RebrickableRepository.moveSetToList` already does this).
+- **There is no custom/wishlist list API.** `setlists` are lists of sets you actually *own* —
+  confirmed by manually reviewing the live API/website, not an assumption. There's no Rebrickable
+  endpoint for arbitrary user-created lists independent of ownership (a "wishlist" feature was
+  attempted and reverted in this codebase's history for exactly this reason — don't re-attempt it
+  without first confirming Rebrickable has shipped such an endpoint). `ListPickerView` is a
+  single-select "add this owned/ownable set to one of your setlists" picker, not a generic list
+  manager.
+- `POST /users/{user_token}/setlists/{list_id}/sets/` (add set to a list) does **not** reliably
+  return the nested `Set` shape on success — decoding its response body as `UserSet` failed in
+  production even though the add succeeded server-side. `RebrickableRepository.addSetToList`/
+  `moveSetToList` deliberately ignore the response body (check HTTP status only via
+  `NetworkClient.post(path:formBody:)`, the non-decoding overload) and re-fetch real status
+  separately via `fetchUserSet`. Don't go back to decoding that endpoint's body without
+  confirming the real shape first (see `check-rebrickable-endpoint` skill).
 - A decode failure surfaces in the UI as `CollectionStatus.unknown("Erreur lors du traitement de
   la réponse")`. If you see that string, suspect a model/JSON-shape mismatch first, not a
-  network/auth problem.
+  network/auth problem. If an operation "works" (data changes server-side, user confirms it) but
+  this error still shows, the request succeeded and only the *response decode* failed — check
+  whether you're decoding a body you don't actually need (see the `addSetToList` case above).
 
 ## Swift 6 strict concurrency
 
@@ -97,6 +112,24 @@ Known gotchas already paid for — don't rediscover them:
   (Keychain, disk, etc.) will never trigger a SwiftUI re-render when that state changes — store
   the value and update it explicitly (see `SettingsViewModel.isAccountLinked`, which used to be
   computed and silently never refreshed the UI after unlinking).
+
+## Local SwiftData cache must be synced explicitly — it doesn't follow view-model state
+
+`HistoryView` reads `CachedSet` (SwiftData, via `LocalRepository`) — it does **not** observe
+`SetDetailViewModel`/`ScannerViewModel` state directly. Any place that changes a set's real
+collection/list status (add to list, remove from collection, status retry) must explicitly call
+`LocalRepository(modelContext:).cacheSet(...)` again afterward, or History's "in collection"
+checkmark silently goes stale. `SetDetailView` does this via `.onChange(of: viewModel.collectionStatus)`
+/ `.onChange(of: viewModel.collectionListName)` calling a local `syncCache()` — follow that
+pattern for any new view that mutates collection state.
+
+## Code signing
+
+`DEVELOPMENT_TEAM`/`CODE_SIGN_STYLE: Automatic` are set in `project.yml` from the local Apple
+Development certificate (`security find-identity -v -p codesigning`, then read the cert's `OU`
+field via `security find-certificate -c "<name>" -p | openssl x509 -noout -subject` for the team
+ID) — there was no way to look this up except by inspecting the keychain. If a different
+machine/account needs this, redo that lookup rather than guessing a team ID.
 
 ## Camera lifecycle
 
