@@ -165,7 +165,6 @@ final class ScannerViewModel {
         }
 
         candidateDetected = true
-        ScanFeedback.playCandidateDetectedSound()
         debounceTask?.cancel()
         debounceTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 1_500_000_000)
@@ -181,6 +180,7 @@ final class ScannerViewModel {
         isPaused = true
         candidateDetected = false
         state = .processing
+        ScanFeedback.playCandidateDetectedSound()
 
         do {
             let resolution = try await repository.resolveSet(setNum: setNum)

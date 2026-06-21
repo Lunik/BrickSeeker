@@ -148,13 +148,14 @@ candidate sets `candidateDetected = true` during the 1.5s debounce before the ac
 something happened before the network call starts. Don't remove the throttle or the flag when
 touching this file.
 
-`ScanFeedback.playCandidateDetectedSound()` (`Core/Scanner/ScanFeedback.swift`) fires at the same
-moment as `candidateDetected = true` — i.e. on initial detection, **not** after the API
-round-trip in `resolveSet` confirms/decorates the result. This was deliberately moved earlier
-once already (see git history: "Play the scan sound at detection, not after collection-status
-verification") — the cue is meant to match the pulsing-green visual feedback's timing, telling
-the user "something was seen," not "the lookup finished." Don't move it back to after
-`fetchCollectionStatus`/`resolveSet` without a specific reason.
+`ScanFeedback.playCandidateDetectedSound()` (`Core/Scanner/ScanFeedback.swift`) fires inside
+`resolveSet`, once candidate verification actually launches — **not** in `scheduleResolution` on
+initial detection. It used to fire at detection time, but `scheduleResolution` can re-run for the
+same in-view candidate on every throttled frame (each restarting the 1.5s debounce), which made
+the sound repeat every ~0.8s while a candidate stayed in frame. `lastIdentifiedSetNum`/
+`lastIdentifiedAt` are only set inside `resolveSet`, so that's the one point guaranteed to run
+once per resolved candidate. Don't move it back to detection time without fixing that repeat-fire
+issue first.
 
 Besides the camera and photo-import paths, `ScannerView` also supports typing a set number
 directly via the `keyboard`-icon toolbar button → `ManualSetEntryView` sheet, which calls
