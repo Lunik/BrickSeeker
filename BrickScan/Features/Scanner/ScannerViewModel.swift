@@ -101,6 +101,7 @@ final class ScannerViewModel {
         state = .processing
         Task {
             state = .found(legoSet, await fetchCollectionStatus(for: legoSet.setNum))
+            ScanFeedback.playSetFoundSound()
         }
     }
 
@@ -186,6 +187,7 @@ final class ScannerViewModel {
             switch resolution {
             case .found(let legoSet):
                 state = .found(legoSet, await fetchCollectionStatus(for: legoSet.setNum))
+                ScanFeedback.playSetFoundSound()
             case .ambiguous(let sets):
                 state = .ambiguous(sets)
             case .notFound:
