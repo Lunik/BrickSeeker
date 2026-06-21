@@ -1,0 +1,157 @@
+{
+  "71045": {
+    "name": "Series 25",
+    "regions": {
+      "DK": {
+        "100": {
+          "name": "Sprinter",
+          "setNum": "71045-4"
+        },
+        "101": {
+          "name": "Pet Groomer",
+          "setNum": "71045-12"
+        },
+        "102": {
+          "name": "Triceratops Costume Fan",
+          "setNum": "71045-8"
+        },
+        "103": {
+          "name": "E-Sports Gamer",
+          "setNum": "71045-2"
+        },
+        "104": {
+          "name": "Vampire Knight",
+          "setNum": "71045-3"
+        },
+        "93": {
+          "name": "Fierce Barbarian",
+          "setNum": "71045-11"
+        },
+        "94": {
+          "name": "Fitness Instructor",
+          "setNum": "71045-7"
+        },
+        "95": {
+          "name": "Mushroom Sprite",
+          "setNum": "71045-6"
+        },
+        "96": {
+          "name": "Goatherd",
+          "setNum": "71045-5"
+        },
+        "97": {
+          "name": "Harpy",
+          "setNum": "71045-9"
+        },
+        "98": {
+          "name": "Train Kid",
+          "setNum": "71045-10"
+        },
+        "99": {
+          "name": "Film Noir Detective",
+          "setNum": "71045-1"
+        }
+      },
+      "EU": {
+        "59": {
+          "name": "Fierce Barbarian",
+          "setNum": "71045-11"
+        },
+        "60": {
+          "name": "Fitness Instructor",
+          "setNum": "71045-7"
+        },
+        "61": {
+          "name": "Mushroom Sprite",
+          "setNum": "71045-6"
+        },
+        "62": {
+          "name": "Goatherd",
+          "setNum": "71045-5"
+        },
+        "63": {
+          "name": "Harpy",
+          "setNum": "71045-9"
+        },
+        "64": {
+          "name": "Train Kid",
+          "setNum": "71045-10"
+        },
+        "65": {
+          "name": "Film Noir Detective",
+          "setNum": "71045-1"
+        },
+        "66": {
+          "name": "Sprinter",
+          "setNum": "71045-4"
+        },
+        "67": {
+          "name": "Pet Groomer",
+          "setNum": "71045-12"
+        },
+        "68": {
+          "name": "Triceratops Costume Fan",
+          "setNum": "71045-8"
+        },
+        "69": {
+          "name": "E-Sports Gamer",
+          "setNum": "71045-2"
+        },
+        "70": {
+          "name": "Vampire Knight",
+          "setNum": "71045-3"
+        }
+      },
+      "NA": {
+        "60": {
+          "name": "Fierce Barbarian",
+          "setNum": "71045-11"
+        },
+        "61": {
+          "name": "Fitness Instructor",
+          "setNum": "71045-7"
+        },
+        "62": {
+          "name": "Mushroom Sprite",
+          "setNum": "71045-6"
+        },
+        "63": {
+          "name": "Goatherd",
+          "setNum": "71045-5"
+        },
+        "64": {
+          "name": "Harpy",
+          "setNum": "71045-9"
+        },
+        "65": {
+          "name": "Train Kid",
+          "setNum": "71045-10"
+        },
+        "66": {
+          "name": "Film Noir Detective",
+          "setNum": "71045-1"
+        },
+        "67": {
+          "name": "Sprinter",
+          "setNum": "71045-4"
+        },
+        "68": {
+          "name": "Pet Groomer",
+          "setNum": "71045-12"
+        },
+        "69": {
+          "name": "Triceratops Costume Fan",
+          "setNum": "71045-8"
+        },
+        "70": {
+          "name": "E-Sports Gamer",
+          "setNum": "71045-2"
+        },
+        "71": {
+          "name": "Vampire Knight",
+          "setNum": "71045-3"
+        }
+      }
+    }
+  }
+}

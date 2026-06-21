@@ -8,6 +8,21 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     private var captureDevice: AVCaptureDevice?
 
     var onFrame: ((CVPixelBuffer) -> Void)?
+    weak var previewLayer: AVCaptureVideoPreviewLayer?
+
+    /// Converts a Vision-space normalized bounding box (origin bottom-left,
+    /// 0...1) into points within the preview layer, accounting for the
+    /// `.resizeAspectFill` crop. Must be called on the main thread.
+    func convertToPreviewRect(_ visionBoundingBox: CGRect) -> CGRect? {
+        guard let previewLayer else { return nil }
+        let topLeftNormalized = CGRect(
+            x: visionBoundingBox.minX,
+            y: 1 - visionBoundingBox.maxY,
+            width: visionBoundingBox.width,
+            height: visionBoundingBox.height
+        )
+        return previewLayer.layerRectConverted(fromMetadataOutputRect: topLeftNormalized)
+    }
 
     func configure() {
         sessionQueue.async {
@@ -75,6 +90,7 @@ struct CameraPreviewView: UIViewRepresentable {
         let view = PreviewUIView()
         view.videoPreviewLayer.session = controller.session
         view.videoPreviewLayer.videoGravity = .resizeAspectFill
+        controller.previewLayer = view.videoPreviewLayer
         return view
     }
 

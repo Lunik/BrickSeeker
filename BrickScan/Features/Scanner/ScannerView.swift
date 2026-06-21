@@ -20,6 +20,10 @@ struct ScannerView: View {
 
                 ScanOverlayView(state: viewModel.state, candidateDetected: viewModel.candidateDetected)
 
+                if let minifigOverlay = viewModel.minifigOverlay {
+                    MinifigOverlayView(overlay: minifigOverlay)
+                }
+
                 if !hasAPIKey {
                     apiKeyWarningBanner
                 }
@@ -116,6 +120,31 @@ struct ScannerView: View {
                 LocalRepository(modelContext: modelContext)
                     .cacheSet(legoSet, isInCollection: isInCollection, listId: listId, listName: nil)
             }
+        }
+        .onChange(of: viewModel.lastDetectedMinifig) { _, newValue in
+            guard let newValue else { return }
+            let isInCollection: Bool
+            let listId: Int?
+            switch newValue.collectionStatus {
+            case .inCollection(let userSet):
+                isInCollection = true
+                listId = userSet.listId
+            case .notInCollection, .unknown:
+                isInCollection = false
+                listId = nil
+            }
+            LocalRepository(modelContext: modelContext).cacheSet(
+                newValue.legoSet,
+                isInCollection: isInCollection,
+                listId: listId,
+                listName: nil,
+                isMinifig: true,
+                boxCode: newValue.boxCode
+            )
+        }
+        .onChange(of: viewModel.lastUnresolvedBoxCode) { _, newValue in
+            guard let newValue else { return }
+            LocalRepository(modelContext: modelContext).cachePendingBoxCode(newValue.boxCode)
         }
         .onChange(of: selectedPhotoItem) { _, newItem in
             guard let newItem else { return }
