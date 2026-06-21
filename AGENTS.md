@@ -148,9 +148,27 @@ candidate sets `candidateDetected = true` during the 1.5s debounce before the ac
 something happened before the network call starts. Don't remove the throttle or the flag when
 touching this file.
 
+`ScanFeedback.playCandidateDetectedSound()` (`Core/Scanner/ScanFeedback.swift`) fires at the same
+moment as `candidateDetected = true` — i.e. on initial detection, **not** after the API
+round-trip in `resolveSet` confirms/decorates the result. This was deliberately moved earlier
+once already (see git history: "Play the scan sound at detection, not after collection-status
+verification") — the cue is meant to match the pulsing-green visual feedback's timing, telling
+the user "something was seen," not "the lookup finished." Don't move it back to after
+`fetchCollectionStatus`/`resolveSet` without a specific reason.
+
+Besides the camera and photo-import paths, `ScannerView` also supports typing a set number
+directly via the `keyboard`-icon toolbar button → `ManualSetEntryView` sheet, which calls
+`viewModel.lookupSetNumber(setNum)` (the same entry point `HistoryView`'s tap-to-relookup uses).
+`ManualSetEntryView`'s `TextField` grabs focus on appear via `@FocusState` + `.onAppear { isInputFocused = true }`
+so the keyboard is already up when the sheet opens — don't drop that when touching the view, and
+follow the same pattern for any other text-entry sheet presented over the scanner.
+
 ## Things deliberately not built (don't re-add without asking)
 
 - No backend caching of collection status — it's always fetched fresh per the original plan
   (avoids showing stale "in collection" state).
 - No retry-via-stored-password on a 403 — `RebrickableRepository.reauthenticateAndRefreshToken()`
   always rethrows `.forbidden` by design, since the password is never retained.
+- No Home/dashboard root screen — a version of this (stats + a camera button to toggle scan mode)
+  was built and then explicitly reverted by the user. The app's root is `ScannerView` directly.
+  Don't reintroduce a non-scanner root screen without being asked again.
