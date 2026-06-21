@@ -1,10 +1,12 @@
 import SwiftUI
+import SwiftData
 
 struct SetDetailView: View {
     @State private var viewModel: SetDetailViewModel
     @State private var showListPicker = false
     @State private var showRemoveConfirmation = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
 
     let onScanAgain: () -> Void
 
@@ -97,6 +99,23 @@ struct SetDetailView: View {
                 }
             }
         }
+        .onChange(of: viewModel.collectionStatus) { _, _ in syncCache() }
+        .onChange(of: viewModel.collectionListName) { _, _ in syncCache() }
+    }
+
+    private func syncCache() {
+        let listId: Int?
+        if case .inCollection(let userSet) = viewModel.collectionStatus {
+            listId = userSet.listId
+        } else {
+            listId = nil
+        }
+        LocalRepository(modelContext: modelContext).cacheSet(
+            viewModel.legoSet,
+            isInCollection: viewModel.isInCollection,
+            listId: listId,
+            listName: viewModel.collectionListName
+        )
     }
 
     @ViewBuilder
