@@ -36,6 +36,42 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    if viewModel.isAccountLinked {
+                        Label("Compte Rebrickable lié", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        Button("Délier mon compte", role: .destructive) {
+                            viewModel.unlinkAccount()
+                        }
+                    } else {
+                        TextField("Nom d'utilisateur Rebrickable", text: $viewModel.username)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        SecureField("Mot de passe Rebrickable", text: $viewModel.password)
+
+                        if let errorMessage = viewModel.linkAccountErrorMessage {
+                            Text(errorMessage)
+                                .foregroundStyle(Color(hex: "E3000B"))
+                                .font(.footnote)
+                        }
+
+                        Button {
+                            Task { _ = await viewModel.linkAccount() }
+                        } label: {
+                            if viewModel.isLinkingAccount {
+                                ProgressView()
+                            } else {
+                                Text("Lier mon compte")
+                            }
+                        }
+                        .disabled(viewModel.apiKey.isEmpty || viewModel.username.isEmpty || viewModel.password.isEmpty || viewModel.isLinkingAccount)
+                    }
+                } header: {
+                    Text("Compte Rebrickable")
+                } footer: {
+                    Text("Nécessaire pour voir et gérer votre collection. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session.")
+                }
+
+                Section {
                     PrivacyNoticeView()
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
