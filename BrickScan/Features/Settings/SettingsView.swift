@@ -43,7 +43,7 @@ struct SettingsView: View {
                             viewModel.unlinkAccount()
                         }
                     } else {
-                        TextField("Nom d'utilisateur Rebrickable", text: $viewModel.username)
+                        TextField("Nom d'utilisateur ou email", text: $viewModel.username)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                         SecureField("Mot de passe Rebrickable", text: $viewModel.password)
