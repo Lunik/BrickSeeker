@@ -6,7 +6,6 @@ protocol RebrickableRepositoryProtocol: Sendable {
     func searchSets(query: String, pageSize: Int) async throws -> [LegoSet]
     func resolveSet(setNum: String) async throws -> SetResolution
     func fetchUserSet(setNum: String) async throws -> UserSet?
-    func fetchUserSetsCount() async throws -> Int
     func addSetToList(setNum: String, listId: Int) async throws
     func moveSetToList(setNum: String, fromListId: Int, toListId: Int) async throws
     func removeSetFromCollection(setNum: String) async throws
@@ -81,17 +80,6 @@ final class RebrickableRepository: RebrickableRepositoryProtocol, @unchecked Sen
             } catch APIError.notFound {
                 return nil
             }
-        }
-    }
-
-    // Total owned-set count, fetched for the home screen's collection stats.
-    func fetchUserSetsCount() async throws -> Int {
-        try await withUserTokenRetry { userToken in
-            let response: PaginatedResponse<UserSet> = try await self.client.get(
-                path: RebrickableEndpoint.userSetsPath(userToken: userToken),
-                queryItems: [URLQueryItem(name: "page_size", value: "1")]
-            )
-            return response.count
         }
     }
 
