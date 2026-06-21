@@ -7,6 +7,7 @@ struct ScannerView: View {
     @State private var showSettings = false
     @State private var hasAPIKey = KeychainService.shared.hasAPIKey
     @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var showPhotoPicker = false
 
     var body: some View {
         NavigationStack {
@@ -28,7 +29,9 @@ struct ScannerView: View {
                         } label: {
                             Image(systemName: "clock.arrow.circlepath")
                         }
-                        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                        Button {
+                            showPhotoPicker = true
+                        } label: {
                             Image(systemName: "photo.on.rectangle")
                         }
                     }
@@ -77,6 +80,7 @@ struct ScannerView: View {
                 }
             }
         }
+        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItem, matching: .images)
         .onAppear { viewModel.onAppear() }
         .onDisappear { viewModel.onDisappear() }
         .onChange(of: isMenuOpen) { _, isOpen in
@@ -99,7 +103,7 @@ struct ScannerView: View {
     }
 
     private var isMenuOpen: Bool {
-        showHistory || showSettings || setDetailBinding.wrappedValue || ambiguousBinding.wrappedValue
+        showHistory || showSettings || showPhotoPicker || setDetailBinding.wrappedValue || ambiguousBinding.wrappedValue
     }
 
     private var apiKeyWarningBanner: some View {
