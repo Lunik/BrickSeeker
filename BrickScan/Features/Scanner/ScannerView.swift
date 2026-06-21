@@ -53,14 +53,8 @@ struct ScannerView: View {
             }
             .sheet(isPresented: $showSettings, onDismiss: {
                 hasAPIKey = KeychainService.shared.hasAPIKey
-                viewModel.cameraController.start()
             }) {
                 SettingsView()
-            }
-            .onChange(of: showSettings) { _, isPresented in
-                if isPresented {
-                    viewModel.cameraController.stop()
-                }
             }
             .sheet(isPresented: setDetailBinding) {
                 if case .found(let legoSet, let userSet) = viewModel.state {
@@ -85,6 +79,13 @@ struct ScannerView: View {
         }
         .onAppear { viewModel.onAppear() }
         .onDisappear { viewModel.onDisappear() }
+        .onChange(of: isMenuOpen) { _, isOpen in
+            if isOpen {
+                viewModel.cameraController.stop()
+            } else {
+                viewModel.cameraController.start()
+            }
+        }
         .onChange(of: selectedPhotoItem) { _, newItem in
             guard let newItem else { return }
             Task {
@@ -95,6 +96,10 @@ struct ScannerView: View {
                 selectedPhotoItem = nil
             }
         }
+    }
+
+    private var isMenuOpen: Bool {
+        showHistory || showSettings || setDetailBinding.wrappedValue || ambiguousBinding.wrappedValue
     }
 
     private var apiKeyWarningBanner: some View {
