@@ -8,20 +8,18 @@ final class SettingsViewModel {
     var password = ""
     var isLinkingAccount = false
     var linkAccountErrorMessage: String?
+    var isAccountLinked: Bool
 
     private let repository: RebrickableRepositoryProtocol
 
     init(repository: RebrickableRepositoryProtocol = RebrickableRepository()) {
         self.apiKey = KeychainService.shared.load(key: .apiKey) ?? ""
+        self.isAccountLinked = KeychainService.shared.load(key: .userToken) != nil
         self.repository = repository
     }
 
     var isConfigured: Bool {
         !apiKey.isEmpty
-    }
-
-    var isAccountLinked: Bool {
-        KeychainService.shared.load(key: .userToken) != nil
     }
 
     func save() {
@@ -41,6 +39,7 @@ final class SettingsViewModel {
             KeychainService.shared.save(key: .userToken, value: userToken)
             username = ""
             password = ""
+            isAccountLinked = true
             return true
         } catch let error as APIError {
             linkAccountErrorMessage = error.errorDescription
@@ -55,5 +54,6 @@ final class SettingsViewModel {
 
     func unlinkAccount() {
         KeychainService.shared.delete(key: .userToken)
+        isAccountLinked = false
     }
 }
