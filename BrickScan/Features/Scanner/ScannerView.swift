@@ -53,8 +53,14 @@ struct ScannerView: View {
             }
             .sheet(isPresented: $showSettings, onDismiss: {
                 hasAPIKey = KeychainService.shared.hasAPIKey
+                viewModel.cameraController.start()
             }) {
                 SettingsView()
+            }
+            .onChange(of: showSettings) { _, isPresented in
+                if isPresented {
+                    viewModel.cameraController.stop()
+                }
             }
             .sheet(isPresented: setDetailBinding) {
                 if case .found(let legoSet, let userSet) = viewModel.state {
