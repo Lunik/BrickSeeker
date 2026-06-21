@@ -7,7 +7,7 @@ protocol RebrickableRepositoryProtocol: Sendable {
     func resolveSet(setNum: String) async throws -> SetResolution
     func fetchUserSet(setNum: String) async throws -> UserSet?
     func addSetToList(setNum: String, listId: Int) async throws -> UserSet
-    func moveSetToList(setNum: String, listId: Int) async throws -> UserSet
+    func moveSetToList(setNum: String, fromListId: Int, toListId: Int) async throws -> UserSet
     func removeSetFromCollection(setNum: String) async throws
     func fetchUserSetLists() async throws -> [SetList]
     func createSetList(name: String) async throws -> SetList
@@ -87,20 +87,22 @@ final class RebrickableRepository: RebrickableRepositoryProtocol, @unchecked Sen
     func addSetToList(setNum: String, listId: Int) async throws -> UserSet {
         try await withUserTokenRetry { userToken in
             try await self.client.post(
-                path: RebrickableEndpoint.userSetsPath(userToken: userToken),
-                formBody: ["set_num": setNum, "quantity": "1", "list_id": String(listId)]
+                path: RebrickableEndpoint.setListSetsPath(userToken: userToken, listId: listId),
+                formBody: ["set_num": setNum, "quantity": "1"]
             )
         }
     }
 
     // Endpoint 6
-    func moveSetToList(setNum: String, listId: Int) async throws -> UserSet {
-        try await withUserTokenRetry { userToken in
-            try await self.client.patch(
-                path: RebrickableEndpoint.userSetPath(userToken: userToken, setNum: setNum),
-                jsonBody: ["list_id": listId]
+    // Rebrickable has no endpoint to change a set's list_id directly, so a
+    // move is a delete from the old list followed by an add to the new one.
+    func moveSetToList(setNum: String, fromListId: Int, toListId: Int) async throws -> UserSet {
+        try await withUserTokenRetryVoid { userToken in
+            try await self.client.delete(
+                path: RebrickableEndpoint.setListSetPath(userToken: userToken, listId: fromListId, setNum: setNum)
             )
         }
+        return try await addSetToList(setNum: setNum, listId: toListId)
     }
 
     // Endpoint 7
