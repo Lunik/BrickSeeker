@@ -184,6 +184,7 @@ struct ScannerView: View {
 private struct ManualSetEntryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var setNum = ""
+    @FocusState private var isInputFocused: Bool
     let onSubmit: (String) -> Void
 
     var body: some View {
@@ -193,9 +194,11 @@ private struct ManualSetEntryView: View {
                     .keyboardType(.asciiCapable)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
+                    .focused($isInputFocused)
                     .onSubmit(submit)
             }
             .navigationTitle("Ajouter un set")
+            .onAppear { isInputFocused = true }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Annuler") { dismiss() }
