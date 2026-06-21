@@ -1,0 +1,33 @@
+name: Publish
+
+# Placeholder — not active yet. Trigger is restricted to manual dispatch so it never
+# runs on its own; flip to release-tag/push triggers once App Store signing is set up.
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: macos-15
+    if: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -switch /Applications/Xcode_16.2.app/Contents/Developer
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Archive
+        run: |
+          xcodebuild -project BrickScan.xcodeproj -scheme BrickScan \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/BrickScan.xcarchive archive
+
+      - name: Export & upload to App Store Connect
+        run: |
+          echo "TODO: export IPA and upload via App Store Connect API key / Transporter"
