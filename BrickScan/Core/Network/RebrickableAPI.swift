@@ -15,11 +15,15 @@ enum RebrickableEndpoint {
         "/users/\(userToken)/sets/\(setNum)/"
     }
 
-    static func userSetsPath(userToken: String) -> String {
-        "/users/\(userToken)/sets/"
-    }
-
     static func userSetListsPath(userToken: String) -> String {
         "/users/\(userToken)/setlists/"
+    }
+
+    static func setListSetsPath(userToken: String, listId: Int) -> String {
+        "/users/\(userToken)/setlists/\(listId)/sets/"
+    }
+
+    static func setListSetPath(userToken: String, listId: Int, setNum: String) -> String {
+        "/users/\(userToken)/setlists/\(listId)/sets/\(setNum)/"
     }
 }

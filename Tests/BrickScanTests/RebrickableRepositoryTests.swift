@@ -201,4 +201,56 @@ final class RebrickableRepositoryTests: XCTestCase {
             XCTFail("Unexpected error type")
         }
     }
+
+    func testAddSetToListPostsToSetListSetsEndpoint() async throws {
+        KeychainService.shared.save(key: .userToken, value: "test_token")
+        defer { KeychainService.shared.delete(key: .userToken) }
+
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertTrue(request.url!.absoluteString.contains("/users/test_token/setlists/7/sets/"))
+            return self.response(status: 200, json: [
+                "set": [
+                    "set_num": "42143-1", "name": "Ferrari", "year": 2022,
+                    "theme_id": 1, "num_parts": 3778, "set_img_url": NSNull(), "set_url": NSNull()
+                ],
+                "quantity": 1,
+                "include_spares": false,
+                "list_id": 7
+            ])
+        }
+
+        let userSet = try await repository.addSetToList(setNum: "42143-1", listId: 7)
+        XCTAssertEqual(userSet.listId, 7)
+    }
+
+    func testMoveSetToListDeletesFromOldListThenAddsToNewList() async throws {
+        KeychainService.shared.save(key: .userToken, value: "test_token")
+        defer { KeychainService.shared.delete(key: .userToken) }
+
+        var requestedPaths: [String] = []
+        MockURLProtocol.requestHandler = { request in
+            requestedPaths.append("\(request.httpMethod ?? "") \(request.url!.absoluteString)")
+            if request.httpMethod == "DELETE" {
+                XCTAssertTrue(request.url!.absoluteString.contains("/users/test_token/setlists/3/sets/42143-1/"))
+                return (HTTPURLResponse(url: request.url!, statusCode: 204, httpVersion: nil, headerFields: nil)!, Data())
+            }
+            XCTAssertTrue(request.url!.absoluteString.contains("/users/test_token/setlists/9/sets/"))
+            return self.response(status: 200, json: [
+                "set": [
+                    "set_num": "42143-1", "name": "Ferrari", "year": 2022,
+                    "theme_id": 1, "num_parts": 3778, "set_img_url": NSNull(), "set_url": NSNull()
+                ],
+                "quantity": 1,
+                "include_spares": false,
+                "list_id": 9
+            ])
+        }
+
+        let userSet = try await repository.moveSetToList(setNum: "42143-1", fromListId: 3, toListId: 9)
+        XCTAssertEqual(userSet.listId, 9)
+        XCTAssertEqual(requestedPaths.count, 2)
+        XCTAssertTrue(requestedPaths[0].hasPrefix("DELETE"))
+        XCTAssertTrue(requestedPaths[1].hasPrefix("POST"))
+    }
 }

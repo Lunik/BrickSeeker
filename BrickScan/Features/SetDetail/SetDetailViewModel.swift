@@ -37,8 +37,13 @@ final class SetDetailViewModel {
 
     @MainActor
     func moveToList(listId: Int, listName: String) async {
+        guard case .inCollection(let currentUserSet) = collectionStatus, let fromListId = currentUserSet.listId else {
+            return
+        }
         await perform {
-            self.collectionStatus = .inCollection(try await self.repository.moveSetToList(setNum: self.legoSet.setNum, listId: listId))
+            self.collectionStatus = .inCollection(
+                try await self.repository.moveSetToList(setNum: self.legoSet.setNum, fromListId: fromListId, toListId: listId)
+            )
             self.toastMessage = "Set déplacé vers \(listName)"
         }
     }

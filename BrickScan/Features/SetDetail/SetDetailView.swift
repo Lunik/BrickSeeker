@@ -56,12 +56,6 @@ struct SetDetailView: View {
 
                     actionButtons
 
-                    Button("Scanner à nouveau") {
-                        dismiss()
-                        onScanAgain()
-                    }
-                    .buttonStyle(.bordered)
-
                     if let setUrl = viewModel.legoSet.setUrl, let url = URL(string: setUrl) {
                         Link("Voir sur Rebrickable", destination: url)
                             .font(.footnote)
