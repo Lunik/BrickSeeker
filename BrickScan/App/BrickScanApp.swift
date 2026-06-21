@@ -3,6 +3,8 @@ import SwiftData
 
 @main
 struct BrickScanApp: App {
+    @State private var isShowingSplash = true
+
     var modelContainer: ModelContainer = {
         let schema = Schema([CachedSet.self, CachedSetList.self])
         let configuration = ModelConfiguration(schema: schema)
@@ -11,11 +13,24 @@ struct BrickScanApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ScannerView()
-                .onReceive(NotificationCenter.default.publisher(for: .didReset)) { _ in
-                    let context = modelContainer.mainContext
-                    LocalRepository(modelContext: context).clearAll()
+            ZStack {
+                ScannerView()
+                    .onReceive(NotificationCenter.default.publisher(for: .didReset)) { _ in
+                        let context = modelContainer.mainContext
+                        LocalRepository(modelContext: context).clearAll()
+                    }
+
+                if isShowingSplash {
+                    SplashView()
+                        .transition(.opacity)
                 }
+            }
+            .task {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                withAnimation(.easeOut(duration: 0.3)) {
+                    isShowingSplash = false
+                }
+            }
         }
         .modelContainer(modelContainer)
     }

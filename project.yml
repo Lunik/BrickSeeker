@@ -30,6 +30,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.lunik.brickscan
         TARGETED_DEVICE_FAMILY: "1"
         ENABLE_PREVIEWS: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     capabilities:
       com.apple.Keychain: {}
 
