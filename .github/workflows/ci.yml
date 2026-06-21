@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -switch /Applications/Xcode_16.2.app/Contents/Developer
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild -project BrickScan.xcodeproj -scheme BrickScan \
+            -destination 'generic/platform=iOS Simulator' build
+
+      - name: Test
+        run: |
+          set -o pipefail
+          xcodebuild test -project BrickScan.xcodeproj -scheme BrickScan \
+            -destination 'platform=iOS Simulator,name=iPhone 16'
