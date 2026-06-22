@@ -35,17 +35,14 @@ struct SetDetailView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    AsyncImage(url: URL(string: viewModel.legoSet.setImgUrl ?? "")) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image.resizable().scaledToFit()
-                        default:
+                    CachedRemoteImage(url: URL(string: viewModel.legoSet.setImgUrl ?? ""), refreshesLive: true) {
+                        AnyView(
                             Image(systemName: "shippingbox")
                                 .resizable()
                                 .scaledToFit()
                                 .foregroundStyle(.secondary)
                                 .padding(40)
-                        }
+                        )
                     }
                     .frame(height: 220)
 

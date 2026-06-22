@@ -34,10 +34,12 @@ BrickScan/
 │   ├── Network/    NetworkClient, APIError, RebrickableEndpoint (path builders), APIModels
 │   ├── Repository/ RebrickableRepository (API calls), LocalRepository (SwiftData cache)
 │   ├── Scanner/    BarcodeScanner, OCRScanner (Vision), SetNumberExtractor (regex parsing)
-│   └── Storage/    KeychainService, ScanStatsStore (UserDefaults scan counter), SwiftDataModels (@Model classes)
+│   └── Storage/    KeychainService, ScanStatsStore (UserDefaults scan counter), ImageCache
+│                   (disk-backed set image cache), SwiftDataModels (@Model classes)
 ├── Features/       One folder per screen: Auth (privacy notice/detail only — no login), Home
 │                   (app root — stats + actions), Scanner (camera-only sub-screen), SetDetail,
-│                   Settings (API key + account linking), Collection, Splash
+│                   Settings (API key + account linking), Collection, Splash, Shared (small
+│                   reusable views used by 2+ features, e.g. SetThumbnailView/CachedRemoteImage)
 └── Tests/BrickScanTests/   MockURLProtocol-based repository tests, SetNumberExtractor tests
 ```
 
@@ -52,6 +54,14 @@ camera-driven and manual/photo/history lookup flows sharing the *same* `ScannerV
 (`HomeView` owns a second instance, `lookupViewModel`, that never has `.onAppear()`/`cameraController`
 started, so it costs nothing camera/battery-wise). If you add a new lookup entry point, wire it
 through `lookupViewModel.lookupSetNumber`/`.importImage`, not a new resolution path.
+
+`HistoryView` presents its *own* nested SetDetail/Ambiguous sheets (driven by the same
+`lookupViewModel.state` passed into it) rather than dismissing itself when a row is tapped — so
+closing the result sheet reveals History again instead of dropping straight back to Home.
+`HomeView`'s own top-level SetDetail/Ambiguous sheets are gated by `!showHistory` so the two don't
+both try to present for the same state change. If you add another presenter of `lookupViewModel`
+results (besides Home and History), follow the same "gate the parent, nest in the child" pattern
+rather than letting multiple sibling `.sheet()`s race on the same state.
 
 `HomeViewModel` is owned by `BrickScanApp` (`@State private var homeViewModel`), not by `HomeView`
 itself — `HomeView` is a fresh struct instance every time the camera is exited (`isScanning` flips
@@ -184,6 +194,12 @@ Two different things, don't conflate them:
   offline) when `reconcileOnAppear` is true. This was deliberately added for responsiveness
   (instant display from cache) — if you see a flash of last-known data before a fresher value
   replaces it, that's the intended behavior, not a bug.
+- **Set images** follow the same split via `CachedRemoteImage` (`Features/Shared/`, backed by
+  `ImageCache`, a disk cache keyed by URL): list-row thumbnails (`SetThumbnailView`) use
+  `refreshesLive: false` — show the cached copy if present and only hit the network when there's
+  none, since refetching on every row appearance while scrolling would be wasteful. SetDetail's
+  hero image uses `refreshesLive: true` — same cache-first-then-reconcile behavior as collection
+  status, since that's the "did I refresh on open" point for everything else on that screen.
 
 ## Code signing
 

@@ -61,7 +61,7 @@ struct HomeView: View {
                 CollectionView()
             }
             .sheet(isPresented: $showHistory) {
-                HistoryView { setNum in
+                HistoryView(lookupViewModel: lookupViewModel) { setNum in
                     lookupViewModel.lookupSetNumber(setNum)
                 }
             }
@@ -125,9 +125,14 @@ struct HomeView: View {
     }
 
 
+    // Gated by !showHistory: when a lookup is triggered from History, History presents its own
+    // nested SetDetail/Ambiguous sheet on top of itself instead (see HistoryView), so closing the
+    // result returns to History rather than straight to Home. Without this gate, both this sheet
+    // and History's nested one would react to the same lookupViewModel.state change.
     private var setDetailBinding: Binding<Bool> {
         Binding(
             get: {
+                guard !showHistory else { return false }
                 if case .found = lookupViewModel.state { return true }
                 return false
             },
@@ -140,6 +145,7 @@ struct HomeView: View {
     private var ambiguousBinding: Binding<Bool> {
         Binding(
             get: {
+                guard !showHistory else { return false }
                 if case .ambiguous = lookupViewModel.state { return true }
                 return false
             },

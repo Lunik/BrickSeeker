@@ -9,18 +9,16 @@ struct SetThumbnailView: View {
     var size: CGFloat = 52
 
     var body: some View {
-        AsyncImage(url: URL(string: imageUrl ?? "")) { phase in
-            switch phase {
-            case .success(let image):
-                image.resizable().scaledToFit().padding(4)
-            default:
+        CachedRemoteImage(url: URL(string: imageUrl ?? "")) {
+            AnyView(
                 Image(systemName: "shippingbox")
                     .resizable()
                     .scaledToFit()
                     .foregroundStyle(.secondary)
-                    .padding(size * 0.22)
-            }
+                    .padding(size * 0.18)
+            )
         }
+        .padding(4)
         .frame(width: size, height: size)
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 10))
