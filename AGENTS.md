@@ -223,6 +223,12 @@ the sound repeat every ~0.8s while a candidate stayed in frame. `lastIdentifiedS
 once per resolved candidate. Don't move it back to detection time without fixing that repeat-fire
 issue first.
 
+Guarded by `ScannerViewModel.playsFeedbackSounds` (default `true`) since `resolveSet` is shared
+with Home's non-camera lookup flows — `HomeView` sets it `false` on its `lookupViewModel`
+instance so tapping a History row / submitting manual entry / picking a photo from Home doesn't
+play the "candidate detected" sound, which only makes sense as live feedback while actually
+looking at the camera screen.
+
 Besides the live camera path (in `ScannerView`), `HomeView` also supports typing a set number
 directly via its `keyboard`-icon action → `ManualSetEntryView` sheet, and importing a photo via
 `PhotosPicker`, both of which call `lookupViewModel.lookupSetNumber(setNum)` /

@@ -117,6 +117,7 @@ struct HomeView: View {
         }
         .onAppear {
             lookupViewModel.localRepository = LocalRepository(modelContext: modelContext)
+            lookupViewModel.playsFeedbackSounds = false
             // Local-only refresh (no network) — picks up anything scanned while the camera was
             // open without re-syncing the whole remote collection just for returning to Home.
             viewModel.loadFromCache()

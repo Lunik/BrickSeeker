@@ -41,6 +41,11 @@ final class ScannerViewModel {
     var lastFoundWasFromCache = false
 
     var localRepository: LocalRepository?
+    /// HomeView reuses this class for its non-camera lookup flows (History tap, manual entry,
+    /// photo import) via a second instance that never starts the camera. The detection sound only
+    /// makes sense as live feedback while actually looking at the camera screen — Home sets this
+    /// false on its instance so picking a result there doesn't unexpectedly play it.
+    var playsFeedbackSounds = true
 
     let cameraController = CameraController()
     private let barcodeScanner = BarcodeScanner()
@@ -192,7 +197,9 @@ final class ScannerViewModel {
             lastFoundWasFromCache = false
             state = .processing
         }
-        ScanFeedback.playCandidateDetectedSound()
+        if playsFeedbackSounds {
+            ScanFeedback.playCandidateDetectedSound()
+        }
 
         do {
             let resolution = try await repository.resolveSet(setNum: setNum)
