@@ -41,10 +41,17 @@ struct HistoryView: View {
 
                                 Spacer()
 
-                                if cached.isInCollection {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.title3)
-                                        .foregroundStyle(.green)
+                                VStack(alignment: .trailing, spacing: 3) {
+                                    if let amount = cached.storePriceEUR {
+                                        Text(amount, format: .currency(code: "EUR"))
+                                            .font(.subheadline.bold())
+                                            .foregroundStyle(.primary)
+                                    }
+                                    if cached.isInCollection {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.title3)
+                                            .foregroundStyle(.green)
+                                    }
                                 }
                             }
                             .padding(.vertical, 4)
