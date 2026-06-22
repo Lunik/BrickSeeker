@@ -24,6 +24,8 @@ struct CollectionView: View {
                                 }
                             }
                             .foregroundStyle(.primary)
+
+                            Spacer()
                         }
                         .padding(.vertical, 4)
                         .contentShape(Rectangle())
