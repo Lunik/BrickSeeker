@@ -34,6 +34,12 @@ final class SetDetailViewModel {
         self.storePriceFetchedAt = initialStorePriceFetchedAt
         self.repository = repository
         self.legoStoreRepository = legoStoreRepository
+        // loadStorePriceIfNeeded() always fires a fetch in this case (no fetchedAt to compare
+        // against staleAfter) — start the spinner here so the very first render already shows
+        // it's checking, instead of flashing "Pas encore vérifié" for one frame first.
+        if initialStorePrice == nil && initialStorePriceFetchedAt == nil {
+            isLoadingStorePrice = true
+        }
     }
 
     /// Auto-fetch only when there's no cached price yet, or it's older than `staleAfter` — the
@@ -55,6 +61,8 @@ final class SetDetailViewModel {
         do {
             storePrice = try await legoStoreRepository.fetchStorePrice(setNum: legoSet.setNum)
             storePriceFetchedAt = Date()
+        } catch is CancellationError {
+            // The view was dismissed mid-fetch — this isn't a real failure, don't show one.
         } catch {
             storePriceErrorMessage = (error as? LocalizedError)?.errorDescription ?? "Prix indisponible"
         }
