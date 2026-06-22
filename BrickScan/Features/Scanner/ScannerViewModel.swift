@@ -209,12 +209,19 @@ final class ScannerViewModel {
             case .ambiguous(let sets):
                 state = .ambiguous(sets)
             case .notFound:
-                state = .notFound
-                isPaused = false
+                // Some cached numbers (e.g. minifigs, "fig-…") can't be re-resolved through the
+                // sets endpoint at all — don't let a live reconcile failure close a detail view
+                // that was already showing valid cached data; just keep it as-is.
+                if !lastFoundWasFromCache {
+                    state = .notFound
+                    isPaused = false
+                }
             }
         } catch {
-            state = .error((error as? APIError)?.errorDescription ?? "Erreur inconnue")
-            isPaused = false
+            if !lastFoundWasFromCache {
+                state = .error((error as? APIError)?.errorDescription ?? "Erreur inconnue")
+                isPaused = false
+            }
         }
     }
 
