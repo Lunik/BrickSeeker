@@ -66,7 +66,7 @@ struct HomeView: View {
                 }
             }
             .sheet(isPresented: $showManualEntry) {
-                ManualSetEntryView { setNum in
+                ManualSetEntryView(lookupViewModel: lookupViewModel) { setNum in
                     lookupViewModel.lookupSetNumber(setNum)
                 }
             }
@@ -125,14 +125,18 @@ struct HomeView: View {
     }
 
 
-    // Gated by !showHistory: when a lookup is triggered from History, History presents its own
-    // nested SetDetail/Ambiguous sheet on top of itself instead (see HistoryView), so closing the
-    // result returns to History rather than straight to Home. Without this gate, both this sheet
-    // and History's nested one would react to the same lookupViewModel.state change.
+    // Gated by !showHistory and !showManualEntry: when a lookup is triggered from one of those,
+    // it presents its own nested SetDetail/Ambiguous sheet on top of itself instead (see
+    // HistoryView/ManualSetEntryView), so closing the result returns there rather than straight
+    // to Home. Without this gate, this sheet would race the sibling sheet's own dismissal —
+    // SwiftUI can't cleanly close one sheet and open another from the same parent in one
+    // transaction, which is exactly what happened when a manually-typed set resolved from cache
+    // instantly (same frame as the manual-entry sheet dismissing): the price-load animation never
+    // got a chance to start because the SetDetail sheet's presentation/task got dropped.
     private var setDetailBinding: Binding<Bool> {
         Binding(
             get: {
-                guard !showHistory else { return false }
+                guard !showHistory, !showManualEntry else { return false }
                 if case .found = lookupViewModel.state { return true }
                 return false
             },
@@ -145,7 +149,7 @@ struct HomeView: View {
     private var ambiguousBinding: Binding<Bool> {
         Binding(
             get: {
-                guard !showHistory else { return false }
+                guard !showHistory, !showManualEntry else { return false }
                 if case .ambiguous = lookupViewModel.state { return true }
                 return false
             },
@@ -294,8 +298,10 @@ struct HomeView: View {
 
 private struct ManualSetEntryView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @State private var setNum = ""
     @FocusState private var isInputFocused: Bool
+    let lookupViewModel: ScannerViewModel
     let onSubmit: (String) -> Void
 
     var body: some View {
@@ -319,6 +325,36 @@ private struct ManualSetEntryView: View {
                         .disabled(setNum.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
+            // Nested rather than a sibling sheet on HomeView — when a typed set resolves
+            // straight from cache, the result is ready in the same frame this view dismisses,
+            // and SwiftUI can't cleanly close one sheet while opening another from the same
+            // parent at once (see HomeView.setDetailBinding's !showManualEntry gate). Nesting
+            // here, like HistoryView already does, avoids that race entirely.
+            .sheet(isPresented: setDetailBinding) {
+                if case .found(let legoSet, let collectionStatus) = lookupViewModel.state {
+                    let cached = LocalRepository(modelContext: modelContext).cachedSet(setNum: legoSet.setNum)
+                    SetDetailView(
+                        legoSet: legoSet,
+                        collectionStatus: collectionStatus,
+                        initialListName: lookupViewModel.lastFoundWasFromCache ? cached?.currentListName : nil,
+                        initialStorePrice: cached?.storePriceEUR.map { StorePrice(amount: $0, currency: "EUR", availability: cached?.storeAvailability) },
+                        initialStorePriceFetchedAt: cached?.storePriceFetchedAt,
+                        reconcileOnAppear: lookupViewModel.lastFoundWasFromCache
+                    ) {
+                        lookupViewModel.resumeScanning()
+                        dismiss()
+                    }
+                }
+            }
+            .sheet(isPresented: ambiguousBinding) {
+                if case .ambiguous(let sets) = lookupViewModel.state {
+                    AmbiguousSetPickerView(sets: sets) { selected in
+                        lookupViewModel.selectAmbiguousSet(selected)
+                    } onCancel: {
+                        lookupViewModel.resumeScanning()
+                    }
+                }
+            }
         }
     }
 
@@ -326,6 +362,29 @@ private struct ManualSetEntryView: View {
         let trimmed = setNum.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
         onSubmit(trimmed)
-        dismiss()
+    }
+
+    private var setDetailBinding: Binding<Bool> {
+        Binding(
+            get: {
+                if case .found = lookupViewModel.state { return true }
+                return false
+            },
+            set: { newValue in
+                if !newValue { lookupViewModel.resumeScanning() }
+            }
+        )
+    }
+
+    private var ambiguousBinding: Binding<Bool> {
+        Binding(
+            get: {
+                if case .ambiguous = lookupViewModel.state { return true }
+                return false
+            },
+            set: { newValue in
+                if !newValue { lookupViewModel.resumeScanning() }
+            }
+        )
     }
 }
