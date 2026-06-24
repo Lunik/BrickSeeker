@@ -177,10 +177,17 @@ struct SetDetailView: View {
             ForEach([PriceSource.amazon, .bricklinkNew, .bricklinkUsed], id: \.self) { source in
                 if let quote = viewModel.priceQuotes.first(where: { $0.source == source }) {
                     priceRow(label: source.displayName) {
-                        if let sourceURL = quote.sourceURL {
-                            Link(formattedAmount(quote.amount, currency: quote.currency), destination: sourceURL)
-                        } else {
-                            Text(formattedAmount(quote.amount, currency: quote.currency))
+                        HStack(spacing: 6) {
+                            if let promo = discountVsStore(quote.amount, currency: quote.currency) {
+                                Text(promo.text)
+                                    .font(.caption2)
+                                    .foregroundStyle(promo.color)
+                            }
+                            if let sourceURL = quote.sourceURL {
+                                Link(formattedAmount(quote.amount, currency: quote.currency), destination: sourceURL)
+                            } else {
+                                Text(formattedAmount(quote.amount, currency: quote.currency))
+                            }
                         }
                     }
                 } else if viewModel.pricesLoading {
@@ -227,6 +234,19 @@ struct SetDetailView: View {
             trailing()
         }
         .font(.subheadline)
+    }
+
+    /// Percentage difference of a source price versus the official lego.com
+    /// price — a small "-5%" promo hint shown left of the price. Returns nil
+    /// when there's no reference price, the currencies differ, or it rounds to
+    /// 0%. Green when cheaper than retail, red when more expensive.
+    private func discountVsStore(_ amount: Decimal, currency: String) -> (text: String, color: Color)? {
+        guard let storeAmount = viewModel.storePrice?.amount, storeAmount > 0,
+              (viewModel.storePrice?.currency ?? "EUR") == currency else { return nil }
+        let source = (amount as NSDecimalNumber).doubleValue
+        let pct = Int((((source - storeAmount) / storeAmount) * 100).rounded())
+        guard pct != 0 else { return nil }
+        return ("\(pct > 0 ? "+" : "")\(pct)%", pct < 0 ? .green : .red)
     }
 
     private func formattedAmount(_ amount: Decimal, currency: String) -> String {
