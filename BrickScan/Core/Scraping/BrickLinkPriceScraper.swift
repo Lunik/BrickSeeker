@@ -62,7 +62,12 @@ struct BrickLinkPriceScraper: Sendable {
             throw ScrapeError.notFound
         }
 
-        let scraper = await self.scraper ?? HeadlessWebScraper.shared
+        let scraper: HeadlessWebScraper
+        if let injected = self.scraper {
+            scraper = injected
+        } else {
+            scraper = await HeadlessWebScraper.shared
+        }
         let json = try await scraper.loadAndExtract(
             url: url,
             readinessScript: Self.readinessScript,
