@@ -29,7 +29,7 @@ deleted — a build break that only showed up after the "revert" was declared do
 3. For anything still present: check `git log --oneline -- <file>` for that symbol's commit — if
    it predates the feature commit you just reverted, it's a leftover. Remove it by hand (delete
    the method/property and its protocol entry, not just comment it out).
-4. Run the `ios-build-test` skill's build+test steps. A clean revert must build — if it doesn't,
-   you haven't found everything yet.
+4. Run the `ios-build-test` skill's build steps (there is no test target). A clean revert must
+   build — if it doesn't, you haven't found everything yet.
 5. Commit the cleanup separately from the revert commit, with a message that says *why* it was
    needed (so the next person doesn't assume `git revert` alone was sufficient).

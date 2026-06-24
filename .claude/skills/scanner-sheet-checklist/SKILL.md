@@ -43,14 +43,21 @@ SwiftData via `LocalRepository`, not from any view model directly. Call
 does this via `.onChange(of: viewModel.collectionStatus)` calling a local `syncCache()` — follow
 that pattern rather than inventing a new one.
 
-## 4. Audio/visual feedback — fire at detection, not after verification
+## 4. Audio/visual feedback — visual at detection, sound once in `resolveSet`
 
-If your change touches scan feedback timing (sound, haptics, the pulsing-green overlay), the
-existing convention is: fire at the moment a candidate is *detected* (`candidateDetected = true`
-in `scheduleResolution`), not after the API round-trip resolves/decorates it in `resolveSet`. This
-was deliberately chosen so feedback matches what the user is looking at — don't move feedback
-calls later in the pipeline without a specific reason, and check `ScanFeedback.swift` /
-`AGENTS.md`'s "Scanning pipeline" section for the current convention before changing it.
+If your change touches scan feedback timing, mind the split:
+
+- **Visual** (the pulsing-green/checkmark overlay) fires at detection: `candidateDetected = true`
+  in `scheduleResolution`, so it matches what the user is looking at.
+- **Sound** (`ScanFeedback.playCandidateDetectedSound()`) fires inside `resolveSet`, **not** at
+  detection. It used to be at detection, but `scheduleResolution` re-runs for the same in-view
+  candidate on every throttled frame, which made the sound repeat every ~0.8s. `resolveSet`
+  (guarded by `lastIdentifiedSetNum`/`lastIdentifiedAt`) is the one point that runs once per
+  resolved candidate. Don't move it back to detection without fixing that repeat-fire.
+
+Both are gated by `ScannerViewModel.playsFeedbackSounds` (Home's non-camera `lookupViewModel`
+sets it `false`). Check `ScanFeedback.swift` / `AGENTS.md`'s "Scanning pipeline" section before
+changing any of this.
 
 ## 5. Build & test
 
