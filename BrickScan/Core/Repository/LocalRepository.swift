@@ -182,6 +182,36 @@ final class LocalRepository {
         if let lists = try? modelContext.fetch(FetchDescriptor<CachedSetList>()) {
             lists.forEach { modelContext.delete($0) }
         }
+        if let prices = try? modelContext.fetch(FetchDescriptor<CachedSetPrice>()) {
+            prices.forEach { modelContext.delete($0) }
+        }
+        try? modelContext.save()
+    }
+
+    /// Non-expired cached price quotes for a set, regardless of source.
+    func cachedPrices(setNum: String) -> [PriceQuote] {
+        let cached = (try? modelContext.fetch(
+            FetchDescriptor<CachedSetPrice>(predicate: #Predicate { $0.setNum == setNum })
+        )) ?? []
+        return cached.filter { !$0.isExpired }.compactMap(\.quote)
+    }
+
+    func cachePrices(_ quotes: [PriceQuote], setNum: String) {
+        for quote in quotes {
+            let source = quote.source.rawValue
+            let existing = try? modelContext.fetch(
+                FetchDescriptor<CachedSetPrice>(predicate: #Predicate { $0.setNum == setNum && $0.source == source })
+            ).first
+
+            if let existing {
+                existing.amount = quote.amount
+                existing.currency = quote.currency
+                existing.sourceURLString = quote.sourceURL?.absoluteString
+                existing.fetchedAt = quote.fetchedAt
+            } else {
+                modelContext.insert(CachedSetPrice(setNum: setNum, quote: quote))
+            }
+        }
         try? modelContext.save()
     }
 }

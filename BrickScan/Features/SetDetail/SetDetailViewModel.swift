@@ -9,6 +9,8 @@ final class SetDetailViewModel {
     var isLoading = false
     var errorMessage: String?
     var toastMessage: String?
+    var priceQuotes: [PriceQuote] = []
+    var pricesLoading = false
 
     var storePrice: StorePrice?
     var storePriceFetchedAt: Date?
@@ -17,6 +19,7 @@ final class SetDetailViewModel {
 
     private let repository: RebrickableRepositoryProtocol
     private let legoStoreRepository: LegoStoreRepositoryProtocol
+    private let priceRepository: PriceRepositoryProtocol
 
     init(
         legoSet: LegoSet,
@@ -25,7 +28,8 @@ final class SetDetailViewModel {
         initialStorePrice: StorePrice? = nil,
         initialStorePriceFetchedAt: Date? = nil,
         repository: RebrickableRepositoryProtocol = RebrickableRepository(),
-        legoStoreRepository: LegoStoreRepositoryProtocol = LegoStoreRepository()
+        legoStoreRepository: LegoStoreRepositoryProtocol = LegoStoreRepository(),
+        priceRepository: PriceRepositoryProtocol = PriceRepository()
     ) {
         self.legoSet = legoSet
         self.collectionStatus = collectionStatus
@@ -34,6 +38,7 @@ final class SetDetailViewModel {
         self.storePriceFetchedAt = initialStorePriceFetchedAt
         self.repository = repository
         self.legoStoreRepository = legoStoreRepository
+        self.priceRepository = priceRepository
         // loadStorePriceIfNeeded() always fires a fetch in this case (no fetchedAt to compare
         // against staleAfter) — start the spinner here so the very first render already shows
         // it's checking, instead of flashing "Pas encore vérifié" for one frame first.
@@ -65,6 +70,22 @@ final class SetDetailViewModel {
             // The view was dismissed mid-fetch — this isn't a real failure, don't show one.
         } catch {
             storePriceErrorMessage = (error as? LocalizedError)?.errorDescription ?? "Prix indisponible"
+        }
+    }
+
+    /// Seeds prices from the local cache without hitting the network. Call
+    /// before `loadPrices()` so cached values show up instantly.
+    func setCachedPrices(_ quotes: [PriceQuote]) {
+        priceQuotes = quotes
+    }
+
+    @MainActor
+    func loadPrices() async {
+        pricesLoading = true
+        defer { pricesLoading = false }
+        let quotes = await priceRepository.fetchPrices(for: legoSet)
+        if !quotes.isEmpty {
+            priceQuotes = quotes
         }
     }
 

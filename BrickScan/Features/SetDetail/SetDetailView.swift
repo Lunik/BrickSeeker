@@ -61,6 +61,8 @@ struct SetDetailView: View {
 
                     storePriceSection
 
+                    priceSection
+
                     if viewModel.isLoading {
                         ProgressView()
                     }
@@ -132,11 +134,69 @@ struct SetDetailView: View {
         .task {
             await viewModel.loadStorePriceIfNeeded()
         }
+        .task {
+            let setNum = viewModel.legoSet.setNum
+            viewModel.setCachedPrices(LocalRepository(modelContext: modelContext).cachedPrices(setNum: setNum))
+            if viewModel.priceQuotes.isEmpty {
+                await refreshPrices()
+            }
+        }
     }
 
     private func syncStorePriceCache() {
         guard let storePrice = viewModel.storePrice, viewModel.storePriceFetchedAt != nil else { return }
         LocalRepository(modelContext: modelContext).cacheStorePrice(setNum: viewModel.legoSet.setNum, price: storePrice)
+    }
+
+    private func refreshPrices() async {
+        await viewModel.loadPrices()
+        LocalRepository(modelContext: modelContext).cachePrices(viewModel.priceQuotes, setNum: viewModel.legoSet.setNum)
+    }
+
+    @ViewBuilder
+    private var priceSection: some View {
+        if !viewModel.priceQuotes.isEmpty || viewModel.pricesLoading {
+            VStack(spacing: 8) {
+                ForEach(PriceSource.allCases, id: \.self) { source in
+                    if let quote = viewModel.priceQuotes.first(where: { $0.source == source }) {
+                        priceRow(label: source.displayName, quote: quote)
+                    }
+                }
+
+                if viewModel.pricesLoading {
+                    ProgressView().padding(.vertical, 4)
+                } else {
+                    Button("Rafraîchir les prix") {
+                        Task { await refreshPrices() }
+                    }
+                    .font(.footnote)
+                }
+            }
+            .padding(12)
+            .background(Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    private func priceRow(label: String, quote: PriceQuote) -> some View {
+        HStack {
+            Text(label)
+                .foregroundStyle(.secondary)
+            Spacer()
+            if let sourceURL = quote.sourceURL {
+                Link(formattedAmount(quote), destination: sourceURL)
+            } else {
+                Text(formattedAmount(quote))
+            }
+        }
+        .font(.subheadline)
+    }
+
+    private func formattedAmount(_ quote: PriceQuote) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = quote.currency
+        return formatter.string(from: quote.amount as NSDecimalNumber) ?? "\(quote.amount) \(quote.currency)"
     }
 
     private func syncCache() {

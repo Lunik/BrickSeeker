@@ -61,6 +61,44 @@ final class CollectionSyncState {
     }
 }
 
+/// A price quote scraped from an external source (BrickLink, Amazon),
+/// cached per set+source so the price section doesn't re-scrape on every
+/// screen visit. Prices move slowly, so the TTL is much longer than
+/// `CachedSet`'s.
+@Model
+final class CachedSetPrice {
+    var setNum: String
+    var source: String
+    var amount: Decimal
+    var currency: String
+    var sourceURLString: String?
+    var fetchedAt: Date
+
+    init(setNum: String, quote: PriceQuote) {
+        self.setNum = setNum
+        self.source = quote.source.rawValue
+        self.amount = quote.amount
+        self.currency = quote.currency
+        self.sourceURLString = quote.sourceURL?.absoluteString
+        self.fetchedAt = quote.fetchedAt
+    }
+
+    var isExpired: Bool {
+        Date().timeIntervalSince(fetchedAt) > 7 * 24 * 60 * 60
+    }
+
+    var quote: PriceQuote? {
+        guard let priceSource = PriceSource(rawValue: source) else { return nil }
+        return PriceQuote(
+            source: priceSource,
+            amount: amount,
+            currency: currency,
+            sourceURL: sourceURLString.flatMap(URL.init),
+            fetchedAt: fetchedAt
+        )
+    }
+}
+
 @Model
 final class CachedSetList {
     @Attribute(.unique) var listId: Int

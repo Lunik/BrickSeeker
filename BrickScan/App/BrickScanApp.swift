@@ -11,7 +11,7 @@ struct BrickScanApp: App {
     @State private var homeViewModel: HomeViewModel?
 
     var modelContainer: ModelContainer = {
-        let schema = Schema([CachedSet.self, CachedSetList.self, CollectionSyncState.self])
+        let schema = Schema([CachedSet.self, CachedSetList.self, CollectionSyncState.self, CachedSetPrice.self])
         let configuration = ModelConfiguration(schema: schema)
         return try! ModelContainer(for: schema, configurations: [configuration])
     }()
