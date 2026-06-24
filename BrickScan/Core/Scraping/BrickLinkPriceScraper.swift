@@ -73,31 +73,15 @@ struct BrickLinkPriceScraper: Sendable {
         self.scraper = scraper
     }
 
-    /// The item page's "Items For Sale" tab, deep-linked with the right filter
-    /// options so the user lands on exactly the listings the quote reflects:
-    /// the given condition, complete only (no incomplete sets; `is:0` also
-    /// drops sealed from used), and sellers shipping to France.
-    ///
-    /// The options ride in the `#T=S&O={…}` fragment as a JSON object, matching
-    /// the URLs BrickLink itself produces (only the quotes are percent-encoded).
-    static func itemForSaleURL(setNum: String, used: Bool) -> URL? {
-        let options = used
-            ? #"{"cond":"U","ii":0,"is":0,"iconly":0,"loc":"FR"}"#
-            : #"{"cond":"N","ii":0,"iconly":0,"loc":"FR"}"#
-        let encoded = options.replacingOccurrences(of: "\"", with: "%22")
-        return URL(string: "https://www.bricklink.com/v2/catalog/catalogitem.page?S=\(setNum)#T=S&O=\(encoded)")
-    }
-
     func fetchPrices(setNum: String) async throws -> [PriceQuote] {
         // `viewExclude=Y` is BrickLink's "Exclude Incomplete Sets" toggle — we
         // want the value of a complete set, not one missing pieces.
         guard let priceGuideURL = URL(string: "https://www.bricklink.com/catalogPG.asp?S=\(setNum)&viewExclude=Y") else {
             throw ScrapeError.notFound
         }
-        // The price guide is what we scrape; the links we surface go to the
-        // item page's filtered "Items For Sale" tab (per condition).
-        let newURL = Self.itemForSaleURL(setNum: setNum, used: false) ?? priceGuideURL
-        let usedURL = Self.itemForSaleURL(setNum: setNum, used: true) ?? priceGuideURL
+        // The price guide is what we scrape; the link we surface is the set's
+        // catalog item page (filter options in the fragment didn't stick).
+        let itemURL = URL(string: "https://www.bricklink.com/v2/catalog/catalogitem.page?S=\(setNum)") ?? priceGuideURL
 
         let scraper: HeadlessWebScraper
         if let injected = self.scraper {
@@ -122,7 +106,7 @@ struct BrickLinkPriceScraper: Sendable {
                 source: .bricklinkUsed,
                 amount: amount,
                 currency: PriceParsing.currency(from: used),
-                sourceURL: usedURL,
+                sourceURL: itemURL,
                 fetchedAt: fetchedAt
             ))
         }
@@ -131,7 +115,7 @@ struct BrickLinkPriceScraper: Sendable {
                 source: .bricklinkNew,
                 amount: amount,
                 currency: PriceParsing.currency(from: new),
-                sourceURL: newURL,
+                sourceURL: itemURL,
                 fetchedAt: fetchedAt
             ))
         }
