@@ -22,7 +22,10 @@ enum ScrapeError: Error {
 /// `cf_clearance` cookie persist across calls in the same app session,
 /// avoiding the challenge on subsequent requests to the same site.
 @MainActor
-final class HeadlessWebScraper: NSObject {
+// @unchecked: mutable state (`navigationContinuation`, `isBusy`, `waiters`)
+// is only ever touched on the main actor, so cross-actor passing of the
+// reference itself (e.g. as a struct's stored property) is safe.
+final class HeadlessWebScraper: NSObject, @unchecked Sendable {
     // `static let` on an `@MainActor` class is isolated by default, which
     // blocks using `.shared` as a default argument value in nonisolated
     // scraper inits. Safe to read without isolation: it's a constant set

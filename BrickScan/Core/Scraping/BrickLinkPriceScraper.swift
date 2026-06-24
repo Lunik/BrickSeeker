@@ -8,7 +8,7 @@ import Foundation
 /// BrickLink's markup isn't documented and class names are the first thing
 /// to break on a redesign. If BrickLink changes their wording, this needs
 /// updating — see `BrickLinkPriceScraperTests` for the expected shape.
-struct BrickLinkPriceScraper {
+struct BrickLinkPriceScraper: Sendable {
     private struct RawPrices: Decodable {
         let used: String?
         let new: String?

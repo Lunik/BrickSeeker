@@ -9,7 +9,7 @@ import Foundation
 /// the two): any failure here — CAPTCHA, no matching card, layout change —
 /// is caught by the caller and simply omits the Amazon quote, it never
 /// blocks BrickLink's result.
-struct AmazonPriceScraper {
+struct AmazonPriceScraper: Sendable {
     private struct RawResult: Decodable {
         let price: String
         let url: String?

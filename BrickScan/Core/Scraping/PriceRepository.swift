@@ -1,6 +1,6 @@
 import Foundation
 
-protocol PriceRepositoryProtocol {
+protocol PriceRepositoryProtocol: Sendable {
     /// Scrapes every price source for `legoSet` in parallel and returns
     /// whatever quotes succeeded. Never throws: a source that fails (CAPTCHA,
     /// layout change, timeout) is silently dropped rather than failing the
