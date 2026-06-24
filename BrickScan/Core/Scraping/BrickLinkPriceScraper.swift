@@ -74,9 +74,14 @@ struct BrickLinkPriceScraper: Sendable {
     }
 
     func fetchPrices(setNum: String) async throws -> [PriceQuote] {
-        guard let url = URL(string: "https://www.bricklink.com/catalogPG.asp?S=\(setNum)") else {
+        // `viewExclude=Y` is BrickLink's "Exclude Incomplete Sets" toggle — we
+        // want the value of a complete set, not one missing pieces.
+        guard let priceGuideURL = URL(string: "https://www.bricklink.com/catalogPG.asp?S=\(setNum)&viewExclude=Y") else {
             throw ScrapeError.notFound
         }
+        // The price guide is what we scrape; the link we surface points at the
+        // set's catalog item page, which is the useful destination for a user.
+        let itemURL = URL(string: "https://www.bricklink.com/v2/catalog/catalogitem.page?S=\(setNum)") ?? priceGuideURL
 
         let scraper: HeadlessWebScraper
         if let injected = self.scraper {
@@ -85,7 +90,7 @@ struct BrickLinkPriceScraper: Sendable {
             scraper = await HeadlessWebScraper.shared
         }
         let json = try await scraper.loadAndExtract(
-            url: url,
+            url: priceGuideURL,
             readinessScript: Self.readinessScript,
             extractScript: Self.extractScript
         )
@@ -101,7 +106,7 @@ struct BrickLinkPriceScraper: Sendable {
                 source: .bricklinkUsed,
                 amount: amount,
                 currency: PriceParsing.currency(from: used),
-                sourceURL: url,
+                sourceURL: itemURL,
                 fetchedAt: fetchedAt
             ))
         }
@@ -110,7 +115,7 @@ struct BrickLinkPriceScraper: Sendable {
                 source: .bricklinkNew,
                 amount: amount,
                 currency: PriceParsing.currency(from: new),
-                sourceURL: url,
+                sourceURL: itemURL,
                 fetchedAt: fetchedAt
             ))
         }
