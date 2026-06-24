@@ -47,9 +47,13 @@ struct BrickLinkPriceScraper: Sendable {
     })()
     """
 
-    private let scraper: HeadlessWebScraper
+    // Not defaulted to `.shared` here: that's a main-actor-isolated static
+    // property, and a default argument value must be evaluable in this
+    // (nonisolated) init's context. Resolved lazily in `fetchPrices` instead,
+    // where `await` can hop onto the main actor.
+    private let scraper: HeadlessWebScraper?
 
-    init(scraper: HeadlessWebScraper = .shared) {
+    init(scraper: HeadlessWebScraper? = nil) {
         self.scraper = scraper
     }
 
@@ -58,6 +62,7 @@ struct BrickLinkPriceScraper: Sendable {
             throw ScrapeError.notFound
         }
 
+        let scraper = await self.scraper ?? HeadlessWebScraper.shared
         let json = try await scraper.loadAndExtract(
             url: url,
             readinessScript: Self.readinessScript,

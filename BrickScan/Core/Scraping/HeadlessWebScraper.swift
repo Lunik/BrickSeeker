@@ -26,12 +26,7 @@ enum ScrapeError: Error {
 // is only ever touched on the main actor, so cross-actor passing of the
 // reference itself (e.g. as a struct's stored property) is safe.
 final class HeadlessWebScraper: NSObject, @unchecked Sendable {
-    // `static let` on an `@MainActor` class is isolated by default, which
-    // blocks using `.shared` as a default argument value in nonisolated
-    // scraper inits. Safe to read without isolation: it's a constant set
-    // once, and every actual interaction with the instance still goes
-    // through `await`-guarded async methods.
-    nonisolated(unsafe) static let shared = HeadlessWebScraper()
+    static let shared = HeadlessWebScraper()
 
     private let webView: WKWebView
     private var navigationContinuation: CheckedContinuation<Void, Error>?
@@ -43,9 +38,7 @@ final class HeadlessWebScraper: NSObject, @unchecked Sendable {
     private var isBusy = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
 
-    // Nonisolated so `static let shared`'s initializer (itself nonisolated,
-    // per the annotation above) can call it without needing MainActor.
-    nonisolated override init() {
+    override init() {
         webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
         super.init()
         webView.navigationDelegate = self
