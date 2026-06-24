@@ -78,11 +78,6 @@ struct SetDetailView: View {
                             Link("Voir sur Rebrickable", destination: url)
                                 .font(.footnote)
                         }
-                        if viewModel.storePrice?.amount != nil,
-                           let url = LegoStoreRepository.storeUrl(setNum: viewModel.legoSet.setNum) {
-                            Link("Voir sur lego.com", destination: url)
-                                .font(.footnote)
-                        }
                     }
                 }
                 .padding(16)
@@ -179,7 +174,7 @@ struct SetDetailView: View {
 
             legoStoreRow
 
-            ForEach(PriceSource.allCases, id: \.self) { source in
+            ForEach([PriceSource.amazon, .bricklinkNew, .bricklinkUsed], id: \.self) { source in
                 if let quote = viewModel.priceQuotes.first(where: { $0.source == source }) {
                     priceRow(label: source.displayName) {
                         if let sourceURL = quote.sourceURL {
