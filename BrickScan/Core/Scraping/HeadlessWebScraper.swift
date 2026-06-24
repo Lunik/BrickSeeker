@@ -23,7 +23,12 @@ enum ScrapeError: Error {
 /// avoiding the challenge on subsequent requests to the same site.
 @MainActor
 final class HeadlessWebScraper: NSObject {
-    static let shared = HeadlessWebScraper()
+    // `static let` on an `@MainActor` class is isolated by default, which
+    // blocks using `.shared` as a default argument value in nonisolated
+    // scraper inits. Safe to read without isolation: it's a constant set
+    // once, and every actual interaction with the instance still goes
+    // through `await`-guarded async methods.
+    nonisolated(unsafe) static let shared = HeadlessWebScraper()
 
     private let webView: WKWebView
     private var navigationContinuation: CheckedContinuation<Void, Error>?
