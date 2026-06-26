@@ -76,7 +76,8 @@ struct HistoryView: View {
                         initialListName: lookupViewModel.lastFoundWasFromCache ? cached?.currentListName : nil,
                         initialStorePrice: cached?.storePriceEUR.map { StorePrice(amount: $0, currency: "EUR", availability: cached?.storeAvailability) },
                         initialStorePriceFetchedAt: cached?.storePriceFetchedAt,
-                        reconcileOnAppear: lookupViewModel.lastFoundWasFromCache
+                        reconcileOnAppear: lookupViewModel.lastFoundWasFromCache,
+                        isOfflineResult: lookupViewModel.lastFoundWasOffline
                     ) {
                         lookupViewModel.resumeScanning()
                     }

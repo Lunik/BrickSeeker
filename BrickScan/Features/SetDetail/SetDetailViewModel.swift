@@ -61,6 +61,14 @@ final class SetDetailViewModel {
 
     @MainActor
     func refreshStorePrice() async {
+        guard NetworkMonitor.shared.isConnected else {
+            // `isLoadingStorePrice` may already be `true` from `init` (it pre-sets the spinner
+            // when there's no cached price yet, before this function ever runs) — must be reset
+            // here too, or the price section spins forever instead of showing "Hors-ligne".
+            isLoadingStorePrice = false
+            storePriceErrorMessage = "Hors-ligne"
+            return
+        }
         isLoadingStorePrice = true
         storePriceErrorMessage = nil
         defer { isLoadingStorePrice = false }
@@ -82,6 +90,7 @@ final class SetDetailViewModel {
 
     @MainActor
     func loadPrices() async {
+        guard NetworkMonitor.shared.isConnected else { return }
         pricesLoading = true
         defer { pricesLoading = false }
         let quotes = await priceRepository.fetchPrices(for: legoSet)
@@ -123,6 +132,7 @@ final class SetDetailViewModel {
     /// error UI — if the fetch fails (e.g. offline), keep showing whatever the cache had.
     @MainActor
     func silentlyReconcileCollectionStatus() async {
+        guard NetworkMonitor.shared.isConnected else { return }
         do {
             let userSet = try await repository.fetchUserSet(setNum: legoSet.setNum)
             collectionStatus = userSet.map(CollectionStatus.inCollection) ?? .notInCollection
@@ -142,6 +152,11 @@ final class SetDetailViewModel {
 
     @MainActor
     private func refreshCollectionStatus() async {
+        guard NetworkMonitor.shared.isConnected else {
+            collectionStatus = .unknown("Hors-ligne — statut collection à rafraîchir une fois reconnecté")
+            collectionListName = nil
+            return
+        }
         do {
             let userSet = try await repository.fetchUserSet(setNum: legoSet.setNum)
             collectionStatus = userSet.map(CollectionStatus.inCollection) ?? .notInCollection

@@ -8,7 +8,7 @@ struct UserTokenResponse: Codable {
     }
 }
 
-struct LegoSet: Codable, Identifiable, Hashable {
+struct LegoSet: Codable, Identifiable, Hashable, Sendable {
     var id: String { setNum }
 
     let setNum: String

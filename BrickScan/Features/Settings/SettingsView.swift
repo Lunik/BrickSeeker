@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var cacheCleared = false
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationStack {
@@ -104,6 +105,55 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    if let metadata = viewModel.offlineCatalogMetadata {
+                        HStack {
+                            Text("\(metadata.setCount) sets")
+                            Spacer()
+                            Text(metadata.downloadedAt, style: .date)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        Text("Aucun catalogue téléchargé")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if viewModel.isUpdatingOfflineCatalog {
+                        ProgressView(value: viewModel.offlineCatalogDownloadProgress)
+                    }
+
+                    if let errorMessage = viewModel.offlineCatalogErrorMessage {
+                        Text(errorMessage)
+                            .foregroundStyle(Color(hex: "E3000B"))
+                            .font(.footnote)
+                    }
+
+                    Button {
+                        Task { await viewModel.downloadOfflineCatalog() }
+                    } label: {
+                        HStack {
+                            Text(downloadButtonTitle)
+                            Spacer()
+                            if viewModel.isUpdatingOfflineCatalog {
+                                Text(viewModel.offlineCatalogDownloadProgress, format: .percent.precision(.fractionLength(0)))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .disabled(viewModel.isUpdatingOfflineCatalog)
+
+                    if viewModel.offlineCatalogMetadata != nil {
+                        Button("Purger le catalogue", role: .destructive) {
+                            viewModel.purgeOfflineCatalog()
+                        }
+                        .disabled(viewModel.isUpdatingOfflineCatalog)
+                    }
+                } header: {
+                    Text("Catalogue hors-ligne")
+                } footer: {
+                    Text("Permet d'identifier un set déjà connu même sans réseau. Téléchargé depuis Rebrickable (~25 000 sets) ; le statut collection et les prix restent toujours en ligne.")
+                }
+
+                Section {
                     Button("Confidentialité & données") {
                         showPrivacyDetail = true
                     }
@@ -137,7 +187,20 @@ struct SettingsView: View {
             } message: {
                 Text("Supprime les images, prix et listes mis en cache. Votre clé API et votre compte sont conservés.")
             }
+            .onChange(of: scenePhase) { _, newPhase in
+                viewModel.handleScenePhaseChange(isActive: newPhase == .active)
+            }
         }
+    }
+
+    private var downloadButtonTitle: String {
+        if viewModel.isUpdatingOfflineCatalog {
+            return "Téléchargement en cours…"
+        }
+        if viewModel.hasResumableOfflineCatalogDownload {
+            return "Reprendre le téléchargement"
+        }
+        return viewModel.offlineCatalogMetadata == nil ? "Télécharger le catalogue" : "Mettre à jour le catalogue"
     }
 
     private func clearCache() async {

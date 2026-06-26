@@ -10,6 +10,7 @@ struct SetDetailView: View {
 
     let onScanAgain: () -> Void
     private let reconcileOnAppear: Bool
+    private let isOfflineResult: Bool
 
     init(
         legoSet: LegoSet,
@@ -18,6 +19,7 @@ struct SetDetailView: View {
         initialStorePrice: StorePrice? = nil,
         initialStorePriceFetchedAt: Date? = nil,
         reconcileOnAppear: Bool = false,
+        isOfflineResult: Bool = false,
         onScanAgain: @escaping () -> Void
     ) {
         _viewModel = State(initialValue: SetDetailViewModel(
@@ -28,6 +30,7 @@ struct SetDetailView: View {
             initialStorePriceFetchedAt: initialStorePriceFetchedAt
         ))
         self.reconcileOnAppear = reconcileOnAppear
+        self.isOfflineResult = isOfflineResult
         self.onScanAgain = onScanAgain
     }
 
@@ -54,6 +57,12 @@ struct SetDetailView: View {
                             .multilineTextAlignment(.center)
                         Text("\(viewModel.legoSet.year) · \(viewModel.legoSet.numParts) pièces")
                             .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if isOfflineResult {
+                        Label("Résultat hors-ligne — identification depuis le catalogue embarqué", systemImage: "wifi.slash")
+                            .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
 

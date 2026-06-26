@@ -33,7 +33,7 @@ final class HomeViewModel {
 
     func syncCollection() async {
         loadFromCache()
-        guard isAccountLinked else { return }
+        guard isAccountLinked, NetworkMonitor.shared.isConnected else { return }
 
         isSyncing = true
         syncErrorMessage = nil

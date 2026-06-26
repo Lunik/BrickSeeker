@@ -10,12 +10,74 @@ final class SettingsViewModel {
     var linkAccountErrorMessage: String?
     var isAccountLinked: Bool
 
+    var isUpdatingOfflineCatalog = false
+    var offlineCatalogDownloadProgress: Double = 0
+    var offlineCatalogErrorMessage: String?
+    var offlineCatalogMetadata: OfflineCatalogStore.Metadata?
+
+    private let offlineCatalogStore: OfflineCatalogStore
+    /// Set right before `cancelActiveDownloadPreservingProgress()` so the resulting
+    /// `.networkUnavailable` thrown back into `downloadOfflineCatalog()` is recognized as a
+    /// deliberate pause (app backgrounding) rather than a real connectivity failure, and shown
+    /// with reassuring copy instead of an error.
+    private var pausedForBackgrounding = false
+
     private let repository: RebrickableRepositoryProtocol
 
-    init(repository: RebrickableRepositoryProtocol = RebrickableRepository()) {
+    init(
+        repository: RebrickableRepositoryProtocol = RebrickableRepository(),
+        offlineCatalogStore: OfflineCatalogStore = .shared
+    ) {
         self.apiKey = KeychainService.shared.load(key: .apiKey) ?? ""
         self.isAccountLinked = KeychainService.shared.load(key: .userToken) != nil
         self.repository = repository
+        self.offlineCatalogStore = offlineCatalogStore
+        self.offlineCatalogMetadata = offlineCatalogStore.metadata
+    }
+
+    var hasResumableOfflineCatalogDownload: Bool {
+        offlineCatalogStore.hasResumableDownload
+    }
+
+    @MainActor
+    func downloadOfflineCatalog() async {
+        isUpdatingOfflineCatalog = true
+        offlineCatalogDownloadProgress = 0
+        offlineCatalogErrorMessage = nil
+        pausedForBackgrounding = false
+        defer { isUpdatingOfflineCatalog = false }
+
+        do {
+            try await offlineCatalogStore.download { [weak self] value in
+                self?.offlineCatalogDownloadProgress = value
+            }
+            offlineCatalogMetadata = offlineCatalogStore.metadata
+        } catch let error as APIError {
+            if pausedForBackgrounding {
+                offlineCatalogErrorMessage = "Téléchargement interrompu — il reprendra où il s'est arrêté à la prochaine ouverture."
+            } else {
+                offlineCatalogErrorMessage = error.errorDescription
+            }
+        } catch {
+            offlineCatalogErrorMessage = "Téléchargement impossible. Vérifiez votre réseau."
+        }
+    }
+
+    /// Called from `SettingsView`'s `scenePhase` observer when the app stops being active. If a
+    /// download is in flight, pauses it so its resume data is preserved instead of being lost to
+    /// the app suspending/terminating mid-transfer (see `OfflineCatalogStore.
+    /// cancelActiveDownloadPreservingProgress`).
+    @MainActor
+    func handleScenePhaseChange(isActive: Bool) {
+        guard !isActive, isUpdatingOfflineCatalog else { return }
+        pausedForBackgrounding = true
+        offlineCatalogStore.cancelActiveDownloadPreservingProgress()
+    }
+
+    @MainActor
+    func purgeOfflineCatalog() {
+        offlineCatalogStore.purge()
+        offlineCatalogMetadata = nil
     }
 
     var isConfigured: Bool {

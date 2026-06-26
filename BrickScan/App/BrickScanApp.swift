@@ -9,6 +9,7 @@ struct BrickScanApp: App {
     // recreated every time the camera is exited, and re-syncing the collection on every single
     // return from the camera was a needless network round-trip. Created once at real app launch.
     @State private var homeViewModel: HomeViewModel?
+    @State private var networkMonitor = NetworkMonitor.shared
 
     var modelContainer: ModelContainer = {
         let schema = Schema([CachedSet.self, CachedSetList.self, CollectionSyncState.self, CachedSetPrice.self])
@@ -35,7 +36,12 @@ struct BrickScanApp: App {
                     SplashView()
                         .transition(.opacity)
                 }
+
+                if !networkMonitor.isConnected {
+                    OfflineIndicatorView()
+                }
             }
+            .animation(.easeOut(duration: 0.2), value: networkMonitor.isConnected)
             .task {
                 if homeViewModel == nil {
                     let vm = HomeViewModel(localRepository: LocalRepository(modelContext: modelContainer.mainContext))
