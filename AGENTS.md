@@ -216,24 +216,74 @@ Two different things, don't conflate them:
 
 ## Offline catalogue fallback (scanning with no network)
 
-`OfflineCatalogStore` (`Core/Storage/OfflineCatalogStore.swift`) loads a bundled, build-time
-snapshot (`BrickScan/Resources/OfflineCatalogSnapshot.json`) of `set_num → name/year/theme_id/
-num_parts/set_img_url` so basic identification still works with zero network — the typical
-scanning scenario (in-store, poor reception) where a never-before-seen set would otherwise fail
-outright. `ScannerViewModel.resolveSet`'s `catch` block falls back to it *only* on
-`APIError.networkUnavailable` (not on auth/server errors, which aren't a connectivity problem and
-shouldn't be silently masked), and only when there's no existing `CachedSet` hit already being
-shown (`lastFoundWasFromCache`). It sets `lastFoundWasOffline = true` and surfaces the result via
-the existing `CollectionStatus.unknown(...)` UI path (retry button included) rather than a new one
-— `SetDetailView` additionally shows a small "Résultat hors-ligne" label when `isOfflineResult` is
-threaded through to it. Collection status and live prices are deliberately **not** in the
-snapshot — same "catalog facts are static, collection status isn't" split as the rest of the app.
+`OfflineCatalogStore` (`Core/Storage/OfflineCatalogStore.swift`) manages a snapshot of
+`set_num → name/year/theme_id/num_parts/set_img_url` so basic identification still works with
+zero network — the typical scanning scenario (in-store, poor reception) where a never-before-seen
+set would otherwise fail outright. There is **no bundled placeholder file** — the snapshot is
+downloaded entirely in-app, on demand, from Settings ("Catalogue hors-ligne" section,
+`SettingsViewModel.downloadOfflineCatalog()`/`purgeOfflineCatalog()`), and stored as JSON in
+Application Support (`OfflineCatalogSnapshot.json` + `OfflineCatalogMetadata.json`, **not** the
+app bundle). Before the user downloads it at least once, `OfflineCatalogStore.isEmpty` is true and
+the fallback simply doesn't trigger.
 
-The committed `OfflineCatalogSnapshot.json` is a tiny, hand-picked placeholder (a handful of
-well-known sets), not a real catalogue dump — regenerate it for real with
-`Scripts/generate_offline_catalog_snapshot.py` (downloads Rebrickable's public, unauthenticated
-`sets.csv.gz`; see the script's docstring) before relying on this feature in production, and check
-the resulting bundle size first.
+Source is Rebrickable's public, unauthenticated `sets.csv.gz` dump
+(`OfflineCatalogStore.downloadURL`, `cdn.rebrickable.com/media/downloads/sets.csv.gz` — no API key
+needed, see `rebrickable.com/downloads/`). `download()` fetches it directly via `URLSession`
+(bypassing `NetworkClient`/`RequestThrottler`/the API-key header — this isn't a v3 API call),
+strips the gzip container and inflates the raw deflate payload itself via Apple's `Compression`
+framework (`OfflineCatalogStore.gunzip`; `COMPRESSION_ZLIB` in that framework means raw deflate,
+not zlib/gzip framing — there's no other way to inflate gzip on iOS without a third-party
+dependency, which this app deliberately avoids), then parses the
+`set_num,name,year,theme_id,num_parts,img_url` CSV columns into `LegoSet` (`set_img_url` renamed
+from the dump's `img_url`). Don't reach for a bundled/Python-generated snapshot again — the whole
+point of this rework was to make download/update/purge user-controlled, in-app actions instead of
+a manual offline build step.
+
+Three non-obvious bugs were found and fixed only by testing against a real download (the dump is
+~500KB compressed / ~2.6MB of CSV, ~27k rows — nothing about them showed up against small
+hand-made fixtures), in case anything here gets touched again:
+- `gunzip` uses the one-shot `compression_decode_buffer`, not the streaming
+  `compression_stream_process` API — the streaming API returned `COMPRESSION_STATUS_ERROR`
+  immediately when verified by hand against a real `sets.csv.gz`, even with
+  `COMPRESSION_STREAM_FINALIZE` passed on every call (the correct idiom when the whole input is
+  already in memory). The destination buffer is sized exactly from the gzip trailer's ISIZE field
+  (last 4 bytes, little-endian, RFC 1952) rather than grown in a loop.
+- That ISIZE must be assembled byte-by-byte (`UInt32(bytes[0]) | bytes[1]<<8 | ...`), not via
+  `UnsafeRawBufferPointer.load(as: UInt32.self)` — `data.suffix(4)`'s offset into the backing
+  buffer isn't guaranteed 4-byte aligned, and `load(as:)` **traps** (not throws) on unaligned
+  access. This crashed the app on a real device/simulator with `EXC_BREAKPOINT`.
+- `parseCSV` splits lines with `text.split(whereSeparator: { $0.isNewline })`, not
+  `split(separator: "\n")` — the real dump uses CRLF line endings, and Swift's `Character` treats
+  `"\r\n"` as one indivisible grapheme cluster that never equals a lone `"\n"` `Character`. Against
+  a real download that split found zero line breaks (the entire file became "one line"), silently
+  producing a 0-set result with no thrown error — the kind of bug that's invisible unless you
+  check the actual set count after a download, not just whether it "succeeded".
+
+The download itself is a real `URLSessionDownloadTask` (via `DownloadDelegate`, a private
+delegate bridging its callback API to the `async`/`await` call in `download(progress:)`), not a
+one-shot `session.data(from:)` — `download(progress:)` reports `0...1` through that closure on the
+main actor so `SettingsView` can show a real `ProgressView(value:)`/percentage instead of an
+indeterminate spinner. It's resumable by construction: `cancelActiveDownloadPreservingProgress()`
+(called from `SettingsView`'s `.onChange(of: scenePhase)` when the app stops being `.active`) and
+a genuine network drop both go through the same path — `URLSessionTask.cancel(byProducingResumeData:)`
+or `URLError`'s `NSURLSessionDownloadTaskResumeData` userInfo — and persist the resulting resume
+data to `OfflineCatalogResumeData` in Application Support. The next `download()` call (even after
+a full app relaunch, since it's read from disk, not memory) picks that file up and resumes via
+`URLSession.downloadTask(withResumeData:)` instead of restarting from byte zero;
+`hasResumableDownload`/`SettingsViewModel.hasResumableOfflineCatalogDownload` drive the "Reprendre
+le téléchargement" button label for that case. There's no way to react to a hard kill from the
+task switcher (no code runs at all), only to the app backgrounding — that's the one termination
+path this can actually intercept.
+
+`ScannerViewModel.resolveSet`'s `catch` block falls back to `OfflineCatalogStore.shared.lookup`
+*only* on `APIError.networkUnavailable` (not on auth/server errors, which aren't a connectivity
+problem and shouldn't be silently masked), and only when there's no existing `CachedSet` hit
+already being shown (`lastFoundWasFromCache`). It sets `lastFoundWasOffline = true` and surfaces
+the result via the existing `CollectionStatus.unknown(...)` UI path (retry button included) rather
+than a new one — `SetDetailView` additionally shows a small "Résultat hors-ligne" label when
+`isOfflineResult` is threaded through to it. Collection status and live prices are deliberately
+**not** in the snapshot — same "catalog facts are static, collection status isn't" split as the
+rest of the app.
 
 ## Code signing — never put a team ID in tracked files
 
