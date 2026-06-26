@@ -285,6 +285,26 @@ than a new one — `SetDetailView` additionally shows a small "Résultat hors-li
 **not** in the snapshot — same "catalog facts are static, collection status isn't" split as the
 rest of the app.
 
+## Device-wide offline indicator + proactive network guards
+
+`NetworkMonitor` (`Core/Network/NetworkMonitor.swift`) is an `@Observable @MainActor` singleton
+wrapping `NWPathMonitor` — `isConnected` reflects the device's actual network path (Wi-Fi/cellular
+reachability), not "can we reach rebrickable.com specifically". `BrickScanApp` shows a small
+"Hors-ligne" capsule (`OfflineIndicatorView`, `Features/Shared/`) pinned to the top of the root
+`ZStack` whenever it's `false` — passive, non-blocking, `allowsHitTesting(false)`.
+
+This is also used to **proactively skip** collection-status/price checks while offline, rather than
+firing them and letting them fail into the same UI a `catch` block would produce — there's no
+point attempting a request (and waiting out its timeout) when the device has no path at all.
+Guarded with an early `guard NetworkMonitor.shared.isConnected else { ... }`:
+`HomeViewModel.syncCollection()`, `ScannerViewModel.resolveSet`/`fetchCollectionStatus` (the
+`resolveSet` guard mirrors its existing `catch APIError.networkUnavailable` offline-catalogue
+fallback, just entered proactively instead of after a failed attempt), and on
+`SetDetailViewModel`: `refreshStorePrice`, `loadPrices`, `silentlyReconcileCollectionStatus`,
+`refreshCollectionStatus`. If you add another place that fetches live collection status or prices,
+add the same guard rather than letting it hit the network and fail — keeps behavior consistent and
+avoids burning the request-per-second budget in `RequestThrottler` on calls known to fail.
+
 ## Code signing — never put a team ID in tracked files
 
 `DEVELOPMENT_TEAM` lives **only** in `Signing.xcconfig`, which is gitignored. `project.yml`
