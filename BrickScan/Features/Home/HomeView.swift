@@ -16,6 +16,7 @@ struct HomeView: View {
     @State private var showCollection = false
 
     let onStartScanning: () -> Void
+    @Binding var pendingAction: AppShortcut?
 
     var body: some View {
         NavigationStack {
@@ -122,6 +123,21 @@ struct HomeView: View {
             // Local-only refresh (no network) — picks up anything scanned while the camera was
             // open without re-syncing the whole remote collection just for returning to Home.
             viewModel.loadFromCache()
+            consumePendingAction()
+        }
+        .onChange(of: pendingAction) { _, _ in consumePendingAction() }
+    }
+
+    private func consumePendingAction() {
+        guard let pendingAction else { return }
+        self.pendingAction = nil
+        switch pendingAction {
+        case .manualEntry:
+            showManualEntry = true
+        case .photo:
+            showPhotoPicker = true
+        case .scan:
+            break
         }
     }
 

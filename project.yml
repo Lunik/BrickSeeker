@@ -25,6 +25,16 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UILaunchScreen: {}
+        UIApplicationShortcutItems:
+          - UIApplicationShortcutItemType: com.lunik.brickscan.scan
+            UIApplicationShortcutItemTitle: Scanner un set
+            UIApplicationShortcutItemIconType: UIApplicationShortcutIconTypeCapturePhoto
+          - UIApplicationShortcutItemType: com.lunik.brickscan.manualEntry
+            UIApplicationShortcutItemTitle: Saisie manuelle
+            UIApplicationShortcutItemIconSymbolName: keyboard
+          - UIApplicationShortcutItemType: com.lunik.brickscan.photo
+            UIApplicationShortcutItemTitle: Importer une photo
+            UIApplicationShortcutItemIconSymbolName: photo.on.rectangle
     configFiles:
       Debug: Signing.xcconfig
       Release: Signing.xcconfig

@@ -20,6 +20,33 @@
 	<string>1</string>
 	<key>NSCameraUsageDescription</key>
 	<string>BrickScan utilise la caméra pour scanner les boîtes et manuels LEGO</string>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeCapturePhoto</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Scanner un set</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.lunik.brickscan.scan</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>keyboard</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Saisie manuelle</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.lunik.brickscan.manualEntry</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>photo.on.rectangle</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Importer une photo</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.lunik.brickscan.photo</string>
+		</dict>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>
