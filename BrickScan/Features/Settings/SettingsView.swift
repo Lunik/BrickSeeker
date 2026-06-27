@@ -1,5 +1,10 @@
 import SwiftUI
 
+/// Date-only, French-locale style for the "last updated/downloaded" timestamps in this view —
+/// the app's UI text is all French regardless of the device's system locale, so dates shown
+/// here shouldn't silently follow it either.
+private let frenchDateStyle = Date.FormatStyle(date: .abbreviated, time: .omitted, locale: Locale(identifier: "fr_FR"))
+
 struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
     @State private var showPrivacyDetail = false
@@ -109,7 +114,7 @@ struct SettingsView: View {
                         HStack {
                             Text("\(metadata.setCount) sets")
                             Spacer()
-                            Text(metadata.downloadedAt, style: .date)
+                            Text(metadata.downloadedAt.formatted(frenchDateStyle))
                                 .foregroundStyle(.secondary)
                         }
                     } else {
@@ -155,7 +160,7 @@ struct SettingsView: View {
 
                 Section {
                     if let lastCompletedAt = viewModel.priceUpdateLastCompletedAt {
-                        Text("Dernière actualisation : \(lastCompletedAt.formatted(date: .abbreviated, time: .shortened))")
+                        Text("Dernière actualisation : \(lastCompletedAt.formatted(frenchDateStyle))")
                             .foregroundStyle(.secondary)
                     }
 
