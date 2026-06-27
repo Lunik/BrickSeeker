@@ -16,7 +16,7 @@ struct HomeView: View {
     @State private var showCollection = false
 
     let onStartScanning: () -> Void
-    @Binding var pendingAction: AppShortcut?
+    @Binding var pendingAction: HomeScreenShortcut?
 
     var body: some View {
         NavigationStack {

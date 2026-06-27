@@ -12,7 +12,7 @@ struct BrickScanApp: App {
     @State private var homeViewModel: HomeViewModel?
     @State private var networkMonitor = NetworkMonitor.shared
     @State private var shortcutCenter = ShortcutCenter.shared
-    @State private var pendingHomeAction: AppShortcut?
+    @State private var pendingHomeAction: HomeScreenShortcut?
 
     var modelContainer: ModelContainer = {
         let schema = Schema([CachedSet.self, CachedSetList.self, CollectionSyncState.self, CachedSetPrice.self, PriceHistoryEntry.self])

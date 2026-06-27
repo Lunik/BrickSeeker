@@ -2,7 +2,7 @@ import UIKit
 import Observation
 
 /// Routes a Home Screen Quick Action (long-press on the app icon) to the entry point it mirrors.
-enum AppShortcut: String {
+enum HomeScreenShortcut: String {
     case scan = "com.lunik.brickscan.scan"
     case manualEntry = "com.lunik.brickscan.manualEntry"
     case photo = "com.lunik.brickscan.photo"
@@ -15,7 +15,7 @@ enum AppShortcut: String {
 final class ShortcutCenter {
     static let shared = ShortcutCenter()
 
-    var pendingShortcut: AppShortcut?
+    var pendingShortcut: HomeScreenShortcut?
 
     private init() {}
 }
@@ -49,7 +49,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     }
 
     private func handle(_ shortcutItem: UIApplicationShortcutItem) {
-        guard let shortcut = AppShortcut(rawValue: shortcutItem.type) else { return }
+        guard let shortcut = HomeScreenShortcut(rawValue: shortcutItem.type) else { return }
         Task { @MainActor in
             ShortcutCenter.shared.pendingShortcut = shortcut
         }
