@@ -5,9 +5,8 @@ struct BrickScanShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: CheckSetPriceIntent(),
             phrases: [
-                "Vérifie le prix du set \(.applicationName)",
-                "Vérifie le prix du set LEGO \(\.$setNumber) sur \(.applicationName)",
-                "Quel est le prix du set \(\.$setNumber) sur \(.applicationName)"
+                "Vérifie le prix d'un set LEGO sur \(.applicationName)",
+                "Quel est le prix d'un set LEGO sur \(.applicationName)"
             ],
             shortTitle: "Prix d'un set LEGO",
             systemImageName: "tag"

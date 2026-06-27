@@ -9,3 +9,5 @@ BrickScan.xcodeproj/
 
 # Local signing config — copy Signing.xcconfig.example to Signing.xcconfig
 Signing.xcconfig
+
+build_*
