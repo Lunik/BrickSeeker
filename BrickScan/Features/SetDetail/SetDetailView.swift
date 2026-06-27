@@ -1,10 +1,12 @@
 import SwiftUI
 import SwiftData
+import Charts
 
 struct SetDetailView: View {
     @State private var viewModel: SetDetailViewModel
     @State private var showListPicker = false
     @State private var showRemoveConfirmation = false
+    @State private var priceHistory: [PriceHistoryEntry] = []
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
@@ -69,6 +71,8 @@ struct SetDetailView: View {
                     statusBadge
 
                     priceSection
+
+                    priceHistoryChart
 
                     if viewModel.isLoading {
                         ProgressView()
@@ -143,16 +147,55 @@ struct SetDetailView: View {
                 await refreshPrices()
             }
         }
+        .task {
+            reloadPriceHistory()
+        }
     }
 
     private func syncStorePriceCache() {
         guard let storePrice = viewModel.storePrice, viewModel.storePriceFetchedAt != nil else { return }
         LocalRepository(modelContext: modelContext).cacheStorePrice(setNum: viewModel.legoSet.setNum, price: storePrice)
+        reloadPriceHistory()
     }
 
     private func refreshPrices() async {
         await viewModel.loadPrices()
         LocalRepository(modelContext: modelContext).cachePrices(viewModel.priceQuotes, setNum: viewModel.legoSet.setNum)
+        reloadPriceHistory()
+    }
+
+    private func reloadPriceHistory() {
+        priceHistory = LocalRepository(modelContext: modelContext).priceHistory(setNum: viewModel.legoSet.setNum)
+    }
+
+    /// Line chart of every recorded price reading (one per source), shown only once there's more
+    /// than a single point to draw a trend from — see issue #5.
+    @ViewBuilder
+    private var priceHistoryChart: some View {
+        let bySource = Dictionary(grouping: priceHistory, by: \.source)
+        if priceHistory.count > 1 {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Évolution des prix")
+                    .font(.subheadline.bold())
+                Chart {
+                    ForEach(bySource.keys.sorted(), id: \.self) { source in
+                        ForEach(bySource[source] ?? [], id: \.persistentModelID) { entry in
+                            LineMark(
+                                x: .value("Date", entry.fetchedAt),
+                                y: .value("Prix", (entry.amount as NSDecimalNumber).doubleValue)
+                            )
+                            .foregroundStyle(by: .value("Source", source.priceHistorySourceDisplayName))
+                            .symbol(by: .value("Source", source.priceHistorySourceDisplayName))
+                        }
+                    }
+                }
+                .frame(height: 180)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
     }
 
     /// Whether any price source is currently being (re)fetched — drives the

@@ -12,7 +12,7 @@ struct BrickScanApp: App {
     @State private var networkMonitor = NetworkMonitor.shared
 
     var modelContainer: ModelContainer = {
-        let schema = Schema([CachedSet.self, CachedSetList.self, CollectionSyncState.self, CachedSetPrice.self])
+        let schema = Schema([CachedSet.self, CachedSetList.self, CollectionSyncState.self, CachedSetPrice.self, PriceHistoryEntry.self])
         let configuration = ModelConfiguration(schema: schema)
         return try! ModelContainer(for: schema, configurations: [configuration])
     }()

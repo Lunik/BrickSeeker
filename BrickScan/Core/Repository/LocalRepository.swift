@@ -1,6 +1,10 @@
 import Foundation
 import SwiftData
 
+/// Source key used for `PriceHistoryEntry` rows from the official lego.com price, which (unlike
+/// `PriceQuote`) has no `PriceSource` case of its own.
+let legoStoreHistorySource = "legoStore"
+
 @MainActor
 final class LocalRepository {
     private let modelContext: ModelContext
@@ -87,6 +91,9 @@ final class LocalRepository {
         existing.storePriceEUR = price.amount
         existing.storeAvailability = price.availability
         existing.storePriceFetchedAt = Date()
+        if let amount = price.amount {
+            recordPriceHistory(setNum: setNum, source: legoStoreHistorySource, amount: Decimal(amount), currency: price.currency ?? "EUR")
+        }
         try? modelContext.save()
     }
 
@@ -185,6 +192,9 @@ final class LocalRepository {
         if let prices = try? modelContext.fetch(FetchDescriptor<CachedSetPrice>()) {
             prices.forEach { modelContext.delete($0) }
         }
+        if let history = try? modelContext.fetch(FetchDescriptor<PriceHistoryEntry>()) {
+            history.forEach { modelContext.delete($0) }
+        }
         if let syncStates = try? modelContext.fetch(FetchDescriptor<CollectionSyncState>()) {
             syncStates.forEach { modelContext.delete($0) }
         }
@@ -214,7 +224,38 @@ final class LocalRepository {
             } else {
                 modelContext.insert(CachedSetPrice(setNum: setNum, quote: quote))
             }
+            recordPriceHistory(setNum: setNum, source: source, amount: quote.amount, currency: quote.currency)
         }
         try? modelContext.save()
+    }
+
+    /// Appends a price reading for `setNum`+`source`, skipping the insert if one was already
+    /// recorded today — keeps the history one point per day per source (see issue #5) instead of
+    /// stacking duplicates every time `SetDetail` is opened or refreshed. Also trims entries older
+    /// than 180 days so the table doesn't grow unbounded.
+    private func recordPriceHistory(setNum: String, source: String, amount: Decimal, currency: String) {
+        let existing = (try? modelContext.fetch(
+            FetchDescriptor<PriceHistoryEntry>(predicate: #Predicate { $0.setNum == setNum && $0.source == source })
+        )) ?? []
+
+        if let mostRecent = existing.max(by: { $0.fetchedAt < $1.fetchedAt }),
+           Calendar.current.isDateInToday(mostRecent.fetchedAt) {
+            return
+        }
+
+        modelContext.insert(PriceHistoryEntry(setNum: setNum, source: source, amount: amount, currency: currency))
+
+        let cutoff = Date().addingTimeInterval(-180 * 24 * 60 * 60)
+        for entry in existing where entry.fetchedAt < cutoff {
+            modelContext.delete(entry)
+        }
+    }
+
+    /// All recorded price readings for a set, oldest first, for the history chart in `SetDetail`.
+    func priceHistory(setNum: String) -> [PriceHistoryEntry] {
+        let entries = (try? modelContext.fetch(
+            FetchDescriptor<PriceHistoryEntry>(predicate: #Predicate { $0.setNum == setNum })
+        )) ?? []
+        return entries.sorted { $0.fetchedAt < $1.fetchedAt }
     }
 }

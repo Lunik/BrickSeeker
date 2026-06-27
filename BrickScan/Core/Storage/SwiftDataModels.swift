@@ -99,6 +99,27 @@ final class CachedSetPrice {
     }
 }
 
+/// An append-only price reading, kept separate from `CachedSetPrice` (which only ever holds the
+/// latest value per set+source for the short-lived TTL cache). One entry is recorded per
+/// set+source+day, at the same point where a price is already fetched for display — no extra
+/// network calls, no background polling (see GitHub issue #5).
+@Model
+final class PriceHistoryEntry {
+    var setNum: String
+    var source: String
+    var amount: Decimal
+    var currency: String
+    var fetchedAt: Date
+
+    init(setNum: String, source: String, amount: Decimal, currency: String, fetchedAt: Date = Date()) {
+        self.setNum = setNum
+        self.source = source
+        self.amount = amount
+        self.currency = currency
+        self.fetchedAt = fetchedAt
+    }
+}
+
 @Model
 final class CachedSetList {
     @Attribute(.unique) var listId: Int

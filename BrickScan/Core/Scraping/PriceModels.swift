@@ -14,6 +14,15 @@ enum PriceSource: String, Codable, CaseIterable {
     }
 }
 
+extension String {
+    /// Display name for a `PriceHistoryEntry.source` raw value, covering both `PriceSource` cases
+    /// and `LocalRepository.legoStoreHistorySource` (lego.com has no `PriceSource` case of its own).
+    var priceHistorySourceDisplayName: String {
+        if self == legoStoreHistorySource { return "lego.com (officiel)" }
+        return PriceSource(rawValue: self)?.displayName ?? self
+    }
+}
+
 struct PriceQuote: Codable, Hashable {
     let source: PriceSource
     let amount: Decimal
