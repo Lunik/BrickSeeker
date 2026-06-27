@@ -13,6 +13,7 @@ struct BrickScanApp: App {
     @State private var networkMonitor = NetworkMonitor.shared
     @State private var shortcutCenter = ShortcutCenter.shared
     @State private var pendingHomeAction: HomeScreenShortcut?
+    @Environment(\.scenePhase) private var scenePhase
 
     var modelContainer: ModelContainer = {
         let schema = Schema([CachedSet.self, CachedSetList.self, CollectionSyncState.self, CachedSetPrice.self, PriceHistoryEntry.self])
@@ -45,6 +46,14 @@ struct BrickScanApp: App {
                 // didFinishLaunchingWithOptions before this view tree exists, so onChange's
                 // initial baseline already includes it and never reports a "change".
                 .onAppear { consumePendingShortcut() }
+                // Auto-resumes a collection price update paused by backgrounding (see
+                // `CollectionPriceUpdater`/`SettingsViewModel.handleScenePhaseChange`) the moment
+                // the app is reopened — the user shouldn't have to go back into Settings and tap
+                // "Reprendre" themselves just to continue a job they already started.
+                .onChange(of: scenePhase) { _, newPhase in
+                    guard newPhase == .active else { return }
+                    Task { await CollectionPriceUpdater.shared.resumeIfNeeded(modelContext: modelContainer.mainContext) }
+                }
 
                 if isShowingSplash {
                     SplashView()

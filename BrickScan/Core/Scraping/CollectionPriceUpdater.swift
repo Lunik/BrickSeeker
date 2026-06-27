@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 
 /// Drives a one-set-at-a-time price refresh across the user's whole collection, started
 /// explicitly from Settings — never automatically. A singleton (like
@@ -53,15 +54,17 @@ final class CollectionPriceUpdater {
     /// instead. `persist` is the caller's hook to actually write each set's fetched prices
     /// into SwiftData (this class has no `ModelContext` of its own).
     ///
-    /// Returns `true` if the whole queue drained (caller should fire the completion
-    /// notification), `false` if the run was cancelled (paused) mid-way.
+    /// Returns `completed: true` and the collection's total if the whole queue drained
+    /// (caller should fire the completion notification), `completed: false` if the run was
+    /// cancelled (paused) mid-way. `total` is captured before `clearQueue()` resets it, so
+    /// it's still meaningful even when `completed` is true.
     func start(
         allSets: [LegoSet],
         priceRepository: PriceRepositoryProtocol,
         legoStoreRepository: LegoStoreRepositoryProtocol,
         persist: @escaping @MainActor (LegoSet, [PriceQuote], StorePrice?) async -> Void
-    ) async -> Bool {
-        guard !isRunning else { return false }
+    ) async -> (completed: Bool, total: Int) {
+        guard !isRunning else { return (false, total) }
 
         var queue = Self.loadQueue(at: queueURL) ?? Queue(remaining: allSets, total: allSets.count)
         total = queue.total
@@ -73,7 +76,7 @@ final class CollectionPriceUpdater {
         while !queue.remaining.isEmpty {
             if cancelRequested {
                 saveQueue(queue)
-                return false
+                return (false, queue.total)
             }
 
             let legoSet = queue.remaining.removeFirst()
@@ -89,8 +92,32 @@ final class CollectionPriceUpdater {
             }
         }
 
+        let finishedTotal = queue.total
         clearQueue()
-        return true
+        return (true, finishedTotal)
+    }
+
+    /// Resumes a previously paused run with no user interaction — called when the app
+    /// becomes active again (see `BrickScanApp`'s `scenePhase` observer) so the user doesn't
+    /// have to reopen Settings and tap "Reprendre" themselves. No-ops if there's nothing to
+    /// resume or a run is already in flight.
+    @discardableResult
+    func resumeIfNeeded(
+        modelContext: ModelContext,
+        priceRepository: PriceRepositoryProtocol = PriceRepository(),
+        legoStoreRepository: LegoStoreRepositoryProtocol = LegoStoreRepository()
+    ) async -> Bool {
+        guard hasResumableUpdate, !isRunning else { return false }
+        let result = await start(
+            allSets: [],
+            priceRepository: priceRepository,
+            legoStoreRepository: legoStoreRepository,
+            persist: Self.persistClosure(modelContext: modelContext)
+        )
+        if result.completed {
+            PriceUpdateNotifier.notifyCompleted(total: result.total)
+        }
+        return result.completed
     }
 
     /// Stops the run after the set currently in flight finishes — the queue file is
@@ -99,6 +126,19 @@ final class CollectionPriceUpdater {
     func cancelPreservingProgress() {
         guard isRunning else { return }
         cancelRequested = true
+    }
+
+    /// Shared `persist` hook for `start()`/`resumeIfNeeded()` — writes a set's fetched
+    /// prices into SwiftData via the existing `LocalRepository.cachePrices`/`cacheStorePrice`
+    /// (which already records price history, see #24).
+    static func persistClosure(modelContext: ModelContext) -> @MainActor (LegoSet, [PriceQuote], StorePrice?) async -> Void {
+        { legoSet, quotes, storePrice in
+            let repo = LocalRepository(modelContext: modelContext)
+            repo.cachePrices(quotes, setNum: legoSet.setNum)
+            if let storePrice {
+                repo.cacheStorePrice(setNum: legoSet.setNum, price: storePrice)
+            }
+        }
     }
 
     private func saveQueue(_ queue: Queue) {

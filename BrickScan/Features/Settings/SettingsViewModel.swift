@@ -65,21 +65,15 @@ final class SettingsViewModel {
 
         await PriceUpdateNotifier.requestAuthorizationIfNeeded()
 
-        let completed = await CollectionPriceUpdater.shared.start(
+        let result = await CollectionPriceUpdater.shared.start(
             allSets: sets,
             priceRepository: priceRepository,
             legoStoreRepository: legoStoreRepository,
-            persist: { legoSet, quotes, storePrice in
-                let repo = LocalRepository(modelContext: modelContext)
-                repo.cachePrices(quotes, setNum: legoSet.setNum)
-                if let storePrice {
-                    repo.cacheStorePrice(setNum: legoSet.setNum, price: storePrice)
-                }
-            }
+            persist: CollectionPriceUpdater.persistClosure(modelContext: modelContext)
         )
 
-        if completed {
-            PriceUpdateNotifier.notifyCompleted(total: CollectionPriceUpdater.shared.total)
+        if result.completed {
+            PriceUpdateNotifier.notifyCompleted(total: result.total)
         }
     }
 
