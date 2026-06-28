@@ -219,23 +219,23 @@ final class ScannerViewModel {
         lastFrameProcessedAt = Date()
 
         let regionOfInterest = cameraController.visionRegionOfInterest(forReticleSize: Self.reticleSize)
-        barcodeScanner.detectBarcode(in: pixelBuffer, regionOfInterest: regionOfInterest) { [weak self] barcodeValue in
+        barcodeScanner.detectBarcode(in: pixelBuffer, regionOfInterest: regionOfInterest) { [weak self] barcodeValue, boundingBox in
             if let barcodeValue {
                 let candidate = SetNumberExtractor.extractFromBarcode(barcodeValue)
-                self?.scheduleResolution(for: candidate, pixelBuffer: pixelBuffer)
+                self?.scheduleResolution(for: candidate, pixelBuffer: pixelBuffer, detectionBox: boundingBox)
                 return
             }
 
-            self?.ocrScanner.recognizeText(in: pixelBuffer, regionOfInterest: regionOfInterest) { texts in
-                let candidates = SetNumberExtractor.extractFromOCR(texts)
+            self?.ocrScanner.recognizeText(in: pixelBuffer, regionOfInterest: regionOfInterest) { observations in
+                let candidates = SetNumberExtractor.extractFromOCR(observations)
                 if let first = candidates.first {
-                    self?.scheduleResolution(for: first, pixelBuffer: pixelBuffer)
+                    self?.scheduleResolution(for: first.setNum, pixelBuffer: pixelBuffer, detectionBox: first.boundingBox)
                 }
             }
         }
     }
 
-    private func scheduleResolution(for setNum: String, pixelBuffer: CVPixelBuffer) {
+    private func scheduleResolution(for setNum: String, pixelBuffer: CVPixelBuffer, detectionBox: CGRect?) {
         if let lastDate = recentlyIdentifiedAt[setNum], Date().timeIntervalSince(lastDate) < 30 {
             return
         }
@@ -243,7 +243,11 @@ final class ScannerViewModel {
         // Capture the thumbnail once per candidate, not on every throttled frame while its
         // debounce is pending.
         if !candidateDetected {
-            candidateThumbnail = cameraController.croppedReticleImage(from: pixelBuffer, reticleSize: Self.reticleSize)
+            candidateThumbnail = cameraController.croppedReticleImage(
+                from: pixelBuffer,
+                reticleSize: Self.reticleSize,
+                detectionBox: detectionBox
+            )
         }
         candidateDetected = true
         debounceTasks[setNum]?.cancel()

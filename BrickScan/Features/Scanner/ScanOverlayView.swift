@@ -68,10 +68,13 @@ struct ScanOverlayView: View {
                 }
                 .overlay(alignment: .topTrailing) {
                     if let candidateThumbnail, candidateDetected || state == .processing {
+                        // .fit (not .fill) inside a bounding box, not a fixed frame, so the
+                        // thumbnail keeps the actual aspect ratio of the captured zone — a wide
+                        // barcode and a squarer text crop shouldn't both get stretched the same way.
                         Image(uiImage: candidateThumbnail)
                             .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 64, height: 42)
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: 110, maxHeight: 70)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white, lineWidth: 1.5))
                             .shadow(radius: 3)

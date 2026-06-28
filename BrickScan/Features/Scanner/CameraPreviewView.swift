@@ -109,18 +109,39 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
         return clamped.isNull || clamped.isEmpty ? nil : clamped
     }
 
-    /// Crops the current frame to the reticle region, for the "what was just detected" thumbnail
-    /// shown in `ScanOverlayView`. Uses the same mapping as `visionRegionOfInterest`, so the
-    /// thumbnail is a faithful preview of the region Vision actually scanned.
-    func croppedReticleImage(from pixelBuffer: CVPixelBuffer, reticleSize: CGSize) -> UIImage? {
+    /// Crops the current frame to the "what was just detected" thumbnail shown in
+    /// `ScanOverlayView`. When `detectionBox` is given (the barcode/text observation's own
+    /// bounding box, in Vision's normalized bottom-left-origin full-image space), it zooms to
+    /// that exact region — padded a little since a tight box often clips its own edges — instead
+    /// of the whole reticle, so the thumbnail matches what was actually read rather than
+    /// everything around it.
+    func croppedReticleImage(
+        from pixelBuffer: CVPixelBuffer,
+        reticleSize: CGSize,
+        detectionBox: CGRect? = nil
+    ) -> UIImage? {
         guard let topLeftROI = normalizedReticleRect(forReticleSize: reticleSize) else { return nil }
+
+        let topLeftCropNormalized: CGRect
+        if let detectionBox {
+            let flipped = CGRect(
+                x: detectionBox.minX,
+                y: 1 - detectionBox.minY - detectionBox.height,
+                width: detectionBox.width,
+                height: detectionBox.height
+            )
+            topLeftCropNormalized = flipped.insetBy(dx: -flipped.width * 0.25, dy: -flipped.height * 0.25)
+        } else {
+            topLeftCropNormalized = topLeftROI
+        }
+
         let imageWidth = CGFloat(CVPixelBufferGetWidth(pixelBuffer))
         let imageHeight = CGFloat(CVPixelBufferGetHeight(pixelBuffer))
         let cropRect = CGRect(
-            x: topLeftROI.minX * imageWidth,
-            y: topLeftROI.minY * imageHeight,
-            width: topLeftROI.width * imageWidth,
-            height: topLeftROI.height * imageHeight
+            x: topLeftCropNormalized.minX * imageWidth,
+            y: topLeftCropNormalized.minY * imageHeight,
+            width: topLeftCropNormalized.width * imageWidth,
+            height: topLeftCropNormalized.height * imageHeight
         ).intersection(CGRect(x: 0, y: 0, width: imageWidth, height: imageHeight))
         guard !cropRect.isEmpty else { return nil }
 

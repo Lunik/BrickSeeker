@@ -2,10 +2,12 @@ import Vision
 import CoreImage
 
 final class OCRScanner {
+    /// Each box is in Vision's normalized, bottom-left-origin coordinate space relative to the
+    /// *whole* image — even when `regionOfInterest` restricts where recognition looks.
     func recognizeText(
         in pixelBuffer: CVPixelBuffer,
         regionOfInterest: CGRect? = nil,
-        completion: @escaping ([String]) -> Void
+        completion: @escaping ([(text: String, boundingBox: CGRect)]) -> Void
     ) {
         perform(
             VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:]),
@@ -15,13 +17,15 @@ final class OCRScanner {
     }
 
     func recognizeText(in cgImage: CGImage, completion: @escaping ([String]) -> Void) {
-        perform(VNImageRequestHandler(cgImage: cgImage, options: [:]), regionOfInterest: nil, completion: completion)
+        perform(VNImageRequestHandler(cgImage: cgImage, options: [:]), regionOfInterest: nil) { observations in
+            completion(observations.map(\.text))
+        }
     }
 
     private func perform(
         _ handler: VNImageRequestHandler,
         regionOfInterest: CGRect?,
-        completion: @escaping ([String]) -> Void
+        completion: @escaping ([(text: String, boundingBox: CGRect)]) -> Void
     ) {
         let request = VNRecognizeTextRequest { request, error in
             guard error == nil,
@@ -29,7 +33,10 @@ final class OCRScanner {
                 completion([])
                 return
             }
-            let candidates = results.compactMap { $0.topCandidates(1).first?.string }
+            let candidates = results.compactMap { observation -> (text: String, boundingBox: CGRect)? in
+                guard let text = observation.topCandidates(1).first?.string else { return nil }
+                return (text, observation.boundingBox)
+            }
             completion(candidates)
         }
         request.recognitionLevel = .accurate

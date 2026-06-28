@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 enum SetNumberExtractor {
 
@@ -51,6 +52,24 @@ enum SetNumberExtractor {
         }
 
         return Array(orderedUnique(results))
+    }
+
+    /// Same extraction as `extractFromOCR(_:)`, but keeps each match paired with the bounding
+    /// box of the text observation it came from — lets the caller zoom the candidate thumbnail
+    /// to the actual text region instead of the whole reticle (see #32).
+    static func extractFromOCR(
+        _ observations: [(text: String, boundingBox: CGRect)]
+    ) -> [(setNum: String, boundingBox: CGRect)] {
+        var results: [(setNum: String, boundingBox: CGRect)] = []
+        var seen = Set<String>()
+
+        for observation in observations {
+            for setNum in extractFromOCR([observation.text]) where seen.insert(setNum).inserted {
+                results.append((setNum, observation.boundingBox))
+            }
+        }
+
+        return results
     }
 
     private static func isPlausibleSetNumber(_ number: String) -> Bool {
