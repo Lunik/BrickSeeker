@@ -44,6 +44,15 @@ final class ScannerViewModel {
     /// are not in that snapshot, so the presenting view should flag them as needing a refresh.
     var lastFoundWasOffline = false
 
+    /// "Mode lot": while true, a resolved candidate is added to `batchSession` instead of opening
+    /// the blocking detail sheet, so the camera keeps running across several sets — see issue #13.
+    var isBatchModeEnabled = false
+    let batchSession = BatchScanSession()
+    /// Set by `lookupSetForDetail` to bypass batch capture for one resolution — used when the
+    /// user taps a row in the batch summary screen and wants the normal detail sheet, even though
+    /// batch mode is still on.
+    private var forceDetailNextResolution = false
+
     var localRepository: LocalRepository?
     /// HomeView reuses this class for its non-camera lookup flows (History tap, manual entry,
     /// photo import) via a second instance that never starts the camera. The detection sound only
@@ -110,11 +119,37 @@ final class ScannerViewModel {
         }
     }
 
+    /// Same as `lookupSetNumber`, but always opens the detail sheet even if batch mode is on —
+    /// used by the batch summary screen, where tapping a row should show the usual detail view
+    /// rather than re-add the set to the session.
+    func lookupSetForDetail(_ setNum: String) {
+        forceDetailNextResolution = true
+        lookupSetNumber(setNum)
+    }
+
     func selectAmbiguousSet(_ legoSet: LegoSet) {
+        let bypassBatch = forceDetailNextResolution
+        forceDetailNextResolution = false
         state = .processing
         Task {
-            state = .found(legoSet, await fetchCollectionStatus(for: legoSet.setNum))
+            presentFound(legoSet, await fetchCollectionStatus(for: legoSet.setNum), bypassBatch: bypassBatch)
         }
+    }
+
+    /// Routes a resolved candidate either to the batch session (camera keeps running) or to the
+    /// normal `.found` state (opens the blocking detail sheet), depending on `isBatchModeEnabled`.
+    /// `bypassBatch` is captured once per `resolveSet`/`selectAmbiguousSet` call (not re-read from
+    /// `forceDetailNextResolution` on every call) so a live reconcile after a cache-instant display
+    /// doesn't flip back to batch-capture mid-flow and yank the just-opened detail sheet away.
+    private func presentFound(_ legoSet: LegoSet, _ collectionStatus: CollectionStatus, bypassBatch: Bool) {
+        guard isBatchModeEnabled, !bypassBatch else {
+            state = .found(legoSet, collectionStatus)
+            return
+        }
+        // `resolveSet` already plays the "candidate detected" sound once at the start of this
+        // resolution — don't play it again here just because the set landed in the batch session.
+        batchSession.add(legoSet, collectionStatus: collectionStatus)
+        resumeScanning()
     }
 
     func importImage(_ cgImage: CGImage) {
@@ -188,6 +223,9 @@ final class ScannerViewModel {
 
     @MainActor
     private func resolveSet(_ setNum: String) async {
+        let bypassBatch = forceDetailNextResolution
+        forceDetailNextResolution = false
+
         lastIdentifiedSetNum = setNum
         lastIdentifiedAt = Date()
         isPaused = true
@@ -197,7 +235,7 @@ final class ScannerViewModel {
         if let cached = localRepository?.cachedSet(setNum: setNum) {
             lastFoundWasFromCache = true
             lastFoundWasOffline = false
-            state = .found(cached.asLegoSet(), cached.asCollectionStatus())
+            presentFound(cached.asLegoSet(), cached.asCollectionStatus(), bypassBatch: bypassBatch)
         } else {
             lastFoundWasFromCache = false
             lastFoundWasOffline = false
@@ -214,9 +252,10 @@ final class ScannerViewModel {
             if !lastFoundWasFromCache {
                 if let offlineSet = OfflineCatalogStore.shared.lookup(setNum: setNum) {
                     lastFoundWasOffline = true
-                    state = .found(
+                    presentFound(
                         offlineSet,
-                        .unknown("Hors-ligne — statut collection et prix à rafraîchir une fois reconnecté")
+                        .unknown("Hors-ligne — statut collection et prix à rafraîchir une fois reconnecté"),
+                        bypassBatch: bypassBatch
                     )
                 } else {
                     state = .error(APIError.networkUnavailable.errorDescription ?? "Erreur inconnue")
@@ -230,7 +269,7 @@ final class ScannerViewModel {
             let resolution = try await repository.resolveSet(setNum: setNum)
             switch resolution {
             case .found(let legoSet):
-                state = .found(legoSet, await fetchCollectionStatus(for: legoSet.setNum))
+                presentFound(legoSet, await fetchCollectionStatus(for: legoSet.setNum), bypassBatch: bypassBatch)
             case .ambiguous(let sets):
                 state = .ambiguous(sets)
             case .notFound:
@@ -247,9 +286,10 @@ final class ScannerViewModel {
                 if case .networkUnavailable = error as? APIError,
                    let offlineSet = OfflineCatalogStore.shared.lookup(setNum: setNum) {
                     lastFoundWasOffline = true
-                    state = .found(
+                    presentFound(
                         offlineSet,
-                        .unknown("Hors-ligne — statut collection et prix à rafraîchir une fois reconnecté")
+                        .unknown("Hors-ligne — statut collection et prix à rafraîchir une fois reconnecté"),
+                        bypassBatch: bypassBatch
                     )
                 } else {
                     state = .error((error as? APIError)?.errorDescription ?? "Erreur inconnue")
