@@ -47,15 +47,6 @@ final class LegoStoreRepository: NSObject, LegoStoreRepositoryProtocol, @uncheck
         return URL(string: "https://www.lego.com/fr-fr/product/\(productId)")
     }
 
-    /// Building instructions page for a set, by product id (same id `storeUrl` derives). The page
-    /// is a client-rendered SPA shell that returns HTTP 200 regardless of whether the set actually
-    /// has instructions, so there's no way to check availability without a full web view — the
-    /// link is always shown and lego.com handles the "no instructions" case itself.
-    static func instructionsUrl(setNum: String) -> URL? {
-        let productId = setNum.split(separator: "-").first.map(String.init) ?? setNum
-        return URL(string: "https://www.lego.com/fr-fr/service/building-instructions/\(productId)")
-    }
-
     @MainActor
     func fetchStorePrice(setNum: String) async throws -> StorePrice {
         guard let url = LegoStoreRepository.storeUrl(setNum: setNum) else {
