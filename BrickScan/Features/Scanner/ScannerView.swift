@@ -5,6 +5,7 @@ struct ScannerView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = ScannerViewModel()
     @State private var hasAPIKey = KeychainService.shared.hasAPIKey
+    @State private var showBatchSummary = false
     var onStopScanning: (() -> Void)?
 
     var body: some View {
@@ -17,6 +18,10 @@ struct ScannerView: View {
                 if !hasAPIKey {
                     apiKeyWarningBanner
                 }
+
+                if viewModel.isBatchModeEnabled {
+                    batchSessionButton
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -27,6 +32,14 @@ struct ScannerView: View {
                             Image(systemName: "xmark")
                         }
                     }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        viewModel.isBatchModeEnabled.toggle()
+                    } label: {
+                        Image(systemName: viewModel.isBatchModeEnabled ? "square.stack.3d.up.fill" : "square.stack.3d.up")
+                    }
+                    .accessibilityLabel("Mode lot")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -61,6 +74,23 @@ struct ScannerView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showBatchSummary) {
+                BatchSessionSummaryView(
+                    session: viewModel.batchSession,
+                    onSelect: { setNum in
+                        // Dismiss this sheet first, then ask the viewModel to resolve for detail
+                        // on the next runloop tick — presenting the detail sheet in the same
+                        // transaction as dismissing this one is unreliable in SwiftUI.
+                        showBatchSummary = false
+                        DispatchQueue.main.async {
+                            viewModel.lookupSetForDetail(setNum)
+                        }
+                    },
+                    onClearSession: {
+                        viewModel.batchSession.clear()
+                    }
+                )
+            }
         }
         .onAppear {
             viewModel.localRepository = LocalRepository(modelContext: modelContext)
@@ -80,7 +110,30 @@ struct ScannerView: View {
     }
 
     private var isMenuOpen: Bool {
-        setDetailBinding.wrappedValue || ambiguousBinding.wrappedValue
+        setDetailBinding.wrappedValue || ambiguousBinding.wrappedValue || showBatchSummary
+    }
+
+    private var batchSessionButton: some View {
+        VStack {
+            Spacer()
+            Button {
+                showBatchSummary = true
+            } label: {
+                HStack {
+                    Image(systemName: "square.stack.3d.up.fill")
+                    Text(viewModel.batchSession.isEmpty ? "Mode lot actif" : "Voir la session (\(viewModel.batchSession.items.count))")
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                }
+                .font(.footnote.bold())
+                .padding(12)
+                .background(.thinMaterial)
+                .foregroundStyle(.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+            }
+        }
     }
 
     private var apiKeyWarningBanner: some View {

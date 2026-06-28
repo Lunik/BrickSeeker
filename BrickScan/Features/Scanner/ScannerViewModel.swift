@@ -44,6 +44,15 @@ final class ScannerViewModel {
     /// are not in that snapshot, so the presenting view should flag them as needing a refresh.
     var lastFoundWasOffline = false
 
+    /// "Mode lot": while true, a resolved candidate is added to `batchSession` instead of opening
+    /// the blocking detail sheet, so the camera keeps running across several sets — see issue #13.
+    var isBatchModeEnabled = false
+    let batchSession = BatchScanSession()
+    /// Set by `lookupSetForDetail` to bypass batch capture for one resolution — used when the
+    /// user taps a row in the batch summary screen and wants the normal detail sheet, even though
+    /// batch mode is still on.
+    private var forceDetailNextResolution = false
+
     var localRepository: LocalRepository?
     /// HomeView reuses this class for its non-camera lookup flows (History tap, manual entry,
     /// photo import) via a second instance that never starts the camera. The detection sound only
@@ -56,9 +65,15 @@ final class ScannerViewModel {
     private let ocrScanner = OCRScanner()
     private let repository: RebrickableRepositoryProtocol
 
-    private var lastIdentifiedSetNum: String?
-    private var lastIdentifiedAt: Date?
-    private var debounceTask: Task<Void, Never>?
+    /// When each set number was last resolved, for the 30s anti-repeat lock. Keyed per set number
+    /// (not a single scalar) so identifying box A doesn't reset the clock that's protecting box B
+    /// — see `scheduleResolution`.
+    private var recentlyIdentifiedAt: [String: Date] = [:]
+    /// One pending debounce per set number currently in frame, keyed the same way — a single
+    /// shared task would mean pointing the camera at a second box within the 1.5s debounce window
+    /// cancels the first box's pending resolution, which made batch mode unusable for scanning
+    /// several boxes in quick succession (see issue #13 follow-up).
+    private var debounceTasks: [String: Task<Void, Never>] = [:]
     private var isPaused = false
 
     private var lastFrameProcessedAt: Date?
@@ -103,22 +118,62 @@ final class ScannerViewModel {
     }
 
     func lookupSetNumber(_ setNum: String) {
-        debounceTask?.cancel()
+        cancelAllDebounceTasks()
         isPaused = true
         Task {
             await resolveSet(setNum)
         }
     }
 
+    /// Same as `lookupSetNumber`, but always opens the detail sheet even if batch mode is on —
+    /// used by the batch summary screen, where tapping a row should show the usual detail view
+    /// rather than re-add the set to the session.
+    func lookupSetForDetail(_ setNum: String) {
+        forceDetailNextResolution = true
+        lookupSetNumber(setNum)
+    }
+
     func selectAmbiguousSet(_ legoSet: LegoSet) {
+        let bypassBatch = forceDetailNextResolution
+        forceDetailNextResolution = false
         state = .processing
         Task {
-            state = .found(legoSet, await fetchCollectionStatus(for: legoSet.setNum))
+            presentFound(legoSet, await fetchCollectionStatus(for: legoSet.setNum), bypassBatch: bypassBatch)
         }
     }
 
+    /// Routes a resolved candidate either to the batch session (camera keeps running) or to the
+    /// normal `.found` state (opens the blocking detail sheet), depending on `isBatchModeEnabled`.
+    /// `bypassBatch` is captured once per `resolveSet`/`selectAmbiguousSet` call (not re-read from
+    /// `forceDetailNextResolution` on every call) so a live reconcile after a cache-instant display
+    /// doesn't flip back to batch-capture mid-flow and yank the just-opened detail sheet away.
+    ///
+    /// `wasFromCache`/`wasOffline` are only written to the published `lastFoundWas...` flags on the
+    /// non-batch branch: while batch-capturing, several resolutions can be in flight concurrently
+    /// (see `resolveSet`), and those flags are only meaningful right before a detail sheet reads
+    /// them — writing them here for every batch item would let an unrelated in-flight scan's value
+    /// win the race and corrupt the one sheet that's actually about to open.
+    private func presentFound(
+        _ legoSet: LegoSet,
+        _ collectionStatus: CollectionStatus,
+        bypassBatch: Bool,
+        wasFromCache: Bool = false,
+        wasOffline: Bool = false
+    ) {
+        guard isBatchModeEnabled, !bypassBatch else {
+            lastFoundWasFromCache = wasFromCache
+            lastFoundWasOffline = wasOffline
+            state = .found(legoSet, collectionStatus)
+            return
+        }
+        // `resolveSet` already plays the "candidate detected" sound once at the start of this
+        // resolution — don't play it again here just because the set landed in the batch session.
+        batchSession.add(legoSet, collectionStatus: collectionStatus)
+        resumeScanning()
+    }
+
     func importImage(_ cgImage: CGImage) {
-        debounceTask?.cancel()
+        cancelAllDebounceTasks()
         isPaused = true
         state = .processing
 
@@ -171,36 +226,58 @@ final class ScannerViewModel {
     }
 
     private func scheduleResolution(for setNum: String) {
-        if setNum == lastIdentifiedSetNum,
-           let lastDate = lastIdentifiedAt,
-           Date().timeIntervalSince(lastDate) < 30 {
+        if let lastDate = recentlyIdentifiedAt[setNum], Date().timeIntervalSince(lastDate) < 30 {
             return
         }
 
         candidateDetected = true
-        debounceTask?.cancel()
-        debounceTask = Task { [weak self] in
+        debounceTasks[setNum]?.cancel()
+        debounceTasks[setNum] = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             guard !Task.isCancelled else { return }
+            self?.debounceTasks[setNum] = nil
             await self?.resolveSet(setNum)
         }
     }
 
+    private func cancelAllDebounceTasks() {
+        debounceTasks.values.forEach { $0.cancel() }
+        debounceTasks.removeAll()
+    }
+
+    /// Lifts the 30s anti-repeat lock set at the start of `resolveSet` — only called on a
+    /// terminal failure (not found / error), where there's nothing on screen worth protecting
+    /// from being immediately re-triggered, unlike a successful `.found`/offline match.
+    private func clearIdentificationLock(for setNum: String) {
+        recentlyIdentifiedAt[setNum] = nil
+    }
+
     @MainActor
     private func resolveSet(_ setNum: String) async {
-        lastIdentifiedSetNum = setNum
-        lastIdentifiedAt = Date()
-        isPaused = true
+        let bypassBatch = forceDetailNextResolution
+        forceDetailNextResolution = false
+        // While batch-capturing, identification of one box must not hold up the next: don't pause
+        // frame processing for it, so several boxes can resolve concurrently in the background.
+        // Outside batch mode (or when explicitly opening a detail sheet) the camera still pauses
+        // exactly as before, since there's only ever one in-flight resolution to wait on then.
+        let isBatchCapturing = isBatchModeEnabled && !bypassBatch
+
+        recentlyIdentifiedAt[setNum] = Date()
+        if !isBatchCapturing {
+            isPaused = true
+        }
         candidateDetected = false
         ScanStatsStore.shared.recordScan()
 
+        // Local to this resolution — not written to the published `lastFoundWas...` flags until
+        // `presentFound` decides this is the one opening a detail sheet (see its doc comment).
+        var foundWasFromCache = false
+        var foundWasOffline = false
+
         if let cached = localRepository?.cachedSet(setNum: setNum) {
-            lastFoundWasFromCache = true
-            lastFoundWasOffline = false
-            state = .found(cached.asLegoSet(), cached.asCollectionStatus())
-        } else {
-            lastFoundWasFromCache = false
-            lastFoundWasOffline = false
+            foundWasFromCache = true
+            presentFound(cached.asLegoSet(), cached.asCollectionStatus(), bypassBatch: bypassBatch, wasFromCache: true)
+        } else if !isBatchCapturing {
             state = .processing
         }
         if playsFeedbackSounds {
@@ -211,17 +288,22 @@ final class ScannerViewModel {
         // offline — fall straight to the same offline-catalogue path the `catch` block below uses
         // for an actual `APIError.networkUnavailable`, instead of waiting to fail first.
         guard NetworkMonitor.shared.isConnected else {
-            if !lastFoundWasFromCache {
+            if !foundWasFromCache {
                 if let offlineSet = OfflineCatalogStore.shared.lookup(setNum: setNum) {
-                    lastFoundWasOffline = true
-                    state = .found(
+                    foundWasOffline = true
+                    presentFound(
                         offlineSet,
-                        .unknown("Hors-ligne — statut collection et prix à rafraîchir une fois reconnecté")
+                        .unknown("Hors-ligne — statut collection et prix à rafraîchir une fois reconnecté"),
+                        bypassBatch: bypassBatch,
+                        wasOffline: true
                     )
-                } else {
+                } else if !isBatchCapturing {
                     state = .error(APIError.networkUnavailable.errorDescription ?? "Erreur inconnue")
+                    clearIdentificationLock(for: setNum)
                 }
-                isPaused = false
+                if !isBatchCapturing {
+                    isPaused = false
+                }
             }
             return
         }
@@ -230,31 +312,45 @@ final class ScannerViewModel {
             let resolution = try await repository.resolveSet(setNum: setNum)
             switch resolution {
             case .found(let legoSet):
-                state = .found(legoSet, await fetchCollectionStatus(for: legoSet.setNum))
+                presentFound(
+                    legoSet,
+                    await fetchCollectionStatus(for: legoSet.setNum),
+                    bypassBatch: bypassBatch,
+                    wasFromCache: foundWasFromCache,
+                    wasOffline: foundWasOffline
+                )
             case .ambiguous(let sets):
                 state = .ambiguous(sets)
             case .notFound:
                 // Some cached numbers (e.g. minifigs, "fig-…") can't be re-resolved through the
                 // sets endpoint at all — don't let a live reconcile failure close a detail view
                 // that was already showing valid cached data; just keep it as-is.
-                if !lastFoundWasFromCache {
+                if !foundWasFromCache, !isBatchCapturing {
                     state = .notFound
                     isPaused = false
+                    // "Set non trouvé" isn't a reason to lock this set number out for 30s like a
+                    // successful identification — the user is told to rescan right away, so let
+                    // them, including rescanning the exact same box (e.g. after repositioning it).
+                    clearIdentificationLock(for: setNum)
                 }
             }
         } catch {
-            if !lastFoundWasFromCache {
+            if !foundWasFromCache {
                 if case .networkUnavailable = error as? APIError,
                    let offlineSet = OfflineCatalogStore.shared.lookup(setNum: setNum) {
-                    lastFoundWasOffline = true
-                    state = .found(
+                    presentFound(
                         offlineSet,
-                        .unknown("Hors-ligne — statut collection et prix à rafraîchir une fois reconnecté")
+                        .unknown("Hors-ligne — statut collection et prix à rafraîchir une fois reconnecté"),
+                        bypassBatch: bypassBatch,
+                        wasOffline: true
                     )
-                } else {
+                } else if !isBatchCapturing {
                     state = .error((error as? APIError)?.errorDescription ?? "Erreur inconnue")
+                    clearIdentificationLock(for: setNum)
                 }
-                isPaused = false
+                if !isBatchCapturing {
+                    isPaused = false
+                }
             }
         }
     }
