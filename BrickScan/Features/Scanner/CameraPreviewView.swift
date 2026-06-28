@@ -77,11 +77,16 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
         previewLayer = layer
     }
 
-    /// The reticle's frame, in the buffer's own top-left-origin normalized coordinate space —
-    /// shared by `visionRegionOfInterest` (which flips it to Vision's bottom-left convention)
-    /// and `croppedReticleImage` (which scales it to pixel coordinates), so both stay in sync
-    /// with whatever the preview layer's aspect-fill geometry is doing.
-    private func normalizedReticleRect(forReticleSize reticleSize: CGSize) -> CGRect? {
+    /// Crops the current frame down to the on-screen reticle, mapped through the preview layer's
+    /// aspect-fill geometry into the pixel buffer's own coordinate space. Detection then runs on
+    /// this small image directly (see `ScannerViewModel.handleFrame`) instead of passing the full
+    /// frame with a Vision `regionOfInterest` — Vision's documented contract is that observation
+    /// bounding boxes stay relative to the *whole* input image regardless of `regionOfInterest`,
+    /// but that didn't hold up in practice (a detected barcode/text's box came back pointing at
+    /// the wrong spot in the full frame). Feeding Vision an already-cropped image sidesteps the
+    /// ambiguity entirely: whatever bounding box it returns is unambiguously relative to this
+    /// same small image, used as-is by `zoomedThumbnail`.
+    func croppedReticleImage(from pixelBuffer: CVPixelBuffer, reticleSize: CGSize) -> CGImage? {
         guard let previewLayer, previewLayer.bounds.width > 0, previewLayer.bounds.height > 0 else { return nil }
         let bounds = previewLayer.bounds
         let reticleRect = CGRect(
@@ -90,64 +95,53 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
             width: reticleSize.width,
             height: reticleSize.height
         )
-        return previewLayer.metadataOutputRectConverted(fromLayerRect: reticleRect)
-    }
-
-    /// Normalized region of interest for `VNDetectBarcodesRequest`/`VNRecognizeTextRequest`,
-    /// restricting detection to the on-screen reticle so "what's aimed at" matches "what's
-    /// detected" — see issue #32. Vision uses a bottom-left origin, unlike the top-left origin
-    /// `metadataOutputRectConverted` returns, so the y axis is flipped here.
-    func visionRegionOfInterest(forReticleSize reticleSize: CGSize) -> CGRect? {
-        guard let topLeftROI = normalizedReticleRect(forReticleSize: reticleSize) else { return nil }
-        let visionROI = CGRect(
-            x: topLeftROI.minX,
-            y: 1 - topLeftROI.minY - topLeftROI.height,
-            width: topLeftROI.width,
-            height: topLeftROI.height
-        )
-        let clamped = visionROI.intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
-        return clamped.isNull || clamped.isEmpty ? nil : clamped
-    }
-
-    /// Crops the current frame to the "what was just detected" thumbnail shown in
-    /// `ScanOverlayView`. When `detectionBox` is given (the barcode/text observation's own
-    /// bounding box, in Vision's normalized bottom-left-origin full-image space), it zooms to
-    /// that exact region — padded a little since a tight box often clips its own edges — instead
-    /// of the whole reticle, so the thumbnail matches what was actually read rather than
-    /// everything around it.
-    func croppedReticleImage(
-        from pixelBuffer: CVPixelBuffer,
-        reticleSize: CGSize,
-        detectionBox: CGRect? = nil
-    ) -> UIImage? {
-        guard let topLeftROI = normalizedReticleRect(forReticleSize: reticleSize) else { return nil }
-
-        let topLeftCropNormalized: CGRect
-        if let detectionBox {
-            let flipped = CGRect(
-                x: detectionBox.minX,
-                y: 1 - detectionBox.minY - detectionBox.height,
-                width: detectionBox.width,
-                height: detectionBox.height
-            )
-            topLeftCropNormalized = flipped.insetBy(dx: -flipped.width * 0.25, dy: -flipped.height * 0.25)
-        } else {
-            topLeftCropNormalized = topLeftROI
-        }
+        // Top-left-origin normalized rect in the buffer's own coordinate space.
+        let topLeftROI = previewLayer.metadataOutputRectConverted(fromLayerRect: reticleRect)
 
         let imageWidth = CGFloat(CVPixelBufferGetWidth(pixelBuffer))
         let imageHeight = CGFloat(CVPixelBufferGetHeight(pixelBuffer))
         let cropRect = CGRect(
-            x: topLeftCropNormalized.minX * imageWidth,
-            y: topLeftCropNormalized.minY * imageHeight,
-            width: topLeftCropNormalized.width * imageWidth,
-            height: topLeftCropNormalized.height * imageHeight
+            x: topLeftROI.minX * imageWidth,
+            y: topLeftROI.minY * imageHeight,
+            width: topLeftROI.width * imageWidth,
+            height: topLeftROI.height * imageHeight
         ).intersection(CGRect(x: 0, y: 0, width: imageWidth, height: imageHeight))
         guard !cropRect.isEmpty else { return nil }
 
-        let ciImage = CIImage(cvPixelBuffer: pixelBuffer).cropped(to: cropRect)
-        guard let cgImage = ciContext.createCGImage(ciImage, from: cropRect) else { return nil }
-        return UIImage(cgImage: cgImage)
+        // Vision/CGImage expect pixel data starting at (0,0); translate the crop back to origin.
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+            .cropped(to: cropRect)
+            .transformed(by: CGAffineTransform(translationX: -cropRect.minX, y: -cropRect.minY))
+        return ciContext.createCGImage(ciImage, from: CGRect(origin: .zero, size: cropRect.size))
+    }
+
+    /// Zooms `reticleImage` (the output of `croppedReticleImage`) to the exact barcode/text
+    /// region Vision detected within it, padded a little since a tight bounding box often clips
+    /// its own edges. Falls back to the unzoomed reticle image when there's no detection box yet.
+    func zoomedThumbnail(in reticleImage: CGImage, detectionBox: CGRect?) -> UIImage {
+        guard let detectionBox else { return UIImage(cgImage: reticleImage) }
+
+        let width = CGFloat(reticleImage.width)
+        let height = CGFloat(reticleImage.height)
+        // Vision uses a bottom-left origin; CGImage cropping uses top-left — flip the y axis.
+        let topLeftBox = CGRect(
+            x: detectionBox.minX,
+            y: 1 - detectionBox.minY - detectionBox.height,
+            width: detectionBox.width,
+            height: detectionBox.height
+        ).insetBy(dx: -detectionBox.width * 0.25, dy: -detectionBox.height * 0.25)
+
+        let pixelRect = CGRect(
+            x: topLeftBox.minX * width,
+            y: topLeftBox.minY * height,
+            width: topLeftBox.width * width,
+            height: topLeftBox.height * height
+        ).intersection(CGRect(x: 0, y: 0, width: width, height: height))
+
+        guard !pixelRect.isEmpty, let cropped = reticleImage.cropping(to: pixelRect) else {
+            return UIImage(cgImage: reticleImage)
+        }
+        return UIImage(cgImage: cropped)
     }
 }
 

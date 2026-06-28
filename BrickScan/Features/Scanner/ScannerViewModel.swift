@@ -186,7 +186,7 @@ final class ScannerViewModel {
         isPaused = true
         state = .processing
 
-        barcodeScanner.detectBarcode(in: cgImage) { [weak self] barcodeValue in
+        barcodeScanner.detectBarcode(in: cgImage) { [weak self] barcodeValue, _ in
             Task { @MainActor in
                 if let barcodeValue {
                     let candidate = SetNumberExtractor.extractFromBarcode(barcodeValue)
@@ -218,24 +218,31 @@ final class ScannerViewModel {
         }
         lastFrameProcessedAt = Date()
 
-        let regionOfInterest = cameraController.visionRegionOfInterest(forReticleSize: Self.reticleSize)
-        barcodeScanner.detectBarcode(in: pixelBuffer, regionOfInterest: regionOfInterest) { [weak self] barcodeValue, boundingBox in
+        // Detect on a crop of just the reticle, rather than the full frame with a Vision
+        // `regionOfInterest` — restricts "what's detected" to "what's aimed at", and any
+        // resulting bounding box is then unambiguously relative to this same small image (see
+        // `CameraController.croppedReticleImage`).
+        guard let reticleImage = cameraController.croppedReticleImage(from: pixelBuffer, reticleSize: Self.reticleSize) else {
+            return
+        }
+
+        barcodeScanner.detectBarcode(in: reticleImage) { [weak self] barcodeValue, boundingBox in
             if let barcodeValue {
                 let candidate = SetNumberExtractor.extractFromBarcode(barcodeValue)
-                self?.scheduleResolution(for: candidate, pixelBuffer: pixelBuffer, detectionBox: boundingBox)
+                self?.scheduleResolution(for: candidate, reticleImage: reticleImage, detectionBox: boundingBox)
                 return
             }
 
-            self?.ocrScanner.recognizeText(in: pixelBuffer, regionOfInterest: regionOfInterest) { observations in
+            self?.ocrScanner.recognizeTextWithBoundingBoxes(in: reticleImage) { observations in
                 let candidates = SetNumberExtractor.extractFromOCR(observations)
                 if let first = candidates.first {
-                    self?.scheduleResolution(for: first.setNum, pixelBuffer: pixelBuffer, detectionBox: first.boundingBox)
+                    self?.scheduleResolution(for: first.setNum, reticleImage: reticleImage, detectionBox: first.boundingBox)
                 }
             }
         }
     }
 
-    private func scheduleResolution(for setNum: String, pixelBuffer: CVPixelBuffer, detectionBox: CGRect?) {
+    private func scheduleResolution(for setNum: String, reticleImage: CGImage, detectionBox: CGRect?) {
         if let lastDate = recentlyIdentifiedAt[setNum], Date().timeIntervalSince(lastDate) < 30 {
             return
         }
@@ -243,11 +250,7 @@ final class ScannerViewModel {
         // Capture the thumbnail once per candidate, not on every throttled frame while its
         // debounce is pending.
         if !candidateDetected {
-            candidateThumbnail = cameraController.croppedReticleImage(
-                from: pixelBuffer,
-                reticleSize: Self.reticleSize,
-                detectionBox: detectionBox
-            )
+            candidateThumbnail = cameraController.zoomedThumbnail(in: reticleImage, detectionBox: detectionBox)
         }
         candidateDetected = true
         debounceTasks[setNum]?.cancel()

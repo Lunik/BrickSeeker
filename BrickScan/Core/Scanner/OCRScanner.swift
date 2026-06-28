@@ -2,29 +2,30 @@ import Vision
 import CoreImage
 
 final class OCRScanner {
-    /// Each box is in Vision's normalized, bottom-left-origin coordinate space relative to the
-    /// *whole* image — even when `regionOfInterest` restricts where recognition looks.
+    /// Each box is in Vision's normalized, bottom-left-origin coordinate space relative to
+    /// whatever image was actually handed to this call (e.g. an already-cropped reticle frame).
     func recognizeText(
         in pixelBuffer: CVPixelBuffer,
-        regionOfInterest: CGRect? = nil,
         completion: @escaping ([(text: String, boundingBox: CGRect)]) -> Void
     ) {
-        perform(
-            VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:]),
-            regionOfInterest: regionOfInterest,
-            completion: completion
-        )
+        perform(VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:]), completion: completion)
+    }
+
+    func recognizeTextWithBoundingBoxes(
+        in cgImage: CGImage,
+        completion: @escaping ([(text: String, boundingBox: CGRect)]) -> Void
+    ) {
+        perform(VNImageRequestHandler(cgImage: cgImage, options: [:]), completion: completion)
     }
 
     func recognizeText(in cgImage: CGImage, completion: @escaping ([String]) -> Void) {
-        perform(VNImageRequestHandler(cgImage: cgImage, options: [:]), regionOfInterest: nil) { observations in
+        recognizeTextWithBoundingBoxes(in: cgImage) { observations in
             completion(observations.map(\.text))
         }
     }
 
     private func perform(
         _ handler: VNImageRequestHandler,
-        regionOfInterest: CGRect?,
         completion: @escaping ([(text: String, boundingBox: CGRect)]) -> Void
     ) {
         let request = VNRecognizeTextRequest { request, error in
@@ -42,9 +43,6 @@ final class OCRScanner {
         request.recognitionLevel = .accurate
         request.recognitionLanguages = ["en-US", "fr-FR"]
         request.usesLanguageCorrection = false
-        if let regionOfInterest {
-            request.regionOfInterest = regionOfInterest
-        }
 
         do {
             try handler.perform([request])
