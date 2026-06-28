@@ -65,6 +65,8 @@ struct BrickScanApp: App {
                 }
             }
             .animation(.easeOut(duration: 0.2), value: networkMonitor.isConnected)
+            .tint(AppTheme.shared.accent)
+            .preferredColorScheme(AppTheme.shared.colorScheme)
             .task {
                 if homeViewModel == nil {
                     let vm = HomeViewModel(localRepository: LocalRepository(modelContext: modelContainer.mainContext))

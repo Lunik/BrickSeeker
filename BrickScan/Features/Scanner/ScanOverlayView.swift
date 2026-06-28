@@ -7,9 +7,9 @@ struct ScanOverlayView: View {
     private var frameColor: Color {
         switch state {
         case .processing:
-            return Color(hex: "FFD700")
+            return .brickStud
         case .error:
-            return Color(hex: "E3000B")
+            return .brickDanger
         case .found, .ambiguous:
             return .green
         default:

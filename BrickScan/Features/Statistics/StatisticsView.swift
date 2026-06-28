@@ -141,7 +141,7 @@ struct StatisticsView: View {
             }
 
             if let errorMessage = viewModel.priceUpdateErrorMessage {
-                Text(errorMessage).foregroundStyle(Color(hex: "E3000B")).font(.footnote)
+                Text(errorMessage).foregroundStyle(Color.brickDanger).font(.footnote)
             }
 
             Button(priceUpdateButtonTitle(viewModel)) {

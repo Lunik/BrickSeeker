@@ -96,7 +96,7 @@ struct ScannerView: View {
                 }
                 .font(.footnote.bold())
                 .padding(12)
-                .background(Color(hex: "FFD700"))
+                .background(Color.brickStud)
                 .foregroundStyle(.black)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .padding(.horizontal, 16)

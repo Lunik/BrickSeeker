@@ -14,7 +14,7 @@ struct SplashView: View {
 
                 Text("BrickScan")
                     .font(.largeTitle.bold())
-                    .foregroundStyle(Color(hex: "E3000B"))
+                    .foregroundStyle(AppTheme.shared.accent)
             }
         }
     }

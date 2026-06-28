@@ -80,7 +80,7 @@ struct SetDetailView: View {
 
                     if let errorMessage = viewModel.errorMessage {
                         Text(errorMessage)
-                            .foregroundStyle(Color(hex: "E3000B"))
+                            .foregroundStyle(Color.brickDanger)
                             .font(.footnote)
                     }
 
@@ -355,7 +355,7 @@ struct SetDetailView: View {
             .foregroundStyle(.green)
         case .notInCollection:
             Label("Pas dans votre collection", systemImage: "xmark.circle.fill")
-                .foregroundStyle(Color(hex: "E3000B"))
+                .foregroundStyle(Color.brickDanger)
         case .unknown(let message):
             VStack(spacing: 8) {
                 Label("Statut inconnu : \(message)", systemImage: "exclamationmark.triangle.fill")
@@ -381,7 +381,7 @@ struct SetDetailView: View {
                 showListPicker = true
             }
             .buttonStyle(.borderedProminent)
-            .tint(Color(hex: "E3000B"))
+            .tint(AppTheme.shared.accent)
         }
     }
 }

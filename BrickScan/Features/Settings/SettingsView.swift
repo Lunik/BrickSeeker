@@ -7,6 +7,7 @@ private let frenchDateStyle = Date.FormatStyle(date: .abbreviated, time: .omitte
 
 struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
+    @Bindable private var theme = AppTheme.shared
     @State private var showPrivacyDetail = false
     @State private var isAPIKeyVisible = false
     @State private var showClearCacheConfirmation = false
@@ -19,6 +20,41 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    HStack(spacing: 18) {
+                        ForEach(BrandColor.allCases) { brand in
+                            Button {
+                                theme.brandColor = brand
+                            } label: {
+                                Circle()
+                                    .fill(brand.accent)
+                                    .frame(width: 34, height: 34)
+                                    .overlay {
+                                        if theme.brandColor == brand {
+                                            Circle()
+                                                .strokeBorder(.primary, lineWidth: 2)
+                                                .padding(-3)
+                                        }
+                                    }
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(brand.displayName)
+                        }
+                    }
+                    .padding(.vertical, 4)
+
+                    Picker("Apparence", selection: $theme.appearanceMode) {
+                        ForEach(AppearanceMode.allCases) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Thème")
+                } footer: {
+                    Text("Choisissez la couleur de marque et l'apparence claire/sombre de l'application.")
+                }
+
                 Section {
                     HStack {
                         Group {
@@ -60,7 +96,7 @@ struct SettingsView: View {
 
                         if let errorMessage = viewModel.linkAccountErrorMessage {
                             Text(errorMessage)
-                                .foregroundStyle(Color(hex: "E3000B"))
+                                .foregroundStyle(Color.brickDanger)
                                 .font(.footnote)
                         }
 
@@ -128,7 +164,7 @@ struct SettingsView: View {
 
                     if let errorMessage = viewModel.offlineCatalogErrorMessage {
                         Text(errorMessage)
-                            .foregroundStyle(Color(hex: "E3000B"))
+                            .foregroundStyle(Color.brickDanger)
                             .font(.footnote)
                     }
 
@@ -175,7 +211,7 @@ struct SettingsView: View {
 
                     if let errorMessage = viewModel.priceUpdateErrorMessage {
                         Text(errorMessage)
-                            .foregroundStyle(Color(hex: "E3000B"))
+                            .foregroundStyle(Color.brickDanger)
                             .font(.footnote)
                     }
 

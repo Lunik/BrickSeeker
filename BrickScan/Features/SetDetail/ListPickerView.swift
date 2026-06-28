@@ -36,7 +36,7 @@ struct ListPickerView: View {
                                 Spacer()
                                 if selectedListId == list.id {
                                     Image(systemName: "checkmark")
-                                        .foregroundStyle(Color(hex: "E3000B"))
+                                        .foregroundStyle(AppTheme.shared.accent)
                                 }
                             }
                         }

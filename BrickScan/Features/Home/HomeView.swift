@@ -188,7 +188,7 @@ struct HomeView: View {
             }
             .font(.footnote.bold())
             .padding(12)
-            .background(Color(hex: "FFD700"))
+            .background(Color.brickStud)
             .foregroundStyle(.black)
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
@@ -305,7 +305,7 @@ struct HomeView: View {
                 .font(.system(size: 32))
                 .foregroundStyle(.white)
                 .frame(width: 72, height: 72)
-                .background(Color.accentColor)
+                .background(AppTheme.shared.accent)
                 .clipShape(Circle())
                 .shadow(radius: 8)
         }
