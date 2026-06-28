@@ -235,6 +235,14 @@ final class ScannerViewModel {
         }
     }
 
+    /// Lifts the 30s anti-repeat lock set at the start of `resolveSet` — only called on a
+    /// terminal failure (not found / error), where there's nothing on screen worth protecting
+    /// from being immediately re-triggered, unlike a successful `.found`/offline match.
+    private func clearIdentificationLock() {
+        lastIdentifiedSetNum = nil
+        lastIdentifiedAt = nil
+    }
+
     @MainActor
     private func resolveSet(_ setNum: String) async {
         let bypassBatch = forceDetailNextResolution
@@ -283,6 +291,7 @@ final class ScannerViewModel {
                     )
                 } else if !isBatchCapturing {
                     state = .error(APIError.networkUnavailable.errorDescription ?? "Erreur inconnue")
+                    clearIdentificationLock()
                 }
                 if !isBatchCapturing {
                     isPaused = false
@@ -311,6 +320,10 @@ final class ScannerViewModel {
                 if !foundWasFromCache, !isBatchCapturing {
                     state = .notFound
                     isPaused = false
+                    // "Set non trouvé" isn't a reason to lock this set number out for 30s like a
+                    // successful identification — the user is told to rescan right away, so let
+                    // them, including rescanning the exact same box (e.g. after repositioning it).
+                    clearIdentificationLock()
                 }
             }
         } catch {
@@ -325,6 +338,7 @@ final class ScannerViewModel {
                     )
                 } else if !isBatchCapturing {
                     state = .error((error as? APIError)?.errorDescription ?? "Erreur inconnue")
+                    clearIdentificationLock()
                 }
                 if !isBatchCapturing {
                     isPaused = false
