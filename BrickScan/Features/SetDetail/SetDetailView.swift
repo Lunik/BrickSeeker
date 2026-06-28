@@ -91,6 +91,10 @@ struct SetDetailView: View {
                             Link("Voir sur Rebrickable", destination: url)
                                 .font(.footnote)
                         }
+                        if let url = LegoStoreRepository.instructionsUrl(setNum: viewModel.legoSet.setNum) {
+                            Link("Notice de montage", destination: url)
+                                .font(.footnote)
+                        }
                     }
                 }
                 .padding(16)
