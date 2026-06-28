@@ -3,13 +3,6 @@ import CoreGraphics
 
 enum SetNumberExtractor {
 
-    /// EAN-13/EAN-8 barcodes don't directly encode the LEGO set number.
-    /// The caller should use the raw barcode value as a search key against
-    /// the Rebrickable catalog (search, then try as a literal set_num).
-    static func extractFromBarcode(_ value: String) -> String {
-        value
-    }
-
     private static let setNumberRegex = try! NSRegularExpression(
         pattern: #"\b(\d{4,6})(-\d{1,2})?\b"#
     )

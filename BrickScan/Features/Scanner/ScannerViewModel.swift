@@ -69,7 +69,6 @@ final class ScannerViewModel {
     var playsFeedbackSounds = true
 
     let cameraController = CameraController()
-    private let barcodeScanner = BarcodeScanner()
     private let ocrScanner = OCRScanner()
     private let repository: RebrickableRepositoryProtocol
 
@@ -186,24 +185,14 @@ final class ScannerViewModel {
         isPaused = true
         state = .processing
 
-        barcodeScanner.detectBarcode(in: cgImage) { [weak self] barcodeValue, _ in
+        ocrScanner.recognizeText(in: cgImage) { [weak self] texts in
             Task { @MainActor in
-                if let barcodeValue {
-                    let candidate = SetNumberExtractor.extractFromBarcode(barcodeValue)
-                    await self?.resolveSet(candidate)
-                    return
-                }
-
-                self?.ocrScanner.recognizeText(in: cgImage) { texts in
-                    Task { @MainActor in
-                        let candidates = SetNumberExtractor.extractFromOCR(texts)
-                        if let first = candidates.first {
-                            await self?.resolveSet(first)
-                        } else {
-                            self?.state = .notFound
-                            self?.isPaused = false
-                        }
-                    }
+                let candidates = SetNumberExtractor.extractFromOCR(texts)
+                if let first = candidates.first {
+                    await self?.resolveSet(first)
+                } else {
+                    self?.state = .notFound
+                    self?.isPaused = false
                 }
             }
         }
@@ -226,18 +215,10 @@ final class ScannerViewModel {
             return
         }
 
-        barcodeScanner.detectBarcode(in: reticleImage) { [weak self] barcodeValue, boundingBox in
-            if let barcodeValue {
-                let candidate = SetNumberExtractor.extractFromBarcode(barcodeValue)
-                self?.scheduleResolution(for: candidate, reticleImage: reticleImage, detectionBox: boundingBox)
-                return
-            }
-
-            self?.ocrScanner.recognizeTextWithBoundingBoxes(in: reticleImage) { observations in
-                let candidates = SetNumberExtractor.extractFromOCR(observations)
-                if let first = candidates.first {
-                    self?.scheduleResolution(for: first.setNum, reticleImage: reticleImage, detectionBox: first.boundingBox)
-                }
+        ocrScanner.recognizeTextWithBoundingBoxes(in: reticleImage) { observations in
+            let candidates = SetNumberExtractor.extractFromOCR(observations)
+            if let first = candidates.first {
+                self.scheduleResolution(for: first.setNum, reticleImage: reticleImage, detectionBox: first.boundingBox)
             }
         }
     }

@@ -206,7 +206,7 @@ struct HomeView: View {
                 }
                 .buttonStyle(.plain)
 
-                statCard(title: "Scans effectués", value: "\(viewModel.totalScans)", icon: "barcode.viewfinder")
+                statCard(title: "Scans effectués", value: "\(viewModel.totalScans)", icon: "viewfinder")
             }
         }
     }

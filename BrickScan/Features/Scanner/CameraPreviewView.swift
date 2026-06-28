@@ -82,8 +82,8 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     /// this small image directly (see `ScannerViewModel.handleFrame`) instead of passing the full
     /// frame with a Vision `regionOfInterest` — Vision's documented contract is that observation
     /// bounding boxes stay relative to the *whole* input image regardless of `regionOfInterest`,
-    /// but that didn't hold up in practice (a detected barcode/text's box came back pointing at
-    /// the wrong spot in the full frame). Feeding Vision an already-cropped image sidesteps the
+    /// but that didn't hold up in practice (a detected text box came back pointing at the wrong
+    /// spot in the full frame). Feeding Vision an already-cropped image sidesteps the
     /// ambiguity entirely: whatever bounding box it returns is unambiguously relative to this
     /// same small image, used as-is by `zoomedThumbnail`.
     func croppedReticleImage(from pixelBuffer: CVPixelBuffer, reticleSize: CGSize) -> CGImage? {
@@ -115,8 +115,8 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
         return ciContext.createCGImage(ciImage, from: CGRect(origin: .zero, size: cropRect.size))
     }
 
-    /// Zooms `reticleImage` (the output of `croppedReticleImage`) to the exact barcode/text
-    /// region Vision detected within it, padded a little since a tight bounding box often clips
+    /// Zooms `reticleImage` (the output of `croppedReticleImage`) to the exact text region
+    /// Vision detected within it, padded a little since a tight bounding box often clips
     /// its own edges. Falls back to the unzoomed reticle image when there's no detection box yet.
     func zoomedThumbnail(in reticleImage: CGImage, detectionBox: CGRect?) -> UIImage {
         // The pixel buffer is delivered in the camera sensor's native landscape orientation — we

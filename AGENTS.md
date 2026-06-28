@@ -4,7 +4,7 @@ Conventions and hard-won context for working on this repo. Read this before maki
 
 ## What this is
 
-BrickScan: SwiftUI iOS app that scans a LEGO set's barcode/box text via the camera (or an
+BrickScan: SwiftUI iOS app that scans a LEGO set's box text via the camera (or an
 imported photo), looks it up against the Rebrickable catalog, shows/manages its status in the
 user's Rebrickable collection, and compares prices across lego.com, BrickLink and Amazon. MVVM +
 Repository pattern. No third-party dependencies — Vision, AVFoundation, SwiftUI, SwiftData,
@@ -42,7 +42,7 @@ BrickScan/
 │   ├── Network/    NetworkClient, APIError, RebrickableEndpoint (path builders), APIModels,
 │   │               LegoStoreRepository (lego.com retail price via hidden WKWebView)
 │   ├── Repository/ RebrickableRepository (API calls), LocalRepository (SwiftData cache)
-│   ├── Scanner/    BarcodeScanner, OCRScanner (Vision), SetNumberExtractor (regex parsing)
+│   ├── Scanner/    OCRScanner (Vision), SetNumberExtractor (regex parsing)
 │   ├── Scraping/   HeadlessWebScraper (per-call WKWebView driver), BrickLink/Amazon price
 │   │               scrapers, PriceRepository, PriceModels, PriceParsing
 │   └── Storage/    KeychainService, ScanStatsStore (UserDefaults scan counter), ImageCache
@@ -338,7 +338,7 @@ initializer has no observable presentation state — use the
 ## Scanning pipeline
 
 `ScannerViewModel.handleFrame` throttles Vision processing to once every 0.8s (`AVCaptureVideoDataOutput`
-delivers ~30fps; running barcode+OCR detection on every frame is wasted CPU). A detected
+delivers ~30fps; running OCR detection on every frame is wasted CPU). A detected
 candidate sets `candidateDetected = true` during the 1.5s debounce before the actual API search
 — `ScanOverlayView` uses that flag for the pulsing-green/checkmark feedback so the user sees
 something happened before the network call starts. Don't remove the throttle or the flag when

@@ -9,8 +9,8 @@ look up what a set is worth across lego.com, BrickLink and Amazon.
 
 ## Features
 
-- **Scan sets** — point the camera at a box barcode or type a set number to
-  identify a LEGO set.
+- **Scan sets** — point the camera at the set number on the box or type it in
+  to identify a LEGO set.
 - **Collection sync** — link your Rebrickable account to see whether a set is
   already in your collection and in which list, and add/remove it.
 - **Pricing** — for any set, see prices side by side:
