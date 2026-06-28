@@ -21,7 +21,9 @@ struct PriceRepository: PriceRepositoryProtocol {
     }
 
     func fetchPrices(for legoSet: LegoSet) async -> [PriceQuote] {
-        await withTaskGroup(of: [PriceQuote].self) { group in
+        guard await NetworkMonitor.shared.isConnected else { return [] }
+
+        return await withTaskGroup(of: [PriceQuote].self) { group in
             group.addTask {
                 (try? await brickLinkScraper.fetchPrices(setNum: legoSet.setNum)) ?? []
             }
