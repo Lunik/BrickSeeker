@@ -12,6 +12,7 @@ enum LegoStoreError: Error, LocalizedError {
     case timedOut
     case pageUnavailable
     case setNotOnStore
+    case offline
 
     var errorDescription: String? {
         switch self {
@@ -21,6 +22,8 @@ enum LegoStoreError: Error, LocalizedError {
             return "Page lego.com indisponible"
         case .setNotOnStore:
             return "Ce set n'est plus sur lego.com"
+        case .offline:
+            return "Hors-ligne"
         }
     }
 }
@@ -60,6 +63,9 @@ final class LegoStoreRepository: NSObject, LegoStoreRepositoryProtocol, @uncheck
     func fetchStorePrice(setNum: String) async throws -> StorePrice {
         guard let url = LegoStoreRepository.storeUrl(setNum: setNum) else {
             throw LegoStoreError.pageUnavailable
+        }
+        guard NetworkMonitor.shared.isConnected else {
+            throw LegoStoreError.offline
         }
 
         let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))

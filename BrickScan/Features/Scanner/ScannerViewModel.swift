@@ -232,6 +232,14 @@ final class ScannerViewModel {
 
         candidateDetected = true
         debounceTasks[setNum]?.cancel()
+        // Offline, there's no network round-trip to debounce against — resolving immediately
+        // avoids flashing a misleading "Vérification..." label for 1.5s before falling back to
+        // the offline catalogue/cache.
+        guard NetworkMonitor.shared.isConnected else {
+            debounceTasks[setNum] = nil
+            Task { [weak self] in await self?.resolveSet(setNum) }
+            return
+        }
         debounceTasks[setNum] = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             guard !Task.isCancelled else { return }
