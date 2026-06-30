@@ -102,6 +102,9 @@ struct HistoryView: View {
                 await ThemeNameStore.shared.refreshIfNeeded()
                 themeNames = ThemeNameStore.shared.namesByThemeId
             }
+            .onDisappear {
+                HistoryFilterState.shared.resetSort()
+            }
             .sheet(isPresented: setDetailBinding) {
                 if case .found(let legoSet, let collectionStatus) = lookupViewModel.state {
                     let cached = LocalRepository(modelContext: modelContext).cachedSet(setNum: legoSet.setNum)

@@ -78,5 +78,8 @@ struct CollectionView: View {
             }
             viewModel?.load()
         }
+        .onDisappear {
+            CollectionFilterState.shared.resetSort()
+        }
     }
 }

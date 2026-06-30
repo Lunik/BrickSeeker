@@ -62,6 +62,11 @@ final class SetFilterState {
         sort = .dateScanned
         sortAscending = SetSortOption.dateScanned.defaultAscending
     }
+
+    func resetSort() {
+        sort = .dateScanned
+        sortAscending = SetSortOption.dateScanned.defaultAscending
+    }
 }
 
 /// Separate singleton from `HistoryFilterState` so filtering one screen never affects the other.
