@@ -4,7 +4,6 @@ import SwiftData
 struct CollectionView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: CollectionViewModel?
-    @State private var showStatistics = false
     @State private var showFilters = false
     @Bindable private var filter = CollectionFilterState.shared
     let lookupViewModel: ScannerViewModel
@@ -57,13 +56,6 @@ struct CollectionView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    showStatistics = true
-                } label: {
-                    Image(systemName: "chart.bar")
-                }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
                     showFilters = true
                 } label: {
                     Image(systemName: filter.isFilterActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
@@ -79,9 +71,6 @@ struct CollectionView: View {
                 showsOwnedFilter: false,
                 themeName: { viewModel?.themeName(forThemeId: $0) ?? "Thème #\($0)" }
             )
-        }
-        .navigationDestination(isPresented: $showStatistics) {
-            StatisticsView(lookupViewModel: lookupViewModel)
         }
         .onAppear {
             if viewModel == nil {
