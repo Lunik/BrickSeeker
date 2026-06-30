@@ -103,7 +103,7 @@ struct HistoryView: View {
                 themeNames = ThemeNameStore.shared.namesByThemeId
             }
             .onDisappear {
-                HistoryFilterState.shared.resetSort()
+                HistoryFilterState.shared.resetFilters()
             }
             .sheet(isPresented: setDetailBinding) {
                 if case .found(let legoSet, let collectionStatus) = lookupViewModel.state {
