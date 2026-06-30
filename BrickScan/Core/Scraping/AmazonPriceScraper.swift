@@ -1,6 +1,6 @@
 import Foundation
 
-/// Scrapes an Amazon.fr search results page for a LEGO set's price.
+/// Scrapes an Amazon search results page for a LEGO set's price.
 ///
 /// Amazon has no per-product URL keyed by LEGO set number, so this searches
 /// `LEGO {setNum}` and reads the price off the first result card that looks
@@ -17,20 +17,28 @@ struct AmazonPriceScraper: Sendable {
         let url: String?
     }
 
-    // Not defaulted to `.shared` here: that's a main-actor-isolated static
-    // property, and a default argument value must be evaluable in this
-    // (nonisolated) init's context. Resolved lazily in `fetchPrice` instead,
-    // where `await` can hop onto the main actor.
+    // Neither HeadlessWebScraper.shared nor AppMarketplace.shared are defaulted here:
+    // both are main-actor-isolated static properties, and a default argument value must
+    // be evaluable in this (nonisolated) init's context. Both are resolved lazily in
+    // `fetchPrice` instead, where `await` can hop onto the main actor.
     private let scraper: HeadlessWebScraper?
+    private let marketplaceOverride: Marketplace?
 
-    init(scraper: HeadlessWebScraper? = nil) {
+    init(scraper: HeadlessWebScraper? = nil, marketplace: Marketplace? = nil) {
         self.scraper = scraper
+        self.marketplaceOverride = marketplace
     }
 
     func fetchPrice(legoSet: LegoSet) async throws -> PriceQuote {
         let setDigits = legoSet.setNum.split(separator: "-").first.map(String.init) ?? legoSet.setNum
+        let market: Marketplace
+        if let override = marketplaceOverride {
+            market = override
+        } else {
+            market = await MainActor.run { AppMarketplace.shared.marketplace }
+        }
 
-        var components = URLComponents(string: "https://www.amazon.fr/s")!
+        var components = URLComponents(string: "https://www.\(market.amazonDomain)/s")!
         components.queryItems = [URLQueryItem(name: "k", value: "LEGO \(setDigits)")]
         guard let url = components.url else { throw ScrapeError.notFound }
 
@@ -43,7 +51,7 @@ struct AmazonPriceScraper: Sendable {
         let json = try await scraper.loadAndExtract(
             url: url,
             readinessScript: Self.readinessScript,
-            extractScript: Self.extractScript(setDigits: setDigits)
+            extractScript: Self.extractScript(setDigits: setDigits, rejectPattern: market.amazonRejectPattern)
         )
         guard let data = json.data(using: .utf8),
               let raw = try? JSONDecoder().decode(RawResult.self, from: data),
@@ -68,7 +76,7 @@ struct AmazonPriceScraper: Sendable {
     })()
     """
 
-    static func extractScript(setDigits: String) -> String {
+    static func extractScript(setDigits: String, rejectPattern: String) -> String {
         """
         (function() {
             var text = document.body ? document.body.innerText : '';
@@ -77,7 +85,7 @@ struct AmazonPriceScraper: Sendable {
             // Third-party accessories that merely reference a set number — most
             // often LED lighting kits "compatible avec"/"pour LEGO", which never
             // include the set itself.
-            var reject = /compatible|pour lego|for lego|\\u00e9clairage|eclairage|\\bled\\b|lighting|non inclus|not included|pas inclus|sans la|briksmax|vonado|lightailing/i;
+            var reject = new RegExp(\(#""\#(rejectPattern)""#), 'i');
             function priceFrom(card) {
                 var titleEl = card.querySelector('h2');
                 var title = (titleEl ? titleEl.textContent : '').trim();

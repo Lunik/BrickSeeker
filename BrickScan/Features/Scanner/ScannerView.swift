@@ -60,7 +60,7 @@ struct ScannerView: View {
                         legoSet: legoSet,
                         collectionStatus: collectionStatus,
                         initialListName: viewModel.lastFoundWasFromCache ? cached?.currentListName : nil,
-                        initialStorePrice: cached?.storePriceEUR.map { StorePrice(amount: $0, currency: "EUR", availability: cached?.storeAvailability) },
+                        initialStorePrice: cached?.storePrice.map { StorePrice(amount: $0, currency: cached?.storePriceCurrency ?? "EUR", availability: cached?.storeAvailability) },
                         initialStorePriceFetchedAt: cached?.storePriceFetchedAt,
                         reconcileOnAppear: viewModel.lastFoundWasFromCache,
                         isOfflineResult: viewModel.lastFoundWasOffline

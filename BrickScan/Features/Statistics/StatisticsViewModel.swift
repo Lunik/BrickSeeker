@@ -112,7 +112,7 @@ final class StatisticsViewModel {
     /// BrickLink *new* is deliberately skipped: it's usually a third-party reseller markup over
     /// retail, not a meaningfully different signal from lego.com when that's missing.
     func effectivePriceEUR(for set: CachedSet) -> Double? {
-        if let legoPrice = set.storePriceEUR { return legoPrice }
+        if let legoPrice = set.storePrice { return legoPrice }
         let quotes = localRepository.cachedPrices(setNum: set.setNum)
         if let amazon = quotes.first(where: { $0.source == .amazon }) {
             return NSDecimalNumber(decimal: amazon.amount).doubleValue

@@ -88,7 +88,8 @@ final class LocalRepository {
     /// already reached through the normal resolve flow (which always caches one first).
     func cacheStorePrice(setNum: String, price: StorePrice) {
         guard let existing = cachedSet(setNum: setNum) else { return }
-        existing.storePriceEUR = price.amount
+        existing.storePrice = price.amount
+        existing.storePriceCurrency = price.currency
         existing.storeAvailability = price.availability
         existing.storePriceFetchedAt = Date()
         if let amount = price.amount {

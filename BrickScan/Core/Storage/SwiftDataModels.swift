@@ -19,7 +19,8 @@ final class CachedSet {
     var isInCollection: Bool
     var currentListId: Int?
     var currentListName: String?
-    var storePriceEUR: Double?
+    @Attribute(originalName: "storePriceEUR") var storePrice: Double?
+    var storePriceCurrency: String?
     var storeAvailability: String?
     var storePriceFetchedAt: Date?
 

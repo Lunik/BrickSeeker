@@ -277,7 +277,7 @@ struct SetDetailView: View {
             let pppDouble = (ppp as NSDecimalNumber).doubleValue
             let pct = Int(((pppDouble - threshold) / threshold * 100).rounded())
             Button { showSettings = true } label: {
-                priceRow(label: "€ / pièce") {
+                priceRow(label: "\(currency) / pièce") {
                     HStack(spacing: 6) {
                         if pct != 0 {
                             Text("\(pct > 0 ? "+" : "")\(pct)%")
@@ -291,7 +291,7 @@ struct SetDetailView: View {
             }
             .buttonStyle(.plain)
         } else if viewModel.isLoadingStorePrice && numParts > 0 {
-            priceRow(label: "€ / pièce") {
+            priceRow(label: "\(viewModel.storePrice?.currency ?? AppMarketplace.shared.marketplace.currency) / pièce") {
                 ProgressView().controlSize(.small)
             }
         }

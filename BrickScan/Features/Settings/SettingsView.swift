@@ -8,6 +8,7 @@ private let frenchDateStyle = Date.FormatStyle(date: .abbreviated, time: .omitte
 struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
     @Bindable private var theme = AppTheme.shared
+    @Bindable private var appMarketplace = AppMarketplace.shared
     @State private var preferredPPPText: String = ""
     @State private var showPrivacyDetail = false
     @State private var isAPIKeyVisible = false
@@ -57,6 +58,18 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Picker("Marché", selection: $appMarketplace.marketplace) {
+                        ForEach(Marketplace.allCases) { market in
+                            Text(market.displayName).tag(market)
+                        }
+                    }
+                } header: {
+                    Text("Marché / Devise")
+                } footer: {
+                    Text("Définit la boutique Amazon, la page lego.com et la devise utilisées pour les prix. Les prix déjà en cache restent affichés dans leur devise d'origine.")
+                }
+
+                Section {
                     HStack {
                         Text("Cible €/pièce")
                         Spacer()
@@ -70,13 +83,13 @@ struct SettingsView: View {
                                     theme.preferredPricePerPart = value
                                 }
                             }
-                        Text("€")
+                        Text(appMarketplace.marketplace.currency)
                             .foregroundStyle(.secondary)
                     }
                 } header: {
                     Text("Valeur cible")
                 } footer: {
-                    Text("Seuil de €/pièce en dessous duquel un set est considéré comme un bon rapport qualité-prix. Affiché en vert sur la fiche set si le prix lego.com est inférieur à cette valeur, en rouge au-dessus.")
+                    Text("Seuil de \(appMarketplace.marketplace.currency)/pièce en dessous duquel un set est considéré comme un bon rapport qualité-prix. Affiché en vert sur la fiche set si le prix lego.com est inférieur à cette valeur, en rouge au-dessus.")
                 }
 
                 Section {

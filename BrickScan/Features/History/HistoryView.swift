@@ -42,8 +42,8 @@ struct HistoryView: View {
                                 Spacer()
 
                                 VStack(alignment: .trailing, spacing: 3) {
-                                    if let amount = cached.storePriceEUR {
-                                        Text(amount, format: .currency(code: "EUR"))
+                                    if let amount = cached.storePrice {
+                                        Text(amount, format: .currency(code: cached.storePriceCurrency ?? "EUR"))
                                             .font(.subheadline.bold())
                                             .foregroundStyle(.primary)
                                     }
@@ -74,7 +74,7 @@ struct HistoryView: View {
                         legoSet: legoSet,
                         collectionStatus: collectionStatus,
                         initialListName: lookupViewModel.lastFoundWasFromCache ? cached?.currentListName : nil,
-                        initialStorePrice: cached?.storePriceEUR.map { StorePrice(amount: $0, currency: "EUR", availability: cached?.storeAvailability) },
+                        initialStorePrice: cached?.storePrice.map { StorePrice(amount: $0, currency: cached?.storePriceCurrency ?? "EUR", availability: cached?.storeAvailability) },
                         initialStorePriceFetchedAt: cached?.storePriceFetchedAt,
                         reconcileOnAppear: lookupViewModel.lastFoundWasFromCache,
                         isOfflineResult: lookupViewModel.lastFoundWasOffline
