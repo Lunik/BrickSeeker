@@ -58,6 +58,29 @@ struct SettingsView: View {
 
                 Section {
                     HStack {
+                        Text("Cible €/pièce")
+                        Spacer()
+                        TextField("0,12", text: $preferredPPPText)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 80)
+                            .onChange(of: preferredPPPText) { _, new in
+                                let normalised = new.replacingOccurrences(of: ",", with: ".")
+                                if let value = Double(normalised), value > 0 {
+                                    theme.preferredPricePerPart = value
+                                }
+                            }
+                        Text("€")
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Valeur cible")
+                } footer: {
+                    Text("Seuil de €/pièce en dessous duquel un set est considéré comme un bon rapport qualité-prix. Affiché en vert sur la fiche set si le prix lego.com est inférieur à cette valeur, en rouge au-dessus.")
+                }
+
+                Section {
+                    HStack {
                         Group {
                             if isAPIKeyVisible {
                                 TextField("API Key", text: $viewModel.apiKey)
@@ -127,26 +150,6 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Button(role: .destructive) {
-                        showClearCacheConfirmation = true
-                    } label: {
-                        HStack {
-                            Text("Vider le cache")
-                            Spacer()
-                            if isClearingCache {
-                                ProgressView()
-                            } else if cacheCleared {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(.green)
-                            }
-                        }
-                    }
-                    .disabled(isClearingCache)
-                } footer: {
-                    Text("Supprime les images, prix et listes mis en cache. Ne touche pas à votre clé API ni à votre compte, ni à l'historique des prix ; les données seront re-téléchargées au besoin.")
-                }
-
-                Section {
                     if let metadata = viewModel.offlineCatalogMetadata {
                         HStack {
                             Text("\(metadata.setCount) sets")
@@ -196,29 +199,6 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    HStack {
-                        Text("Cible €/pièce")
-                        Spacer()
-                        TextField("0,12", text: $preferredPPPText)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 80)
-                            .onChange(of: preferredPPPText) { _, new in
-                                let normalised = new.replacingOccurrences(of: ",", with: ".")
-                                if let value = Double(normalised), value > 0 {
-                                    theme.preferredPricePerPart = value
-                                }
-                            }
-                        Text("€")
-                            .foregroundStyle(.secondary)
-                    }
-                } header: {
-                    Text("Valeur cible")
-                } footer: {
-                    Text("Seuil de €/pièce en dessous duquel un set est considéré comme un bon rapport qualité-prix. Affiché en vert sur la fiche set si le prix lego.com est inférieur à cette valeur, en rouge au-dessus.")
-                }
-
-                Section {
                     if let lastCompletedAt = viewModel.priceUpdateLastCompletedAt {
                         Text("Dernière actualisation : \(lastCompletedAt.formatted(frenchDateStyle))")
                             .foregroundStyle(.secondary)
@@ -253,6 +233,26 @@ struct SettingsView: View {
                     Button("Confidentialité & données") {
                         showPrivacyDetail = true
                     }
+                }
+
+                Section {
+                    Button(role: .destructive) {
+                        showClearCacheConfirmation = true
+                    } label: {
+                        HStack {
+                            Text("Vider le cache")
+                            Spacer()
+                            if isClearingCache {
+                                ProgressView()
+                            } else if cacheCleared {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.green)
+                            }
+                        }
+                    }
+                    .disabled(isClearingCache)
+                } footer: {
+                    Text("Supprime les images, prix et listes mis en cache. Ne touche pas à votre clé API ni à votre compte, ni à l'historique des prix ; les données seront re-téléchargées au besoin.")
                 }
             }
             .navigationTitle("Paramètres")
