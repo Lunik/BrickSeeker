@@ -74,7 +74,10 @@ final class AppTheme {
     private enum Keys {
         static let brandColor = "appTheme.brandColor"
         static let appearanceMode = "appTheme.appearanceMode"
+        static let preferredPricePerPart = "appTheme.preferredPricePerPart"
     }
+
+    static let defaultPreferredPricePerPart: Double = 0.12
 
     var brandColor: BrandColor {
         didSet { UserDefaults.standard.set(brandColor.rawValue, forKey: Keys.brandColor) }
@@ -84,10 +87,18 @@ final class AppTheme {
         didSet { UserDefaults.standard.set(appearanceMode.rawValue, forKey: Keys.appearanceMode) }
     }
 
+    /// Target €/pièce the user considers a good deal. Used in SetDetailView to colour-code
+    /// the price-per-part row. Defaults to 0.12 €/pièce (industry rule of thumb).
+    var preferredPricePerPart: Double {
+        didSet { UserDefaults.standard.set(preferredPricePerPart, forKey: Keys.preferredPricePerPart) }
+    }
+
     private init() {
         let defaults = UserDefaults.standard
         brandColor = BrandColor(rawValue: defaults.string(forKey: Keys.brandColor) ?? "") ?? .red
         appearanceMode = AppearanceMode(rawValue: defaults.string(forKey: Keys.appearanceMode) ?? "") ?? .system
+        let stored = defaults.double(forKey: Keys.preferredPricePerPart)
+        preferredPricePerPart = stored > 0 ? stored : Self.defaultPreferredPricePerPart
     }
 
     var accent: Color { brandColor.accent }

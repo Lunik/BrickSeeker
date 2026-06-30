@@ -8,6 +8,7 @@ private let frenchDateStyle = Date.FormatStyle(date: .abbreviated, time: .omitte
 struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
     @Bindable private var theme = AppTheme.shared
+    @State private var preferredPPPText: String = ""
     @State private var showPrivacyDetail = false
     @State private var isAPIKeyVisible = false
     @State private var showClearCacheConfirmation = false
@@ -53,6 +54,29 @@ struct SettingsView: View {
                     Text("Thème")
                 } footer: {
                     Text("Choisissez la couleur de marque et l'apparence claire/sombre de l'application.")
+                }
+
+                Section {
+                    HStack {
+                        Text("Cible €/pièce")
+                        Spacer()
+                        TextField("0,12", text: $preferredPPPText)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 80)
+                            .onChange(of: preferredPPPText) { _, new in
+                                let normalised = new.replacingOccurrences(of: ",", with: ".")
+                                if let value = Double(normalised), value > 0 {
+                                    theme.preferredPricePerPart = value
+                                }
+                            }
+                        Text("€")
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Valeur cible")
+                } footer: {
+                    Text("Seuil de €/pièce en dessous duquel un set est considéré comme un bon rapport qualité-prix. Affiché en vert sur la fiche set si le prix lego.com est inférieur à cette valeur, en rouge au-dessus.")
                 }
 
                 Section {
@@ -123,26 +147,6 @@ struct SettingsView: View {
                     PrivacyNoticeView()
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
-                }
-
-                Section {
-                    Button(role: .destructive) {
-                        showClearCacheConfirmation = true
-                    } label: {
-                        HStack {
-                            Text("Vider le cache")
-                            Spacer()
-                            if isClearingCache {
-                                ProgressView()
-                            } else if cacheCleared {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(.green)
-                            }
-                        }
-                    }
-                    .disabled(isClearingCache)
-                } footer: {
-                    Text("Supprime les images, prix et listes mis en cache. Ne touche pas à votre clé API ni à votre compte, ni à l'historique des prix ; les données seront re-téléchargées au besoin.")
                 }
 
                 Section {
@@ -230,6 +234,26 @@ struct SettingsView: View {
                         showPrivacyDetail = true
                     }
                 }
+
+                Section {
+                    Button(role: .destructive) {
+                        showClearCacheConfirmation = true
+                    } label: {
+                        HStack {
+                            Text("Vider le cache")
+                            Spacer()
+                            if isClearingCache {
+                                ProgressView()
+                            } else if cacheCleared {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.green)
+                            }
+                        }
+                    }
+                    .disabled(isClearingCache)
+                } footer: {
+                    Text("Supprime les images, prix et listes mis en cache. Ne touche pas à votre clé API ni à votre compte, ni à l'historique des prix ; les données seront re-téléchargées au besoin.")
+                }
             }
             .navigationTitle("Paramètres")
             .toolbar {
@@ -261,6 +285,13 @@ struct SettingsView: View {
             }
             .onChange(of: scenePhase) { _, newPhase in
                 viewModel.handleScenePhaseChange(isActive: newPhase == .active)
+            }
+            .onAppear {
+                let formatter = NumberFormatter()
+                formatter.numberStyle = .decimal
+                formatter.maximumFractionDigits = 4
+                formatter.decimalSeparator = ","
+                preferredPPPText = formatter.string(from: theme.preferredPricePerPart as NSNumber) ?? "0,12"
             }
         }
     }

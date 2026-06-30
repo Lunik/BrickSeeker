@@ -6,6 +6,7 @@ struct SetDetailView: View {
     @State private var viewModel: SetDetailViewModel
     @State private var showListPicker = false
     @State private var showRemoveConfirmation = false
+    @State private var showSettings = false
     @State private var priceHistory: [PriceHistoryEntry] = []
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -106,6 +107,9 @@ struct SetDetailView: View {
                         onScanAgain()
                     }
                 }
+            }
+            .sheet(isPresented: $showSettings) {
+                SettingsView()
             }
             .sheet(isPresented: $showListPicker) {
                 ListPickerView { listId, listName in
@@ -230,6 +234,8 @@ struct SetDetailView: View {
 
             legoStoreRow
 
+            pricePerPartRow
+
             ForEach([PriceSource.amazon, .bricklinkNew, .bricklinkUsed], id: \.self) { source in
                 sourceRow(source)
             }
@@ -247,11 +253,46 @@ struct SetDetailView: View {
                 let code = viewModel.storePrice?.currency ?? "EUR"
                 if let url = LegoStoreRepository.storeUrl(setNum: viewModel.legoSet.setNum) {
                     Link(formattedAmount(Decimal(amount), currency: code), destination: url)
+                        .foregroundStyle(.primary)
                 } else {
                     Text(formattedAmount(Decimal(amount), currency: code))
                 }
             } else {
                 priceStatus(loading: viewModel.isLoadingStorePrice)
+            }
+        }
+    }
+
+    /// €/pièce derived from the lego.com retail price ÷ numParts. Hidden when
+    /// either value is unavailable or numParts is zero (avoids division-by-zero
+    /// and meaningless "0.00 €/pièce" for sets with unknown part counts).
+    /// Coloured green/red relative to the user's preferred PPP threshold.
+    @ViewBuilder
+    private var pricePerPartRow: some View {
+        let numParts = viewModel.legoSet.numParts
+        if numParts > 0, let storeAmount = viewModel.storePrice?.amount, storeAmount > 0 {
+            let currency = viewModel.storePrice?.currency ?? "EUR"
+            let ppp = Decimal(storeAmount) / Decimal(numParts)
+            let threshold = AppTheme.shared.preferredPricePerPart
+            let pppDouble = (ppp as NSDecimalNumber).doubleValue
+            let pct = Int(((pppDouble - threshold) / threshold * 100).rounded())
+            Button { showSettings = true } label: {
+                priceRow(label: "€ / pièce") {
+                    HStack(spacing: 6) {
+                        if pct != 0 {
+                            Text("\(pct > 0 ? "+" : "")\(pct)%")
+                                .font(.caption2)
+                                .foregroundStyle(pct < 0 ? .green : Color.brickDanger)
+                        }
+                        Text(formattedAmount(ppp, currency: currency))
+                            .foregroundStyle(.primary)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+        } else if viewModel.isLoadingStorePrice && numParts > 0 {
+            priceRow(label: "€ / pièce") {
+                ProgressView().controlSize(.small)
             }
         }
     }
@@ -271,6 +312,7 @@ struct SetDetailView: View {
                     }
                     if let sourceURL = quote.sourceURL {
                         Link(formattedAmount(quote.amount, currency: quote.currency), destination: sourceURL)
+                            .foregroundStyle(.primary)
                     } else {
                         Text(formattedAmount(quote.amount, currency: quote.currency))
                     }
