@@ -13,8 +13,23 @@ struct ListConditionsView: View {
                     description: Text("Synchronisez votre collection depuis l'accueil pour voir vos listes Rebrickable ici.")
                 )
             } else {
-                List(setLists) { list in
-                    ListConditionRow(list: list)
+                List {
+                    Section {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Sélectionner le type de liste")
+                                .font(.title2.bold())
+                            Text("Le type détermine la source de prix utilisée pour estimer la valeur de votre collection. Choisissez « Neuf » pour les sets encore scellés (lego.com en priorité) et « Occasion » pour les sets ouverts ou d'occasion (BrickLink occasion).")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .padding(.vertical, 4)
+                    }
+
+                    ForEach(setLists) { list in
+                        ListConditionRow(list: list)
+                    }
                 }
             }
         }
