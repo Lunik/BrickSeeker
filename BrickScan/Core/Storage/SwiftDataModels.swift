@@ -127,7 +127,7 @@ final class CachedSetList {
     var numSets: Int
     var lastFetchedAt: Date
     /// Raw value of `ListCondition`; stored as String so adding new cases needs no migration.
-    var conditionRaw: String = ListCondition.retail.rawValue
+    var conditionRaw: String = ListCondition.newSet.rawValue
 
     init(from setList: SetList) {
         self.listId = setList.id
@@ -137,7 +137,7 @@ final class CachedSetList {
     }
 
     var condition: ListCondition {
-        get { ListCondition(rawValue: conditionRaw) ?? .retail }
+        get { ListCondition(rawValue: conditionRaw) ?? .newSet }
         set { conditionRaw = newValue.rawValue }
     }
 

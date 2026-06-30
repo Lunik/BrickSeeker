@@ -107,34 +107,23 @@ final class StatisticsViewModel {
 
     var setsForExport: [CachedSet] { ownedSets }
 
-    /// The price used for collection valuation and exports. The source depends on the `ListCondition`
+    /// The price used for collection valuation and exports. Source depends on the `ListCondition`
     /// annotated on the set's current list (see issue #47):
     ///
-    /// - `.retail` (default): lego.com → Amazon → BrickLink used (original behaviour)
-    /// - `.newSet`: BrickLink new → lego.com → Amazon
-    /// - `.used`: BrickLink used only — returns nil when unavailable so used sets aren't
-    ///   over-valued by a retail proxy; the "X / Y sets with known price" counter makes
-    ///   missing coverage visible rather than silently wrong.
+    /// - `.newSet` (default): lego.com → Amazon → BrickLink new
+    /// - `.used`: BrickLink used only — nil when unavailable so occasion sets aren't
+    ///   over-valued by a retail proxy.
     func effectivePriceEUR(for set: CachedSet) -> Double? {
-        let condition = set.currentListId.flatMap { conditionByListId[$0] } ?? .retail
+        let condition = set.currentListId.flatMap { conditionByListId[$0] } ?? .newSet
         let quotes = localRepository.cachedPrices(setNum: set.setNum)
         switch condition {
-        case .retail:
+        case .newSet:
             if let legoPrice = set.storePriceEUR { return legoPrice }
             if let amazon = quotes.first(where: { $0.source == .amazon }) {
                 return NSDecimalNumber(decimal: amazon.amount).doubleValue
             }
-            if let bricklinkUsed = quotes.first(where: { $0.source == .bricklinkUsed }) {
-                return NSDecimalNumber(decimal: bricklinkUsed.amount).doubleValue
-            }
-            return nil
-        case .newSet:
             if let bricklinkNew = quotes.first(where: { $0.source == .bricklinkNew }) {
                 return NSDecimalNumber(decimal: bricklinkNew.amount).doubleValue
-            }
-            if let legoPrice = set.storePriceEUR { return legoPrice }
-            if let amazon = quotes.first(where: { $0.source == .amazon }) {
-                return NSDecimalNumber(decimal: amazon.amount).doubleValue
             }
             return nil
         case .used:

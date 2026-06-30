@@ -4,20 +4,17 @@ import Foundation
 /// Stored as a raw `String` in SwiftData (via `CachedSetList.conditionRaw`) so that adding
 /// new cases later doesn't require a schema migration.
 enum ListCondition: String, Codable, CaseIterable, Identifiable {
-    /// Official lego.com retail price — the default, preserves existing behaviour.
-    case retail
-    /// BrickLink "last 6 months new" average — for sealed / MISB sets.
+    /// Neuf — lego.com → Amazon → BrickLink new.
     case newSet
-    /// BrickLink "last 6 months used" average — for open / occasion sets.
+    /// Occasion — BrickLink used only; nil when unavailable.
     case used
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .retail: return "Retail (lego.com)"
-        case .newSet: return "Neuf (BrickLink)"
-        case .used: return "Occasion (BrickLink)"
+        case .newSet: return "Neuf"
+        case .used: return "Occasion"
         }
     }
 }
