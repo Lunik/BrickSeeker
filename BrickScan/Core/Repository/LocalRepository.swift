@@ -182,6 +182,10 @@ final class LocalRepository {
         (try? modelContext.fetch(FetchDescriptor<CachedSetList>())) ?? []
     }
 
+    func conditionByListId() -> [Int: ListCondition] {
+        Dictionary(uniqueKeysWithValues: cachedSetLists().map { ($0.listId, $0.condition) })
+    }
+
     /// Deliberately does NOT touch `PriceHistoryEntry` — the price-evolution chart in
     /// `SetDetail` is the whole point of recording it over time, and "vider le cache"
     /// is meant to discard reconstructible short-TTL data (cached sets/lists/current

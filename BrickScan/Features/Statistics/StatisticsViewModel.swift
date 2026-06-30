@@ -71,6 +71,7 @@ final class StatisticsViewModel {
     var themeNames: [Int: String] = [:]
 
     private var ownedSets: [CachedSet] = []
+    private var conditionByListId: [Int: ListCondition] = [:]
     private let localRepository: LocalRepository
     private let priceRepository: PriceRepositoryProtocol
     private let legoStoreRepository: LegoStoreRepositoryProtocol
@@ -90,6 +91,7 @@ final class StatisticsViewModel {
 
     func load() {
         ownedSets = localRepository.ownedSets()
+        conditionByListId = localRepository.conditionByListId()
         let priceByNum = Dictionary(uniqueKeysWithValues: ownedSets.map { ($0.setNum, effectivePriceEUR(for: $0)) })
         stats = Self.computeStats(from: ownedSets, priceByNum: priceByNum)
         themeNames = themeNameStore.namesByThemeId
@@ -105,22 +107,31 @@ final class StatisticsViewModel {
 
     var setsForExport: [CachedSet] { ownedSets }
 
-    /// The price used for collection valuation and exports, in priority order: lego.com retail
-    /// (`CachedSet.storePriceEUR`) first since it's the official current price, then Amazon, then
-    /// BrickLink used/occasion as a last resort — both populated by the same batch refresh
-    /// (`CollectionPriceUpdater`) and cached as `PriceQuote`s via `LocalRepository.cachedPrices`.
-    /// BrickLink *new* is deliberately skipped: it's usually a third-party reseller markup over
-    /// retail, not a meaningfully different signal from lego.com when that's missing.
+    /// The price used for collection valuation and exports. Source depends on the `ListCondition`
+    /// annotated on the set's current list (see issue #47):
+    ///
+    /// - `.newSet` (default): lego.com → Amazon → BrickLink new
+    /// - `.used`: BrickLink used only — nil when unavailable so occasion sets aren't
+    ///   over-valued by a retail proxy.
     func effectivePriceEUR(for set: CachedSet) -> Double? {
-        if let legoPrice = set.storePriceEUR { return legoPrice }
+        let condition = set.currentListId.flatMap { conditionByListId[$0] } ?? .newSet
         let quotes = localRepository.cachedPrices(setNum: set.setNum)
-        if let amazon = quotes.first(where: { $0.source == .amazon }) {
-            return NSDecimalNumber(decimal: amazon.amount).doubleValue
+        switch condition {
+        case .newSet:
+            if let legoPrice = set.storePriceEUR { return legoPrice }
+            if let amazon = quotes.first(where: { $0.source == .amazon }) {
+                return NSDecimalNumber(decimal: amazon.amount).doubleValue
+            }
+            if let bricklinkNew = quotes.first(where: { $0.source == .bricklinkNew }) {
+                return NSDecimalNumber(decimal: bricklinkNew.amount).doubleValue
+            }
+            return nil
+        case .used:
+            if let bricklinkUsed = quotes.first(where: { $0.source == .bricklinkUsed }) {
+                return NSDecimalNumber(decimal: bricklinkUsed.amount).doubleValue
+            }
+            return nil
         }
-        if let bricklinkUsed = quotes.first(where: { $0.source == .bricklinkUsed }) {
-            return NSDecimalNumber(decimal: bricklinkUsed.amount).doubleValue
-        }
-        return nil
     }
 
     // MARK: - Collection price batch update

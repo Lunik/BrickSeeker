@@ -7,7 +7,6 @@ final class HomeViewModel {
     var scannedSetsCount = 0
     var totalScans = 0
     var ownedSetsCount = 0
-    var listsCount = 0
     var lastSyncedAt: Date?
 
     var isAccountLinked = false
@@ -26,7 +25,6 @@ final class HomeViewModel {
         scannedSetsCount = localRepository.scannedSetsCount()
         totalScans = ScanStatsStore.shared.totalScans
         ownedSetsCount = localRepository.ownedSetsCount()
-        listsCount = localRepository.cachedSetLists().count
         lastSyncedAt = localRepository.lastFullSyncAt()
         isAccountLinked = KeychainService.shared.hasUserToken
     }

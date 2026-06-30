@@ -1,5 +1,24 @@
 import Foundation
 
+/// Per-list annotation that drives which price source is used when valuing the collection.
+/// Stored as a raw `String` in SwiftData (via `CachedSetList.conditionRaw`) so that adding
+/// new cases later doesn't require a schema migration.
+enum ListCondition: String, Codable, CaseIterable, Identifiable {
+    /// Neuf — lego.com → Amazon → BrickLink new.
+    case newSet
+    /// Occasion — BrickLink used only; nil when unavailable.
+    case used
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .newSet: return "Neuf"
+        case .used: return "Occasion"
+        }
+    }
+}
+
 enum PriceSource: String, Codable, CaseIterable {
     case bricklinkUsed
     case bricklinkNew

@@ -97,6 +97,16 @@ struct StatisticsView: View {
             Text("Basée sur \(viewModel.stats.setsWithKnownPrice) / \(viewModel.stats.setCount) sets dont le prix est connu")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            NavigationLink {
+                ListConditionsView()
+            } label: {
+                HStack(spacing: 4) {
+                    Text("Configurer le type (neuf/occasion) des listes")
+                    Image(systemName: "chevron.right")
+                }
+                .font(.caption)
+            }
         }
     }
 

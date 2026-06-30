@@ -14,6 +14,7 @@ struct HomeView: View {
     @State private var showPhotoPicker = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showCollection = false
+    @State private var showStatistics = false
 
     let onStartScanning: () -> Void
     @Binding var pendingAction: HomeScreenShortcut?
@@ -60,6 +61,9 @@ struct HomeView: View {
             }
             .navigationDestination(isPresented: $showCollection) {
                 CollectionView(lookupViewModel: lookupViewModel)
+            }
+            .navigationDestination(isPresented: $showStatistics) {
+                StatisticsView(lookupViewModel: lookupViewModel)
             }
             .sheet(isPresented: $showHistory) {
                 HistoryView(lookupViewModel: lookupViewModel) { setNum in
@@ -221,15 +225,21 @@ struct HomeView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
-                Button {
-                    showCollection = true
-                } label: {
-                    HStack(spacing: 12) {
-                        statCard(title: "Sets possédés", value: "\(viewModel.ownedSetsCount)", icon: "shippingbox")
-                        statCard(title: "Listes", value: "\(viewModel.listsCount)", icon: "list.bullet")
+                HStack(spacing: 12) {
+                    Button {
+                        showStatistics = true
+                    } label: {
+                        statCardLink(title: "Statistiques", icon: "chart.bar")
                     }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        showCollection = true
+                    } label: {
+                        statCard(title: "Sets possédés", value: "\(viewModel.ownedSetsCount)", icon: "shippingbox")
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
 
                 // Fixed height regardless of which branch renders: letting this row appear/
                 // disappear reflows the ScrollView content while .refreshable's pull gesture is
@@ -289,6 +299,26 @@ struct HomeView: View {
             Text(value)
                 .font(.title2.bold())
             Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .foregroundStyle(.primary)
+    }
+
+    /// Same layout as `statCard` (icon + two text lines) for a tile that navigates somewhere
+    /// rather than displaying a count.
+    private func statCardLink(title: String, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundStyle(.tint)
+            Text(title)
+                .font(.title2.bold())
+            Text("Voir le détail")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
