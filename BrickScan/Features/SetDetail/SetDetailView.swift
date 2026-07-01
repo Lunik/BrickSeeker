@@ -162,9 +162,7 @@ struct SetDetailView: View {
         .task {
             let setNum = viewModel.legoSet.setNum
             viewModel.setCachedPrices(LocalRepository(modelContext: modelContext).cachedPrices(setNum: setNum))
-            if viewModel.priceQuotes.isEmpty {
-                await refreshPrices()
-            }
+            await refreshPricesIfNeeded()
         }
         .task {
             reloadPriceHistory()
@@ -179,7 +177,17 @@ struct SetDetailView: View {
 
     private func refreshPrices() async {
         await viewModel.loadPrices()
-        LocalRepository(modelContext: modelContext).cachePrices(viewModel.priceQuotes, setNum: viewModel.legoSet.setNum)
+        LocalRepository(modelContext: modelContext).cachePrices(
+            viewModel.priceQuotes, setNum: viewModel.legoSet.setNum, reconcile: true
+        )
+        reloadPriceHistory()
+    }
+
+    private func refreshPricesIfNeeded() async {
+        let didFetch = await viewModel.loadPricesIfNeeded()
+        LocalRepository(modelContext: modelContext).cachePrices(
+            viewModel.priceQuotes, setNum: viewModel.legoSet.setNum, reconcile: didFetch
+        )
         reloadPriceHistory()
     }
 

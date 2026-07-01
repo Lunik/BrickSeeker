@@ -2,16 +2,29 @@ import Foundation
 
 /// Scrapes BrickLink "Price Guide" pages for LEGO items.
 ///
-/// For classic sets the item is addressable directly by set number — no
-/// lookup needed. For minifigs (Rebrickable `fig-…` prefix), Rebrickable and
-/// BrickLink use completely different ID schemes (e.g. `fig-004396` vs
-/// `oct033`) and the Rebrickable API doesn't expose the mapping (confirmed by
-/// inspecting a real `/lego/minifigs/{set_num}/` response: no `bricklink_id`
-/// or similar field). The mapping *is* rendered on the Rebrickable minifig's
-/// own web page though, in an "External Sites" table — so for minifigs we
-/// scrape that page first to resolve the BrickLink `M=` ID, then fetch the
-/// price guide as normal. The resolved ID is cached in `BrickLinkMinifigIdStore`
-/// (permanent mapping, never re-scraped once known).
+/// Most classic sets are addressable directly by set number (BrickLink's `S=`
+/// catalog type) — no lookup needed. But Rebrickable and BrickLink don't
+/// always agree on numbering: Rebrickable minifigs (`fig-…` prefix) use a
+/// completely different scheme from BrickLink's (e.g. `fig-004396` vs
+/// `oct033`), and some Rebrickable *sets* — notably individual collectible-
+/// minifigure boxes, which Rebrickable numbers as their own set (e.g.
+/// `71039-6`) — have no matching BrickLink set entry at all, because
+/// BrickLink catalogs the physical contents as a minifig instead.
+///
+/// The workflow therefore is:
+///   1. If this isn't a `fig-…` id, try BrickLink's `S=` catalog directly.
+///   2. If that has no data (or it's a minifig, which never has one), scrape
+///      the item's Rebrickable page for its "External Sites" table, which
+///      links out to the matching BrickLink catalog entry — of whatever type
+///      (`S`, `M`, …) BrickLink actually filed it under (confirmed by
+///      inspecting a real page: the Rebrickable API doesn't expose this
+///      mapping, only the rendered page does).
+///   3. Fetch the price guide for that resolved reference.
+///   4. If nothing matches at any step, the item has no BrickLink price.
+///
+/// The resolved reference is cached in `BrickLinkMinifigIdStore` (permanent
+/// mapping — BrickLink never reassigns a catalog ID — so step 2 only runs
+/// once per item, not on every price refresh).
 ///
 /// The price guide page is a deeply nested table with four "Last 6 Months Sales"
 /// summary quadrants (New-sold, Used-sold, New-for-sale, Used-for-sale) followed
@@ -34,6 +47,7 @@ struct BrickLinkPriceScraper: Sendable {
 
     private struct RawExternalId: Decodable {
         let id: String
+        let href: String?
     }
 
     // MARK: - Price guide scripts (shared between set and minifig flows)
@@ -79,11 +93,12 @@ struct BrickLinkPriceScraper: Sendable {
     })()
     """
 
-    // MARK: - Rebrickable "External Sites" lookup (minifigs only)
+    // MARK: - Rebrickable "External Sites" lookup (both sets and minifigs)
 
     /// Waits for the "External Sites" table to render — a plain `<table>`
     /// with one `<label td>/<value td>` row per external catalog (BrickLink,
-    /// BrickOwl, Brickset, …), confirmed by inspecting the live page.
+    /// BrickOwl, Brickset, …), confirmed by inspecting the live page. Present
+    /// on both `/sets/{set_num}/` and `/minifigs/{set_num}/` pages.
     static let externalIdReadinessScript = """
     (function() {
         var text = document.body ? document.body.innerText : '';
@@ -91,8 +106,11 @@ struct BrickLinkPriceScraper: Sendable {
     })()
     """
 
-    /// Finds the row whose first cell reads exactly "BrickLink" and returns
-    /// the linked catalog ID (e.g. "oct033") from its second cell.
+    /// Finds the row whose first cell reads exactly "BrickLink" and returns the linked catalog
+    /// ID (e.g. "oct033") from its second cell, along with the link's `href` — the href's query
+    /// string (e.g. `catalogitem.page?S=71039-1` or `?M=oct033`) tells us which BrickLink catalog
+    /// type (`S`, `M`, …) the item was actually filed under, since that isn't always the same
+    /// type we started the lookup with.
     static let externalIdExtractScript = """
     (function() {
         var rows = Array.from(document.querySelectorAll('tr'));
@@ -101,8 +119,9 @@ struct BrickLinkPriceScraper: Sendable {
             if (cells.length < 2) continue;
             if (cells[0].textContent.trim() !== 'BrickLink') continue;
             var link = cells[1].querySelector('a');
+            var href = link ? link.getAttribute('href') : null;
             var id = (link ? link.textContent : cells[1].textContent).trim();
-            if (id) return JSON.stringify({ id: id });
+            if (id) return JSON.stringify({ id: id, href: href });
         }
         return null;
     })()
@@ -128,34 +147,24 @@ struct BrickLinkPriceScraper: Sendable {
             scraper = await HeadlessWebScraper.shared
         }
 
-        if legoSet.setNum.hasPrefix("fig-") {
-            return try await fetchMinifigPrices(setNum: legoSet.setNum, scraper: scraper)
-        } else {
-            return try await fetchSetPrices(setNum: legoSet.setNum, scraper: scraper)
-        }
-    }
+        let setNum = legoSet.setNum
+        let isMinifig = setNum.hasPrefix("fig-")
 
-    private func fetchSetPrices(setNum: String, scraper: HeadlessWebScraper) async throws -> [PriceQuote] {
-        // `viewExclude=Y` is BrickLink's "Exclude Incomplete Sets" toggle — we
-        // want the value of a complete set, not one missing pieces.
-        guard let priceGuideURL = URL(string: "https://www.bricklink.com/catalogPG.asp?S=\(setNum)&viewExclude=Y") else {
-            throw ScrapeError.notFound
+        // Step 1: a minifig id never has a direct `S=` set entry, so only try this for sets.
+        if !isMinifig, let quotes = try? await fetchPrices(for: BrickLinkCatalogRef(type: "S", id: setNum), scraper: scraper) {
+            return quotes
         }
-        // The price guide is what we scrape; the link we surface is the set's
-        // catalog item page (filter options in the fragment didn't stick).
-        let itemURL = URL(string: "https://www.bricklink.com/v2/catalog/catalogitem.page?S=\(setNum)") ?? priceGuideURL
-        return try await fetchPricesFromGuide(priceGuideURL: priceGuideURL, itemURL: itemURL, scraper: scraper)
-    }
 
-    private func fetchMinifigPrices(setNum: String, scraper: HeadlessWebScraper) async throws -> [PriceQuote] {
-        // Step 1: resolve the BrickLink `M=` ID, from the on-disk cache if a
-        // previous lookup already resolved it — the mapping is permanent, so
-        // there's no reason to re-scrape Rebrickable's minifig page every time.
-        let bricklinkId: String
+        // Steps 2-3: resolve the actual BrickLink catalog reference from the on-disk cache, or by
+        // scraping Rebrickable's "External Sites" table if this is the first time this item is
+        // looked up — the mapping is permanent, so there's no reason to re-scrape on every
+        // price refresh.
+        let ref: BrickLinkCatalogRef
         if let cached = await minifigIdStore.lookup(setNum: setNum) {
-            bricklinkId = cached
+            ref = cached
         } else {
-            guard let rebrickableURL = URL(string: "https://rebrickable.com/minifigs/\(setNum)/") else {
+            let rebrickablePath = isMinifig ? "minifigs" : "sets"
+            guard let rebrickableURL = URL(string: "https://rebrickable.com/\(rebrickablePath)/\(setNum)/") else {
                 throw ScrapeError.notFound
             }
             let externalIdJson = try await scraper.loadAndExtract(
@@ -167,15 +176,37 @@ struct BrickLinkPriceScraper: Sendable {
                   let externalId = try? JSONDecoder().decode(RawExternalId.self, from: externalIdData) else {
                 throw ScrapeError.parsingFailed
             }
-            bricklinkId = externalId.id
-            await minifigIdStore.save(setNum: setNum, bricklinkId: bricklinkId)
+            ref = Self.catalogRef(id: externalId.id, href: externalId.href, fallbackType: isMinifig ? "M" : "S")
+            await minifigIdStore.save(setNum: setNum, ref: ref)
         }
 
-        // Step 2: fetch the price guide for the resolved BrickLink minifig ID.
-        guard let priceGuideURL = URL(string: "https://www.bricklink.com/catalogPG.asp?M=\(bricklinkId)&viewExclude=Y") else {
+        // Step 4: fetch the price guide for the resolved reference. If this fails too, the item
+        // genuinely has no BrickLink price (step 5 — "Indisponible" — happens at the UI layer).
+        return try await fetchPrices(for: ref, scraper: scraper)
+    }
+
+    /// Reads the BrickLink catalog type (`S`, `M`, …) from an "External Sites" link's `href`
+    /// query string — that's the ground truth for which catalog the item was actually filed
+    /// under, since it isn't always the same type the lookup started with (e.g. a Rebrickable
+    /// *set* number can resolve to a BrickLink *minifig* entry). Falls back to `fallbackType`
+    /// only if the href is missing or unparseable.
+    private static func catalogRef(id: String, href: String?, fallbackType: String) -> BrickLinkCatalogRef {
+        if let href, let components = URLComponents(string: href),
+           let first = components.queryItems?.first, let value = first.value {
+            return BrickLinkCatalogRef(type: first.name, id: value)
+        }
+        return BrickLinkCatalogRef(type: fallbackType, id: id)
+    }
+
+    private func fetchPrices(for ref: BrickLinkCatalogRef, scraper: HeadlessWebScraper) async throws -> [PriceQuote] {
+        // `viewExclude=Y` is BrickLink's "Exclude Incomplete Sets" toggle — we
+        // want the value of a complete set, not one missing pieces.
+        guard let priceGuideURL = URL(string: "https://www.bricklink.com/catalogPG.asp?\(ref.type)=\(ref.id)&viewExclude=Y") else {
             throw ScrapeError.notFound
         }
-        let itemURL = URL(string: "https://www.bricklink.com/v2/catalog/catalogitem.page?M=\(bricklinkId)") ?? priceGuideURL
+        // The price guide is what we scrape; the link we surface is the item's catalog page
+        // (filter options in the fragment didn't stick).
+        let itemURL = URL(string: "https://www.bricklink.com/v2/catalog/catalogitem.page?\(ref.type)=\(ref.id)") ?? priceGuideURL
         return try await fetchPricesFromGuide(priceGuideURL: priceGuideURL, itemURL: itemURL, scraper: scraper)
     }
 

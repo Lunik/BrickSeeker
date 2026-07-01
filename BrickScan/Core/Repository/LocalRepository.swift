@@ -215,7 +215,21 @@ final class LocalRepository {
         return cached.filter { !$0.isExpired }.compactMap(\.quote)
     }
 
-    func cachePrices(_ quotes: [PriceQuote], setNum: String) {
+    /// `reconcile` should only be `true` when `quotes` comes from a genuine live fetch attempt
+    /// (not a cache-only read) — it deletes any cached source missing from `quotes`, so a source
+    /// that went "Indisponible" stops showing its last known price for the rest of the 7-day
+    /// cache TTL. Left `false` for cache-only writes (e.g. the collection-wide batch updater),
+    /// where an empty/partial result can't be distinguished from a transient network hiccup.
+    func cachePrices(_ quotes: [PriceQuote], setNum: String, reconcile: Bool = false) {
+        if reconcile {
+            let fetchedSources = Set(quotes.map { $0.source.rawValue })
+            let cached = (try? modelContext.fetch(
+                FetchDescriptor<CachedSetPrice>(predicate: #Predicate { $0.setNum == setNum })
+            )) ?? []
+            for entry in cached where !fetchedSources.contains(entry.source) {
+                modelContext.delete(entry)
+            }
+        }
         for quote in quotes {
             let source = quote.source.rawValue
             let existing = try? modelContext.fetch(
