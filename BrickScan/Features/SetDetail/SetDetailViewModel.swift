@@ -51,9 +51,12 @@ final class SetDetailViewModel {
     /// Auto-fetch only when there's no cached price yet, or it's older than `staleAfter` — the
     /// WKWebView fetch is slow (solves a real Cloudflare challenge, several seconds), so this
     /// isn't re-run on every SetDetail open the way collection-status reconciliation is.
+    /// "Indisponible" (no amount) is never treated as a fresh cache hit — an unavailable price
+    /// is always re-checked live, since it's exactly the state most likely to have changed.
     @MainActor
     func loadStorePriceIfNeeded(staleAfter: TimeInterval = 24 * 60 * 60) async {
-        if let storePriceFetchedAt, Date().timeIntervalSince(storePriceFetchedAt) < staleAfter {
+        if let storePriceFetchedAt, storePrice?.amount != nil,
+           Date().timeIntervalSince(storePriceFetchedAt) < staleAfter {
             return
         }
         await refreshStorePrice()
@@ -100,14 +103,21 @@ final class SetDetailViewModel {
         priceQuotes = await priceRepository.fetchPrices(for: legoSet)
     }
 
-    /// Auto-refresh scraped prices only when there's none cached yet, or the oldest cached
-    /// quote is older than `staleAfter` — mirrors `loadStorePriceIfNeeded`'s time-based check
-    /// instead of only refreshing when the cache is completely empty, which let a source that
-    /// went "Indisponible" show its last known price for up to 7 days (the hard cache TTL).
+    /// Auto-refresh scraped prices only when every source already has a cached quote and the
+    /// oldest one is younger than `staleAfter` — mirrors `loadStorePriceIfNeeded`'s time-based
+    /// check instead of only refreshing when the cache is completely empty, which let a source
+    /// that went "Indisponible" show its last known price for up to 7 days (the hard cache TTL).
+    /// A missing source is never treated as a fresh cache hit — "Indisponible" is always
+    /// re-checked live rather than trusted from cache, since it's the state most likely to
+    /// have changed.
     @discardableResult
     @MainActor
     func loadPricesIfNeeded(staleAfter: TimeInterval = 24 * 60 * 60) async -> Bool {
-        if let oldestFetch = priceQuotes.map(\.fetchedAt).min(), Date().timeIntervalSince(oldestFetch) < staleAfter {
+        let hasEverySource = PriceSource.allCases.allSatisfy { source in
+            priceQuotes.contains { $0.source == source }
+        }
+        if hasEverySource, let oldestFetch = priceQuotes.map(\.fetchedAt).min(),
+           Date().timeIntervalSince(oldestFetch) < staleAfter {
             return false
         }
         await loadPrices()
