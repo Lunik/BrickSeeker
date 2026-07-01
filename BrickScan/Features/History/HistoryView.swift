@@ -4,6 +4,7 @@ import SwiftData
 struct HistoryView: View {
     @Query(filter: #Predicate<CachedSet> { $0.wasScanned }, sort: \CachedSet.lastScannedAt, order: .reverse)
     private var cachedSets: [CachedSet]
+    @Query private var allCachedPrices: [CachedSetPrice]
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Bindable private var filter = HistoryFilterState.shared
@@ -15,6 +16,17 @@ struct HistoryView: View {
     private var filteredSets: [CachedSet] { cachedSets.filteredAndSorted(by: filter) }
     private var availableThemeIds: [Int] { Set(cachedSets.map(\.themeId)).sorted() }
     private var availableYears: [Int] { Set(cachedSets.map(\.year)).sorted(by: >) }
+
+    private var pricesBySetNum: [String: [PriceQuote]] {
+        Dictionary(grouping: allCachedPrices.filter { !$0.isExpired }.compactMap({ p -> (String, PriceQuote)? in
+            guard let q = p.quote else { return nil }
+            return (p.setNum, q)
+        }), by: \.0).mapValues { $0.map(\.1) }
+    }
+
+    private func resolvedPrice(for cached: CachedSet) -> Double? {
+        resolveNewPrice(storePriceEUR: cached.storePriceEUR, quotes: pricesBySetNum[cached.setNum] ?? [])
+    }
 
     var body: some View {
         NavigationStack {
@@ -39,36 +51,18 @@ struct HistoryView: View {
                             // HomeView.setDetailBinding's !showHistory gate.
                             onSelect(cached.setNum)
                         } label: {
-                            HStack(spacing: 14) {
-                                SetThumbnailView(imageUrl: cached.setImgUrl)
-
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(cached.setNum)
-                                        .font(.headline)
-                                        .foregroundStyle(.primary)
-                                    Text(cached.name)
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
-
-                                Spacer()
-
-                                VStack(alignment: .trailing, spacing: 3) {
-                                    if let amount = cached.storePriceEUR {
-                                        Text(amount, format: .currency(code: "EUR"))
-                                            .font(.subheadline.bold())
-                                            .foregroundStyle(.primary)
-                                    }
-                                    if cached.isInCollection {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .font(.title3)
-                                            .foregroundStyle(.green)
-                                    }
+                            SetRowView(
+                                setNum: cached.setNum,
+                                name: cached.name,
+                                setImgUrl: cached.setImgUrl,
+                                resolvedPrice: resolvedPrice(for: cached)
+                            ) {
+                                if cached.isInCollection {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.title3)
+                                        .foregroundStyle(.green)
                                 }
                             }
-                            .padding(.vertical, 4)
-                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
