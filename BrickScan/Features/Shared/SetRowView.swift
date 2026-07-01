@@ -58,18 +58,19 @@ func resolveNewPrice(storePriceEUR: Double?, quotes: [PriceQuote]) -> Double? {
 }
 
 /// Price resolution for a single owned set in CollectionView.
-/// - `.newSet` (or no list): new-price fallback chain (same as History).
-/// - `.used`: BrickLink used only; nil when unavailable.
+/// - `.newSet` (or no list): new-price chain first, then BrickLink used as last resort.
+/// - `.used`: BrickLink used first, then new-price chain as last resort.
 func resolveCollectionPrice(
     storePriceEUR: Double?,
     condition: ListCondition?,
     quotes: [PriceQuote]
 ) -> Double? {
+    let usedPrice = quotes.first(where: { $0.source == .bricklinkUsed })
+        .map { ($0.amount as NSDecimalNumber).doubleValue }
     switch condition ?? .newSet {
     case .newSet:
-        return resolveNewPrice(storePriceEUR: storePriceEUR, quotes: quotes)
+        return resolveNewPrice(storePriceEUR: storePriceEUR, quotes: quotes) ?? usedPrice
     case .used:
-        guard let q = quotes.first(where: { $0.source == .bricklinkUsed }) else { return nil }
-        return (q.amount as NSDecimalNumber).doubleValue
+        return usedPrice ?? resolveNewPrice(storePriceEUR: storePriceEUR, quotes: quotes)
     }
 }
