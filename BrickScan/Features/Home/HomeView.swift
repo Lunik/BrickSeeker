@@ -389,8 +389,9 @@ private struct ManualSetEntryView: View {
                         reconcileOnAppear: lookupViewModel.lastFoundWasFromCache,
                         isOfflineResult: lookupViewModel.lastFoundWasOffline
                     ) {
+                        // Deliberately no dismiss() here: closing the SetDetail sheet should
+                        // reveal ManualSetEntryView again, not Home — same pattern as HistoryView.
                         lookupViewModel.resumeScanning()
-                        dismiss()
                     }
                 }
             }
