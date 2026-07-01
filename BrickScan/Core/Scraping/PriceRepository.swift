@@ -25,7 +25,7 @@ struct PriceRepository: PriceRepositoryProtocol {
 
         return await withTaskGroup(of: [PriceQuote].self) { group in
             group.addTask {
-                (try? await brickLinkScraper.fetchPrices(setNum: legoSet.setNum)) ?? []
+                (try? await brickLinkScraper.fetchPrices(for: legoSet)) ?? []
             }
             group.addTask {
                 if let quote = try? await amazonScraper.fetchPrice(legoSet: legoSet) {

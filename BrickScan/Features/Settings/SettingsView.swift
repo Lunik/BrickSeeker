@@ -321,6 +321,7 @@ struct SettingsView: View {
         cacheCleared = false
         LocalRepository(modelContext: modelContext).clearAll()
         await ImageCache.shared.clearAll()
+        await BrickLinkMinifigIdStore.shared.clearAll()
         isClearingCache = false
         cacheCleared = true
     }
