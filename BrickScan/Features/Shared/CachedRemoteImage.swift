@@ -8,8 +8,13 @@ import SwiftUI
 struct CachedRemoteImage<Placeholder: View>: View {
     let url: URL?
     var refreshesLive: Bool = false
+    /// Longest displayed dimension in points. When set, the image is decoded (downsampled) at
+    /// that size instead of the file's full resolution — set by `SetThumbnailView` for 52 pt
+    /// list rows, left nil for SetDetail's hero image.
+    var targetSize: CGFloat? = nil
     @ViewBuilder var placeholder: () -> Placeholder
 
+    @Environment(\.displayScale) private var displayScale
     @State private var uiImage: UIImage?
 
     var body: some View {
@@ -27,10 +32,14 @@ struct CachedRemoteImage<Placeholder: View>: View {
         }
     }
 
+    private var maxPixelSize: CGFloat? {
+        targetSize.map { $0 * displayScale }
+    }
+
     private func load() async {
         guard let url else { return }
         let hadCachedImage: Bool
-        if let cachedData = await ImageCache.shared.cachedImageData(for: url), let cachedImage = UIImage(data: cachedData) {
+        if let cachedImage = await ImageCache.shared.cachedImage(for: url, maxPixelSize: maxPixelSize) {
             uiImage = cachedImage
             hadCachedImage = true
         } else {
@@ -38,7 +47,7 @@ struct CachedRemoteImage<Placeholder: View>: View {
         }
 
         guard !hadCachedImage || refreshesLive else { return }
-        guard let freshData = try? await ImageCache.shared.fetchAndCache(url), let freshImage = UIImage(data: freshData) else { return }
+        guard let freshImage = try? await ImageCache.shared.fetchAndCacheImage(url, maxPixelSize: maxPixelSize) else { return }
         uiImage = freshImage
     }
 }

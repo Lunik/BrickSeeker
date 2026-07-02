@@ -9,7 +9,7 @@ struct SetThumbnailView: View {
     var size: CGFloat = 52
 
     var body: some View {
-        CachedRemoteImage(url: URL(string: imageUrl ?? "")) {
+        CachedRemoteImage(url: URL(string: imageUrl ?? ""), targetSize: size) {
             Image(systemName: "shippingbox")
                 .resizable()
                 .scaledToFit()

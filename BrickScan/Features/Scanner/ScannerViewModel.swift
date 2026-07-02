@@ -89,7 +89,8 @@ final class ScannerViewModel {
     private var debounceTasks: [String: Task<Void, Never>] = [:]
     private var isPaused = false
 
-    private var lastFrameProcessedAt: Date?
+    /// Applied to `CameraController.frameInterval` in `onAppear` — the throttle itself runs on
+    /// the camera's session queue so discarded frames never reach the main actor (#70).
     private let frameProcessingInterval: TimeInterval = 0.8
 
     init(repository: RebrickableRepositoryProtocol = RebrickableRepository()) {
@@ -102,6 +103,7 @@ final class ScannerViewModel {
                 guard let self else { return }
                 if granted {
                     self.cameraController.configure()
+                    self.cameraController.frameInterval = self.frameProcessingInterval
                     self.cameraController.onFrame = { [weak self] buffer in
                         Task { @MainActor in
                             self?.handleFrame(buffer)
@@ -207,11 +209,8 @@ final class ScannerViewModel {
     private func handleFrame(_ pixelBuffer: CVPixelBuffer) {
         guard !isPaused else { return }
 
-        if let lastFrameProcessedAt,
-           Date().timeIntervalSince(lastFrameProcessedAt) < frameProcessingInterval {
-            return
-        }
-        lastFrameProcessedAt = Date()
+        // Frames arrive already throttled to `frameProcessingInterval` — the interval test
+        // lives in `CameraController.captureOutput`, on the session queue (#70).
 
         // Detect on a crop of just the reticle, rather than the full frame with a Vision
         // `regionOfInterest` — restricts "what's detected" to "what's aimed at", and any
@@ -306,7 +305,7 @@ final class ScannerViewModel {
         // for an actual `APIError.networkUnavailable`, instead of waiting to fail first.
         guard NetworkMonitor.shared.isConnected else {
             if !foundWasFromCache {
-                if let offlineSet = OfflineCatalogStore.shared.lookup(setNum: setNum) {
+                if let offlineSet = await OfflineCatalogStore.shared.lookup(setNum: setNum) {
                     foundWasOffline = true
                     presentFound(
                         offlineSet,
@@ -354,7 +353,7 @@ final class ScannerViewModel {
         } catch {
             if !foundWasFromCache {
                 if case .networkUnavailable = error as? APIError,
-                   let offlineSet = OfflineCatalogStore.shared.lookup(setNum: setNum) {
+                   let offlineSet = await OfflineCatalogStore.shared.lookup(setNum: setNum) {
                     presentFound(
                         offlineSet,
                         .unknown("Hors-ligne — statut collection et prix à rafraîchir une fois reconnecté"),

@@ -13,16 +13,13 @@ struct HistoryView: View {
     let lookupViewModel: ScannerViewModel
     let onSelect: (String) -> Void
 
+    /// Memoized from `allCachedPrices` (see the `.onChange` in `body`) — rebuilding this
+    /// dictionary was previously a computed property re-run on every keystroke in the search bar.
+    @State private var pricesBySetNum: [String: [PriceQuote]] = [:]
+
     private var filteredSets: [CachedSet] { cachedSets.filteredAndSorted(by: filter, resolvedPrice: resolvedPrice) }
     private var availableThemeIds: [Int] { Set(cachedSets.map(\.themeId)).sorted() }
     private var availableYears: [Int] { Set(cachedSets.map(\.year)).sorted(by: >) }
-
-    private var pricesBySetNum: [String: [PriceQuote]] {
-        Dictionary(grouping: allCachedPrices.filter { !$0.isExpired }.compactMap({ p -> (String, PriceQuote)? in
-            guard let q = p.quote else { return nil }
-            return (p.setNum, q)
-        }), by: \.0).mapValues { $0.map(\.1) }
-    }
 
     private func resolvedPrice(for cached: CachedSet) -> Double? {
         resolveNewPrice(storePriceEUR: cached.storePriceEUR, quotes: pricesBySetNum[cached.setNum] ?? [])
@@ -97,6 +94,9 @@ struct HistoryView: View {
             .task {
                 await ThemeNameStore.shared.refreshIfNeeded()
                 themeNames = ThemeNameStore.shared.namesByThemeId
+            }
+            .onChange(of: SetPriceIndex.Version(allCachedPrices), initial: true) { _, _ in
+                pricesBySetNum = SetPriceIndex.pricesBySetNum(allCachedPrices)
             }
             .onDisappear {
                 HistoryFilterState.shared.resetFilters()

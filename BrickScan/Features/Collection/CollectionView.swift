@@ -10,15 +10,12 @@ struct CollectionView: View {
     @Bindable private var filter = CollectionFilterState.shared
     let lookupViewModel: ScannerViewModel
 
-    private var pricesBySetNum: [String: [PriceQuote]] {
-        Dictionary(grouping: allCachedPrices.filter { !$0.isExpired }.compactMap({ p -> (String, PriceQuote)? in
-            guard let q = p.quote else { return nil }
-            return (p.setNum, q)
-        }), by: \.0).mapValues { $0.map(\.1) }
-    }
+    /// Memoized from `allCachedPrices` (see the `.onChange` in `body`) — rebuilding this
+    /// dictionary was previously a computed property re-run on every keystroke in the search bar.
+    @State private var pricesBySetNum: [String: [PriceQuote]] = [:]
 
     private var conditionByListId: [Int: ListCondition] {
-        Dictionary(uniqueKeysWithValues: allCachedSetLists.map { ($0.listId, $0.condition) })
+        Dictionary(allCachedSetLists.map { ($0.listId, $0.condition) }, uniquingKeysWith: { first, _ in first })
     }
 
     private func resolvedPrice(for cached: CachedSet) -> Double? {
@@ -88,6 +85,9 @@ struct CollectionView: View {
                 showsOwnedFilter: false,
                 themeName: { viewModel?.themeName(forThemeId: $0) ?? "Thème #\($0)" }
             )
+        }
+        .onChange(of: SetPriceIndex.Version(allCachedPrices), initial: true) { _, _ in
+            pricesBySetNum = SetPriceIndex.pricesBySetNum(allCachedPrices)
         }
         .onAppear {
             if viewModel == nil {

@@ -15,8 +15,8 @@ import Foundation
 /// are deliberately NOT part of this snapshot and stay live-only, same as everywhere else in the
 /// app (see AGENTS.md).
 ///
-/// `@unchecked Sendable` because `setsByNum`/`metadata` are only mutated from `@MainActor` call
-/// sites (`download()`/`purge()`) and read-only elsewhere; there's no concurrent mutation.
+/// `@unchecked Sendable` because `snapshotLoad`/`metadata` are only mutated from `@MainActor`
+/// members (`lookup`/`warmUp`/`download()`/`purge()`); there's no concurrent mutation.
 final class OfflineCatalogStore: @unchecked Sendable {
     static let shared = OfflineCatalogStore()
 
@@ -36,7 +36,13 @@ final class OfflineCatalogStore: @unchecked Sendable {
     /// `cancelActiveDownloadPreservingProgress()` reach the right task to cancel.
     private var activeDownload: ActiveDownload?
 
-    private(set) var setsByNum: [String: LegoSet]
+    /// Decodes the on-disk snapshot (~27k `LegoSet`s of JSON — genuinely slow) into the lookup
+    /// table. Created lazily by `snapshotLoadTask()` as a `Task.detached`, so the decode never
+    /// runs on the main actor — it used to run synchronously in `init`, i.e. on the main actor
+    /// in the middle of the first offline scan (`ScannerViewModel.resolveSet`) or Settings
+    /// opening, a perceptible freeze on older devices. `warmUp()` kicks it off at app launch so
+    /// the typical first lookup finds it already finished.
+    private var snapshotLoad: Task<[String: LegoSet], Never>?
     private(set) var metadata: Metadata?
 
     init() {
@@ -46,15 +52,8 @@ final class OfflineCatalogStore: @unchecked Sendable {
         self.metadataURL = directory.appendingPathComponent("OfflineCatalogMetadata.json")
         self.resumeDataURL = directory.appendingPathComponent("OfflineCatalogResumeData")
 
-        if let data = try? Data(contentsOf: snapshotURL),
-           let sets = try? JSONDecoder().decode([LegoSet].self, from: data) {
-            // `uniquingKeysWith`, not `uniqueKeysWithValues`: a duplicate set_num in the dump (or
-            // a corrupted snapshot) must not crash at launch — first occurrence wins, matching
-            // syncCollection's dedup rule.
-            self.setsByNum = Dictionary(sets.map { ($0.setNum, $0) }, uniquingKeysWith: { first, _ in first })
-        } else {
-            self.setsByNum = [:]
-        }
+        // Metadata is a few bytes — fine to keep loading synchronously. The snapshot itself is
+        // deliberately NOT loaded here; see `snapshotLoad`.
         if let data = try? Data(contentsOf: metadataURL) {
             self.metadata = try? JSONDecoder(dateDecodingStrategy: .iso8601).decode(Metadata.self, from: data)
         } else {
@@ -62,14 +61,39 @@ final class OfflineCatalogStore: @unchecked Sendable {
         }
     }
 
-    /// Mirrors `RebrickableRepository.resolveSet`'s two-suffix lookup order: most set numbers
-    /// encountered while scanning omit the "-1" variant suffix that Rebrickable's catalogue
-    /// actually keys on, so the exact variant is tried first.
-    func lookup(setNum: String) -> LegoSet? {
-        setsByNum["\(setNum)-1"] ?? setsByNum[setNum]
+    @MainActor
+    private func snapshotLoadTask() -> Task<[String: LegoSet], Never> {
+        if let snapshotLoad { return snapshotLoad }
+        let snapshotURL = self.snapshotURL
+        let task = Task.detached(priority: .userInitiated) { () -> [String: LegoSet] in
+            guard let data = try? Data(contentsOf: snapshotURL),
+                  let sets = try? JSONDecoder().decode([LegoSet].self, from: data) else { return [:] }
+            // `uniquingKeysWith`, not `uniqueKeysWithValues`: a duplicate set_num in the dump (or
+            // a corrupted snapshot) must not crash — first occurrence wins, matching
+            // syncCollection's dedup rule.
+            return Dictionary(sets.map { ($0.setNum, $0) }, uniquingKeysWith: { first, _ in first })
+        }
+        snapshotLoad = task
+        return task
     }
 
-    var isEmpty: Bool { setsByNum.isEmpty }
+    /// Starts decoding the snapshot in the background if it hasn't started yet. Called at app
+    /// launch so the decode overlaps the splash screen instead of blocking the first lookup.
+    @MainActor
+    func warmUp() {
+        _ = snapshotLoadTask()
+    }
+
+    /// Mirrors `RebrickableRepository.resolveSet`'s two-suffix lookup order: most set numbers
+    /// encountered while scanning omit the "-1" variant suffix that Rebrickable's catalogue
+    /// actually keys on, so the exact variant is tried first. Quasi-instant once the snapshot is
+    /// loaded (awaiting an already-finished task); before the user's first download the table is
+    /// simply empty and this returns nil, same as before.
+    @MainActor
+    func lookup(setNum: String) async -> LegoSet? {
+        let setsByNum = await snapshotLoadTask().value
+        return setsByNum["\(setNum)-1"] ?? setsByNum[setNum]
+    }
 
     /// True once a download has stopped (network loss, or the app backgrounding mid-download via
     /// `cancelActiveDownloadPreservingProgress()`) and left resumable data on disk — the next
@@ -97,7 +121,7 @@ final class OfflineCatalogStore: @unchecked Sendable {
 
         let snapshotURL = self.snapshotURL
         let metadataURL = self.metadataURL
-        let (sets, newMetadata) = try await Task.detached(priority: .userInitiated) {
+        let (setsByNum, newMetadata) = try await Task.detached(priority: .userInitiated) {
             let compressedData = try Data(contentsOf: downloadedFileURL)
             let csv = try Self.gunzip(compressedData)
             let sets = try Self.parseCSV(csv)
@@ -109,10 +133,13 @@ final class OfflineCatalogStore: @unchecked Sendable {
             let metadataData = try JSONEncoder(dateEncodingStrategy: .iso8601).encode(newMetadata)
             try metadataData.write(to: metadataURL, options: .atomic)
 
-            return (sets, newMetadata)
+            let setsByNum = Dictionary(sets.map { ($0.setNum, $0) }, uniquingKeysWith: { first, _ in first })
+            return (setsByNum, newMetadata)
         }.value
 
-        setsByNum = Dictionary(sets.map { ($0.setNum, $0) }, uniquingKeysWith: { first, _ in first })
+        // Replace any pending/completed lazy load with the freshly-built table (already
+        // completed — awaiting it is immediate).
+        snapshotLoad = Task { setsByNum }
         metadata = newMetadata
     }
 
@@ -140,7 +167,7 @@ final class OfflineCatalogStore: @unchecked Sendable {
         try? FileManager.default.removeItem(at: snapshotURL)
         try? FileManager.default.removeItem(at: metadataURL)
         clearResumeData()
-        setsByNum = [:]
+        snapshotLoad = Task { [:] }
         metadata = nil
     }
 
