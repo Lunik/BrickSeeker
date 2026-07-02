@@ -4,6 +4,32 @@ struct StorePrice: Equatable, Sendable {
     let amount: Double?
     let currency: String?
     let availability: String?
+
+    var status: StoreAvailabilityStatus {
+        StoreAvailabilityStatus(rawValue: availability)
+    }
+}
+
+/// Typed view of `StorePrice.availability`, the raw `product:availability` OpenGraph value.
+/// Mapping confirmed against real lego.com pages (see #64): a `product:price:amount` can be
+/// present alongside *any* of these statuses, including `.retired` — a retired set keeps
+/// showing its last price, so the amount is never conditioned on this status (see AGENTS.md).
+enum StoreAvailabilityStatus: Equatable, Sendable {
+    case available
+    case outOfStock
+    case retired
+    /// A value other than the three confirmed strings, or no value at all — shown neutrally
+    /// rather than guessed at, since only "in stock"/"out of stock"/"retired" have been observed.
+    case unknown
+
+    init(rawValue: String?) {
+        switch rawValue?.lowercased() {
+        case "in stock": self = .available
+        case "out of stock": self = .outOfStock
+        case "retired": self = .retired
+        default: self = .unknown
+        }
+    }
 }
 
 enum LegoStoreError: Error, LocalizedError {
