@@ -251,16 +251,49 @@ struct SetDetailView: View {
     private var legoStoreRow: some View {
         priceRow(label: "lego.com (officiel)") {
             if let amount = viewModel.storePrice?.amount {
-                let code = viewModel.storePrice?.currency ?? "EUR"
-                if let url = LegoStoreRepository.storeUrl(setNum: viewModel.legoSet.setNum) {
-                    Link(Decimal(amount).formatted(.currency(code: code)), destination: url)
-                        .foregroundStyle(.primary)
-                } else {
-                    Text(Decimal(amount).formatted(.currency(code: code)))
+                HStack(spacing: 6) {
+                    availabilityBadge(viewModel.storePrice?.status ?? .unknown)
+                    let code = viewModel.storePrice?.currency ?? "EUR"
+                    if let url = LegoStoreRepository.storeUrl(setNum: viewModel.legoSet.setNum) {
+                        Link(Decimal(amount).formatted(.currency(code: code)), destination: url)
+                            .foregroundStyle(.primary)
+                    } else {
+                        Text(Decimal(amount).formatted(.currency(code: code)))
+                    }
                 }
+            } else if viewModel.isLoadingStorePrice {
+                ProgressView().controlSize(.small)
             } else {
-                priceStatus(loading: viewModel.isLoadingStorePrice)
+                // Surfaces the specific reason (e.g. "Ce set n'est plus sur lego.com" for a 404)
+                // instead of the generic "Indisponible" the other price rows fall back to —
+                // a set genuinely removed from the store and one that's just slow to check
+                // aren't the same thing.
+                Text(viewModel.storePriceErrorMessage ?? "Indisponible")
+                    .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    /// Small coloured indicator for `StoreAvailabilityStatus`, shown next to the lego.com price —
+    /// a price alone doesn't say whether the set is actively sold, temporarily out of stock, or
+    /// retired with a residual price still displayed (see #64 / AGENTS.md).
+    @ViewBuilder
+    private func availabilityBadge(_ status: StoreAvailabilityStatus) -> some View {
+        switch status {
+        case .available:
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+                .accessibilityLabel("Disponible à l'achat")
+        case .outOfStock:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .accessibilityLabel("Rupture de stock")
+        case .retired:
+            Image(systemName: "archivebox.fill")
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Retiré de la vente")
+        case .unknown:
+            EmptyView()
         }
     }
 

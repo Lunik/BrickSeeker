@@ -394,8 +394,15 @@ via `evaluateJavaScript`. Notes for anyone touching this:
 - This is slow (full page load + challenge-solve, can take several seconds) — verify it manually
   (skill `verify`/`run`) by opening a SetDetail sheet and watching the price section.
 - `productId` for the URL is `setNum` with the `-1` suffix stripped (e.g. `10307-1` → `10307`).
-- A retired set keeps its lego.com page (so the page still loads and `og:title` is present) but
-  drops `product:price:amount` — that's the signal used for "retired", not an HTTP error code.
+- A retired set keeps its lego.com page (so the page still loads and `og:title` is present) —
+  **but, confirmed against real pages for #64, it does not reliably drop `product:price:amount`.**
+  `product:availability` carries its own explicit string instead: verified real values are
+  `"in stock"`, `"out of stock"`, and `"retired"` (lowercase, e.g. `21335-1` returned `"retired"`
+  *with* `299.99` still in `product:price:amount` — a retired set can keep showing a residual
+  price). Never infer "retired" from a missing amount — read `product:availability` directly via
+  `StorePrice.status` (`StoreAvailabilityStatus`, `Core/Network/LegoStoreRepository.swift`) and
+  always display the amount whenever it's present, independent of that status. Anything other
+  than those three strings maps to `.unknown` rather than being guessed at.
   A set fully **removed** from the catalog (e.g. an old set like `75019-1` with no page at all) is
   different: the real HTTP status (captured via `LegoStoreRepository.StatusCodeObserver`, a
   `WKNavigationDelegate` set on the webview) comes back 404 once Cloudflare's challenge resolves

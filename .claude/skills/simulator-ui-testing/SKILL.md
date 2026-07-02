@@ -43,7 +43,20 @@ To actually tap, you need to take control of the Mac's screen and mouse — that
    window position/size can shift between calls (window manager, display changes), so always
    take a fresh screenshot before clicking rather than reusing coordinates from an earlier one.
 
-4. To see *why* a tap failed (not just that it failed), stream device logs in parallel, detached
+   The user's Mac keyboard layout is **French AZERTY**, not QWERTY/ANSI. The `mcp__computer-use__type`
+   tool sends text that can land wrong or empty in a simulator text field (observed: typing
+   digits produced accented letters like `è`/`ç` instead, or dropped the input entirely). Digits
+   in particular sit on the shifted position on AZERTY — type them with individual `key` calls
+   using `shift+<digit>` (e.g. `shift+7` → `7`), not `type`. Verify with `zoom` on the text field
+   after typing before proceeding, since silent mis-typing is easy to miss in a screenshot.
+
+4. To read `print()`/`FileHandle.standardError.write` output during a debug session — not just
+   structured `os_log`, which is all `log stream` reliably captures — relaunch the app with
+   `xcrun simctl launch --console <UDID> <bundle-id>` (backgrounded via `nohup ... & disown`,
+   redirected to a file) instead of a plain `launch`. Plain stdout `print()` from the app process
+   does **not** reliably show up in `log stream`, even with a matching predicate.
+
+5. To see *why* a tap failed (not just that it failed), stream device logs in parallel, detached
    so it survives the Bash tool call returning:
    ```bash
    nohup xcrun simctl spawn <UDID> log stream --level debug \
