@@ -83,7 +83,7 @@ struct CollectionView: View {
                 availableYears: viewModel?.availableYears ?? [],
                 availableListNames: viewModel?.availableListNames ?? [],
                 showsOwnedFilter: false,
-                themeName: { viewModel?.themeName(forThemeId: $0) ?? "Thème #\($0)" }
+                themeName: { ThemeNameStore.shared.displayName(forThemeId: $0) }
             )
         }
         .onChange(of: SetPriceIndex.Version(allCachedPrices), initial: true) { _, _ in

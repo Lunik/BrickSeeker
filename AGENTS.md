@@ -66,13 +66,14 @@ camera-driven and manual/photo/history lookup flows sharing the *same* `ScannerV
 started, so it costs nothing camera/battery-wise). If you add a new lookup entry point, wire it
 through `lookupViewModel.lookupSetNumber`/`.importImage`, not a new resolution path.
 
-`HistoryView` presents its *own* nested SetDetail/Ambiguous sheets (driven by the same
-`lookupViewModel.state` passed into it) rather than dismissing itself when a row is tapped — so
-closing the result sheet reveals History again instead of dropping straight back to Home.
-`HomeView`'s own top-level SetDetail/Ambiguous sheets are gated by `!showHistory` so the two don't
-both try to present for the same state change. If you add another presenter of `lookupViewModel`
-results (besides Home and History), follow the same "gate the parent, nest in the child" pattern
-rather than letting multiple sibling `.sheet()`s race on the same state.
+The SetDetail/Ambiguous result sheets have a single implementation: the
+`.lookupResultSheets(for:isGated:)` modifier (`Features/Shared/LookupResultSheets.swift`) — it
+owns the bindings (resume-scanning-on-dismiss), the cache re-read that seeds SetDetail, and both
+sheets. `HistoryView`/`ManualSetEntryView` apply it *nested* (so closing the result reveals them
+again instead of dropping back to Home) while `HomeView` applies it gated
+(`isGated: showHistory || showManualEntry`) so two sibling `.sheet()`s never race on the same
+state change. If you add another presenter of `lookupViewModel` results, use the modifier — gate
+the parent, nest in the child — rather than re-implementing bindings/sheets by hand.
 
 `HomeViewModel` is owned by `BrickScanApp` (`@State private var homeViewModel`), not by `HomeView`
 itself — `HomeView` is a fresh struct instance every time the camera is exited (`isScanning` flips

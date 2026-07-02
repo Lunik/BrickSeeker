@@ -5,10 +5,6 @@ import Observation
 @MainActor
 final class CollectionViewModel {
     var cachedSets: [CachedSet] = []
-    /// Mirrors `ThemeNameStore.shared.namesByThemeId` once `refreshIfNeeded()` resolves — copied
-    /// into this `@Observable` property so the filter sheet re-renders when names arrive, same
-    /// pattern as `StatisticsViewModel.themeNames`.
-    var themeNames: [Int: String] = [:]
 
     private let localRepository: LocalRepository
     private let themeNameStore: ThemeNameStore
@@ -20,11 +16,9 @@ final class CollectionViewModel {
 
     func load() {
         cachedSets = localRepository.ownedSets()
-        themeNames = themeNameStore.namesByThemeId
-        Task {
-            await themeNameStore.refreshIfNeeded()
-            themeNames = themeNameStore.namesByThemeId
-        }
+        // Theme names are read straight off the (observable) ThemeNameStore by the views —
+        // this just makes sure the table exists/refreshes.
+        Task { await themeNameStore.refreshIfNeeded() }
     }
 
     var availableThemeIds: [Int] {
@@ -37,9 +31,5 @@ final class CollectionViewModel {
 
     var availableListNames: [String] {
         Set(cachedSets.compactMap(\.currentListName)).sorted()
-    }
-
-    func themeName(forThemeId themeId: Int) -> String {
-        themeNames[themeId] ?? "Thème #\(themeId)"
     }
 }

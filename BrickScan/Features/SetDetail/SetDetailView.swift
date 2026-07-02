@@ -131,20 +131,7 @@ struct SetDetailView: View {
                 }
                 Button("Annuler", role: .cancel) {}
             }
-            .overlay(alignment: .bottom) {
-                if let toast = viewModel.toastMessage {
-                    Text(toast)
-                        .padding(12)
-                        .background(.black.opacity(0.8))
-                        .foregroundStyle(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .padding(.bottom, 24)
-                        .task {
-                            try? await Task.sleep(nanoseconds: 2_000_000_000)
-                            viewModel.toastMessage = nil
-                        }
-                }
-            }
+            .toast($viewModel.toastMessage)
         }
         .onChange(of: viewModel.collectionStatus) { _, _ in syncCache() }
         .onChange(of: viewModel.collectionListName) { _, _ in syncCache() }
@@ -216,10 +203,8 @@ struct SetDetailView: View {
                 }
                 .frame(height: 180)
             }
-            .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .cardStyle(padding: 12)
         }
     }
 
@@ -258,10 +243,8 @@ struct SetDetailView: View {
                 sourceRow(source)
             }
         }
-        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .cardStyle(padding: 12)
     }
 
     @ViewBuilder
@@ -370,11 +353,12 @@ struct SetDetailView: View {
     /// when there's no reference price, the currencies differ, or it rounds to
     /// 0%. Green when cheaper than retail, red when more expensive.
     private func discountVsStore(_ amount: Decimal, currency: String) -> (text: String, color: Color)? {
-        guard let storeAmount = viewModel.storePrice?.amount, storeAmount > 0,
-              (viewModel.storePrice?.currency ?? "EUR") == currency else { return nil }
-        let source = (amount as NSDecimalNumber).doubleValue
-        let pct = Int((((source - storeAmount) / storeAmount) * 100).rounded())
-        guard pct != 0 else { return nil }
+        guard let pct = PriceComparison.percentVsStore(
+            amount: amount,
+            currency: currency,
+            storeAmount: viewModel.storePrice?.amount,
+            storeCurrency: viewModel.storePrice?.currency
+        ), pct != 0 else { return nil }
         return ("\(pct > 0 ? "+" : "")\(pct)%", pct < 0 ? .green : .red)
     }
 

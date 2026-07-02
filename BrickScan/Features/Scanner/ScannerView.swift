@@ -57,31 +57,7 @@ struct ScannerView: View {
                     .accessibilityValue(viewModel.torchOn ? "Activée" : "Désactivée")
                 }
             }
-            .sheet(isPresented: setDetailBinding) {
-                if case .found(let legoSet, let collectionStatus) = viewModel.state {
-                    let cached = LocalRepository(modelContext: modelContext).cachedSet(setNum: legoSet.setNum)
-                    SetDetailView(
-                        legoSet: legoSet,
-                        collectionStatus: collectionStatus,
-                        initialListName: viewModel.lastFoundWasFromCache ? cached?.currentListName : nil,
-                        initialStorePrice: cached?.storePriceEUR.map { StorePrice(amount: $0, currency: "EUR", availability: cached?.storeAvailability) },
-                        initialStorePriceFetchedAt: cached?.storePriceFetchedAt,
-                        reconcileOnAppear: viewModel.lastFoundWasFromCache,
-                        isOfflineResult: viewModel.lastFoundWasOffline
-                    ) {
-                        viewModel.resumeScanning()
-                    }
-                }
-            }
-            .sheet(isPresented: ambiguousBinding) {
-                if case .ambiguous(let sets) = viewModel.state {
-                    AmbiguousSetPickerView(sets: sets) { selected in
-                        viewModel.selectAmbiguousSet(selected)
-                    } onCancel: {
-                        viewModel.resumeScanning()
-                    }
-                }
-            }
+            .lookupResultSheets(for: viewModel)
             .sheet(isPresented: $showBatchSummary) {
                 BatchSessionSummaryView(
                     session: viewModel.batchSession,
@@ -118,7 +94,7 @@ struct ScannerView: View {
     }
 
     private var isMenuOpen: Bool {
-        setDetailBinding.wrappedValue || ambiguousBinding.wrappedValue || showBatchSummary
+        viewModel.isPresentingLookupResult || showBatchSummary
     }
 
     private var batchSessionButton: some View {
@@ -167,29 +143,6 @@ struct ScannerView: View {
         }
     }
 
-    private var setDetailBinding: Binding<Bool> {
-        Binding(
-            get: {
-                if case .found = viewModel.state { return true }
-                return false
-            },
-            set: { newValue in
-                if !newValue { viewModel.resumeScanning() }
-            }
-        )
-    }
-
-    private var ambiguousBinding: Binding<Bool> {
-        Binding(
-            get: {
-                if case .ambiguous = viewModel.state { return true }
-                return false
-            },
-            set: { newValue in
-                if !newValue { viewModel.resumeScanning() }
-            }
-        )
-    }
 }
 
 struct AmbiguousSetPickerView: View {

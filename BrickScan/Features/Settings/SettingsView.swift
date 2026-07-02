@@ -200,30 +200,7 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    if let lastCompletedAt = viewModel.priceUpdateLastCompletedAt {
-                        Text("Dernière actualisation : \(lastCompletedAt.formatted(frenchDateStyle))")
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if viewModel.isUpdatingAllPrices {
-                        ProgressView(value: Double(viewModel.priceUpdateDone), total: Double(max(viewModel.priceUpdateTotal, 1)))
-                    }
-
-                    if viewModel.isUpdatingAllPrices || viewModel.hasResumablePriceUpdate {
-                        Text("\(viewModel.priceUpdateDone) / \(viewModel.priceUpdateTotal) sets")
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if let errorMessage = viewModel.priceUpdateErrorMessage {
-                        Text(errorMessage)
-                            .foregroundStyle(Color.brickDanger)
-                            .font(.footnote)
-                    }
-
-                    Button(priceUpdateButtonTitle) {
-                        Task { await viewModel.updateAllPrices(modelContext: modelContext) }
-                    }
-                    .disabled(viewModel.isUpdatingAllPrices)
+                    CollectionPriceUpdateSection()
                 } header: {
                     Text("Prix de la collection")
                 } footer: {
@@ -305,16 +282,6 @@ struct SettingsView: View {
             return "Reprendre le téléchargement"
         }
         return viewModel.offlineCatalogMetadata == nil ? "Télécharger le catalogue" : "Mettre à jour le catalogue"
-    }
-
-    private var priceUpdateButtonTitle: String {
-        if viewModel.isUpdatingAllPrices {
-            return "Mise à jour en cours…"
-        }
-        if viewModel.hasResumablePriceUpdate {
-            return "Reprendre (\(viewModel.priceUpdateTotal - viewModel.priceUpdateDone) restants)"
-        }
-        return "Actualiser les prix de la collection"
     }
 
     private func clearCache() async {

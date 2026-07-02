@@ -64,28 +64,17 @@ struct CollectionStats {
 @MainActor
 final class StatisticsViewModel {
     var stats: CollectionStats = .empty
-    var priceUpdateErrorMessage: String?
-    /// Mirrors `ThemeNameStore.shared.namesByThemeId` once `refreshIfNeeded()` resolves — copied
-    /// into this `@Observable` property (rather than read directly from the store) so the view
-    /// re-renders when names arrive after the initial, name-less render.
-    var themeNames: [Int: String] = [:]
 
     private var ownedSets: [CachedSet] = []
     private var conditionByListId: [Int: ListCondition] = [:]
     private let localRepository: LocalRepository
-    private let priceRepository: PriceRepositoryProtocol
-    private let legoStoreRepository: LegoStoreRepositoryProtocol
     private let themeNameStore: ThemeNameStore
 
     init(
         localRepository: LocalRepository,
-        priceRepository: PriceRepositoryProtocol = PriceRepository(),
-        legoStoreRepository: LegoStoreRepositoryProtocol = LegoStoreRepository(),
         themeNameStore: ThemeNameStore = .shared
     ) {
         self.localRepository = localRepository
-        self.priceRepository = priceRepository
-        self.legoStoreRepository = legoStoreRepository
         self.themeNameStore = themeNameStore
     }
 
@@ -93,11 +82,9 @@ final class StatisticsViewModel {
         ownedSets = localRepository.ownedSets()
         conditionByListId = localRepository.conditionByListId()
         recomputeStats()
-        themeNames = themeNameStore.namesByThemeId
-        Task {
-            await themeNameStore.refreshIfNeeded()
-            themeNames = themeNameStore.namesByThemeId
-        }
+        // Theme names are read straight off the (observable) ThemeNameStore by the view —
+        // this just makes sure the table exists/refreshes.
+        Task { await themeNameStore.refreshIfNeeded() }
     }
 
     /// Re-derives `stats` from the already-fetched `ownedSets`/`conditionByListId` without
@@ -111,10 +98,6 @@ final class StatisticsViewModel {
     func recomputeStats() {
         let priceByNum = Dictionary(uniqueKeysWithValues: ownedSets.map { ($0.setNum, effectivePriceEUR(for: $0)) })
         stats = Self.computeStats(from: ownedSets, priceByNum: priceByNum)
-    }
-
-    func themeName(forThemeId themeId: Int) -> String {
-        themeNames[themeId] ?? "Thème #\(themeId)"
     }
 
     var setsForExport: [CachedSet] { ownedSets }
@@ -143,40 +126,6 @@ final class StatisticsViewModel {
                 return NSDecimalNumber(decimal: bricklinkUsed.amount).doubleValue
             }
             return nil
-        }
-    }
-
-    // MARK: - Collection price batch update
-
-    /// Forwards to the same `CollectionPriceUpdater.shared` singleton `SettingsViewModel` reads
-    /// from, so a run started here shows up identically if the user opens Settings instead, and
-    /// vice versa — there is only ever one batch in flight.
-    var isUpdatingAllPrices: Bool { CollectionPriceUpdater.shared.isRunning }
-    var priceUpdateDone: Int { CollectionPriceUpdater.shared.done }
-    var priceUpdateTotal: Int { CollectionPriceUpdater.shared.total }
-    var hasResumablePriceUpdate: Bool { CollectionPriceUpdater.shared.hasResumableUpdate }
-    var priceUpdateLastCompletedAt: Date? { CollectionPriceUpdater.shared.lastCompletedAt }
-
-    func updateAllPrices(modelContext: ModelContext) async {
-        priceUpdateErrorMessage = nil
-        let sets = ownedSets.map { $0.asLegoSet() }
-        guard !sets.isEmpty else {
-            priceUpdateErrorMessage = "Aucun set dans votre collection."
-            return
-        }
-
-        await PriceUpdateNotifier.requestAuthorizationIfNeeded()
-
-        let result = await CollectionPriceUpdater.shared.start(
-            allSets: sets,
-            priceRepository: priceRepository,
-            legoStoreRepository: legoStoreRepository,
-            persist: CollectionPriceUpdater.persistClosure(modelContext: modelContext)
-        )
-
-        if result.completed {
-            PriceUpdateNotifier.notifyCompleted(total: result.total)
-            load()
         }
     }
 

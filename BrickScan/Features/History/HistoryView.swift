@@ -9,7 +9,6 @@ struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable private var filter = HistoryFilterState.shared
     @State private var showFilters = false
-    @State private var themeNames: [Int: String] = ThemeNameStore.shared.namesByThemeId
     let lookupViewModel: ScannerViewModel
     let onSelect: (String) -> Void
 
@@ -88,12 +87,11 @@ struct HistoryView: View {
                     availableYears: availableYears,
                     availableListNames: [],
                     showsOwnedFilter: true,
-                    themeName: { themeNames[$0] ?? "Thème #\($0)" }
+                    themeName: { ThemeNameStore.shared.displayName(forThemeId: $0) }
                 )
             }
             .task {
                 await ThemeNameStore.shared.refreshIfNeeded()
-                themeNames = ThemeNameStore.shared.namesByThemeId
             }
             .onChange(of: SetPriceIndex.Version(allCachedPrices), initial: true) { _, _ in
                 pricesBySetNum = SetPriceIndex.pricesBySetNum(allCachedPrices)
@@ -101,55 +99,9 @@ struct HistoryView: View {
             .onDisappear {
                 HistoryFilterState.shared.resetFilters()
             }
-            .sheet(isPresented: setDetailBinding) {
-                if case .found(let legoSet, let collectionStatus) = lookupViewModel.state {
-                    let cached = LocalRepository(modelContext: modelContext).cachedSet(setNum: legoSet.setNum)
-                    SetDetailView(
-                        legoSet: legoSet,
-                        collectionStatus: collectionStatus,
-                        initialListName: lookupViewModel.lastFoundWasFromCache ? cached?.currentListName : nil,
-                        initialStorePrice: cached?.storePriceEUR.map { StorePrice(amount: $0, currency: "EUR", availability: cached?.storeAvailability) },
-                        initialStorePriceFetchedAt: cached?.storePriceFetchedAt,
-                        reconcileOnAppear: lookupViewModel.lastFoundWasFromCache,
-                        isOfflineResult: lookupViewModel.lastFoundWasOffline
-                    ) {
-                        lookupViewModel.resumeScanning()
-                    }
-                }
-            }
-            .sheet(isPresented: ambiguousBinding) {
-                if case .ambiguous(let sets) = lookupViewModel.state {
-                    AmbiguousSetPickerView(sets: sets) { selected in
-                        lookupViewModel.selectAmbiguousSet(selected)
-                    } onCancel: {
-                        lookupViewModel.resumeScanning()
-                    }
-                }
-            }
+            // Nested presenter — closing the result reveals History again, not Home (HomeView
+            // gates its own copy while this sheet is up; see LookupResultSheetsModifier).
+            .lookupResultSheets(for: lookupViewModel)
         }
-    }
-
-    private var setDetailBinding: Binding<Bool> {
-        Binding(
-            get: {
-                if case .found = lookupViewModel.state { return true }
-                return false
-            },
-            set: { newValue in
-                if !newValue { lookupViewModel.resumeScanning() }
-            }
-        )
-    }
-
-    private var ambiguousBinding: Binding<Bool> {
-        Binding(
-            get: {
-                if case .ambiguous = lookupViewModel.state { return true }
-                return false
-            },
-            set: { newValue in
-                if !newValue { lookupViewModel.resumeScanning() }
-            }
-        )
     }
 }

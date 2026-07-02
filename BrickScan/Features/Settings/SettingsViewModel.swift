@@ -17,8 +17,6 @@ final class SettingsViewModel {
     var offlineCatalogErrorMessage: String?
     var offlineCatalogMetadata: OfflineCatalogStore.Metadata?
 
-    var priceUpdateErrorMessage: String?
-
     private let offlineCatalogStore: OfflineCatalogStore
     /// Set right before `cancelActiveDownloadPreservingProgress()` so the resulting
     /// `.networkUnavailable` thrown back into `downloadOfflineCatalog()` is recognized as a
@@ -27,55 +25,16 @@ final class SettingsViewModel {
     private var pausedForBackgrounding = false
 
     private let repository: RebrickableRepositoryProtocol
-    private let priceRepository: PriceRepositoryProtocol
-    private let legoStoreRepository: LegoStoreRepositoryProtocol
 
     init(
         repository: RebrickableRepositoryProtocol = RebrickableRepository(),
-        offlineCatalogStore: OfflineCatalogStore = .shared,
-        priceRepository: PriceRepositoryProtocol = PriceRepository(),
-        legoStoreRepository: LegoStoreRepositoryProtocol = LegoStoreRepository()
+        offlineCatalogStore: OfflineCatalogStore = .shared
     ) {
         self.apiKey = KeychainService.shared.load(key: .apiKey) ?? ""
         self.isAccountLinked = KeychainService.shared.load(key: .userToken) != nil
         self.repository = repository
         self.offlineCatalogStore = offlineCatalogStore
         self.offlineCatalogMetadata = offlineCatalogStore.metadata
-        self.priceRepository = priceRepository
-        self.legoStoreRepository = legoStoreRepository
-    }
-
-    // MARK: - Collection price batch update
-
-    /// These five forward to `CollectionPriceUpdater.shared` (rather than mirroring its state
-    /// into local properties) so progress stays live even if `SettingsView` is dismissed and
-    /// reopened mid-run — the singleton, not this view model, owns the actual job.
-    var isUpdatingAllPrices: Bool { CollectionPriceUpdater.shared.isRunning }
-    var priceUpdateDone: Int { CollectionPriceUpdater.shared.done }
-    var priceUpdateTotal: Int { CollectionPriceUpdater.shared.total }
-    var hasResumablePriceUpdate: Bool { CollectionPriceUpdater.shared.hasResumableUpdate }
-    var priceUpdateLastCompletedAt: Date? { CollectionPriceUpdater.shared.lastCompletedAt }
-
-    func updateAllPrices(modelContext: ModelContext) async {
-        priceUpdateErrorMessage = nil
-        let sets = LocalRepository(modelContext: modelContext).ownedSets().map { $0.asLegoSet() }
-        guard !sets.isEmpty else {
-            priceUpdateErrorMessage = "Aucun set dans votre collection."
-            return
-        }
-
-        await PriceUpdateNotifier.requestAuthorizationIfNeeded()
-
-        let result = await CollectionPriceUpdater.shared.start(
-            allSets: sets,
-            priceRepository: priceRepository,
-            legoStoreRepository: legoStoreRepository,
-            persist: CollectionPriceUpdater.persistClosure(modelContext: modelContext)
-        )
-
-        if result.completed {
-            PriceUpdateNotifier.notifyCompleted(total: result.total)
-        }
     }
 
     var hasResumableOfflineCatalogDownload: Bool {
@@ -115,7 +74,7 @@ final class SettingsViewModel {
             pausedForBackgrounding = true
             offlineCatalogStore.cancelActiveDownloadPreservingProgress()
         }
-        if isUpdatingAllPrices {
+        if CollectionPriceUpdater.shared.isRunning {
             CollectionPriceUpdater.shared.cancelPreservingProgress()
         }
     }
