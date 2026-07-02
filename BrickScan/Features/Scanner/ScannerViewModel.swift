@@ -110,6 +110,8 @@ final class ScannerViewModel {
                         }
                     }
                     self.cameraController.start()
+                    // Warm up the Taptic Engine now so the first detection haptic isn't late.
+                    ScanFeedback.prepare()
                 } else {
                     self.state = .permissionDenied
                 }
@@ -297,7 +299,7 @@ final class ScannerViewModel {
             state = .processing
         }
         if playsFeedbackSounds {
-            ScanFeedback.playCandidateDetectedSound()
+            ScanFeedback.playCandidateDetected()
         }
 
         // Skip the network round-trip (and its timeout) entirely when the device is known
@@ -309,13 +311,15 @@ final class ScannerViewModel {
                     foundWasOffline = true
                     presentFound(
                         offlineSet,
-                        .unknown("Hors-ligne — statut collection et prix à rafraîchir une fois reconnecté"),
+                        .unknown(UserMessage.offlineStatusAndPrices),
                         bypassBatch: bypassBatch,
                         wasOffline: true
                     )
+                    if playsFeedbackSounds { ScanFeedback.playResolutionSucceeded() }
                 } else if !isBatchCapturing {
-                    state = .error(APIError.networkUnavailable.errorDescription ?? "Erreur inconnue")
+                    state = .error(APIError.networkUnavailable.errorDescription ?? UserMessage.unknownError)
                     clearIdentificationLock(for: setNum)
+                    if playsFeedbackSounds { ScanFeedback.playResolutionFailed() }
                 }
                 if !isBatchCapturing {
                     isPaused = false
@@ -335,6 +339,9 @@ final class ScannerViewModel {
                     wasFromCache: foundWasFromCache,
                     wasOffline: foundWasOffline
                 )
+                // No haptic when this is just the live reconcile of a cache-instant result —
+                // the user already got the detection feedback for this candidate.
+                if playsFeedbackSounds, !foundWasFromCache { ScanFeedback.playResolutionSucceeded() }
             case .ambiguous(let sets):
                 state = .ambiguous(sets)
             case .notFound:
@@ -344,6 +351,7 @@ final class ScannerViewModel {
                 if !foundWasFromCache, !isBatchCapturing {
                     state = .notFound
                     isPaused = false
+                    if playsFeedbackSounds { ScanFeedback.playResolutionFailed() }
                     // "Set non trouvé" isn't a reason to lock this set number out for 30s like a
                     // successful identification — the user is told to rescan right away, so let
                     // them, including rescanning the exact same box (e.g. after repositioning it).
@@ -356,13 +364,15 @@ final class ScannerViewModel {
                    let offlineSet = await OfflineCatalogStore.shared.lookup(setNum: setNum) {
                     presentFound(
                         offlineSet,
-                        .unknown("Hors-ligne — statut collection et prix à rafraîchir une fois reconnecté"),
+                        .unknown(UserMessage.offlineStatusAndPrices),
                         bypassBatch: bypassBatch,
                         wasOffline: true
                     )
+                    if playsFeedbackSounds { ScanFeedback.playResolutionSucceeded() }
                 } else if !isBatchCapturing {
-                    state = .error((error as? APIError)?.errorDescription ?? "Erreur inconnue")
+                    state = .error((error as? APIError)?.errorDescription ?? UserMessage.unknownError)
                     clearIdentificationLock(for: setNum)
+                    if playsFeedbackSounds { ScanFeedback.playResolutionFailed() }
                 }
                 if !isBatchCapturing {
                     isPaused = false
@@ -373,15 +383,15 @@ final class ScannerViewModel {
 
     private func fetchCollectionStatus(for setNum: String) async -> CollectionStatus {
         guard NetworkMonitor.shared.isConnected else {
-            return .unknown("Hors-ligne — statut collection à rafraîchir une fois reconnecté")
+            return .unknown(UserMessage.offlineStatus)
         }
         do {
             let userSet = try await repository.fetchUserSet(setNum: setNum)
             return userSet.map(CollectionStatus.inCollection) ?? .notInCollection
         } catch let error as APIError {
-            return .unknown(error.errorDescription ?? "Statut de collection inconnu")
+            return .unknown(error.errorDescription ?? UserMessage.unknownCollectionStatus)
         } catch {
-            return .unknown("Statut de collection inconnu")
+            return .unknown(UserMessage.unknownCollectionStatus)
         }
     }
 }

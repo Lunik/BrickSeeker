@@ -52,19 +52,19 @@ struct CollectionPriceUpdateSection: View {
     private var buttonTitle: String {
         let updater = CollectionPriceUpdater.shared
         if updater.isRunning {
-            return "Mise à jour en cours…"
+            return String(localized: "Mise à jour en cours…")
         }
         if updater.hasResumableUpdate {
-            return "Reprendre (\(updater.total - updater.done) restants)"
+            return String(localized: "Reprendre (\(updater.total - updater.done) restants)")
         }
-        return "Actualiser les prix de la collection"
+        return String(localized: "Actualiser les prix de la collection")
     }
 
     private func updateAllPrices() async {
         errorMessage = nil
         let sets = LocalRepository(modelContext: modelContext).ownedSets().map { $0.asLegoSet() }
         guard !sets.isEmpty else {
-            errorMessage = "Aucun set dans votre collection."
+            errorMessage = String(localized: "Aucun set dans votre collection.")
             return
         }
 

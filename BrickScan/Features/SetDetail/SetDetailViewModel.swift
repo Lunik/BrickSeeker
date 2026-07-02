@@ -188,7 +188,7 @@ final class SetDetailViewModel {
     @MainActor
     private func refreshCollectionStatus() async {
         guard NetworkMonitor.shared.isConnected else {
-            collectionStatus = .unknown("Hors-ligne — statut collection à rafraîchir une fois reconnecté")
+            collectionStatus = .unknown(UserMessage.offlineStatus)
             collectionListName = nil
             return
         }
@@ -197,10 +197,10 @@ final class SetDetailViewModel {
             collectionStatus = userSet.map(CollectionStatus.inCollection) ?? .notInCollection
             await refreshCollectionListName()
         } catch let error as APIError {
-            collectionStatus = .unknown(error.errorDescription ?? "Statut de collection inconnu")
+            collectionStatus = .unknown(error.errorDescription ?? UserMessage.unknownCollectionStatus)
             collectionListName = nil
         } catch {
-            collectionStatus = .unknown("Statut de collection inconnu")
+            collectionStatus = .unknown(UserMessage.unknownCollectionStatus)
             collectionListName = nil
         }
     }

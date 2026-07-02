@@ -55,12 +55,12 @@ final class SettingsViewModel {
             offlineCatalogMetadata = offlineCatalogStore.metadata
         } catch let error as APIError {
             if pausedForBackgrounding {
-                offlineCatalogErrorMessage = "Téléchargement interrompu — il reprendra où il s'est arrêté à la prochaine ouverture."
+                offlineCatalogErrorMessage = String(localized: "Téléchargement interrompu — il reprendra où il s'est arrêté à la prochaine ouverture.")
             } else {
                 offlineCatalogErrorMessage = error.errorDescription
             }
         } catch {
-            offlineCatalogErrorMessage = "Téléchargement impossible. Vérifiez votre réseau."
+            offlineCatalogErrorMessage = String(localized: "Téléchargement impossible. Vérifiez votre réseau.")
         }
     }
 
@@ -107,7 +107,7 @@ final class SettingsViewModel {
             password = ""
             return false
         } catch {
-            linkAccountErrorMessage = "Connexion impossible. Vérifiez votre réseau."
+            linkAccountErrorMessage = String(localized: "Connexion impossible. Vérifiez votre réseau.")
             password = ""
             return false
         }

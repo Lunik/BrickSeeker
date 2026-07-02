@@ -10,6 +10,11 @@ enum ScrapeError: Error {
     case challengeUnsolved
     case notFound
     case parsingFailed
+    /// The target page itself returned HTTP 404 (seen via `decidePolicyFor navigationResponse`,
+    /// i.e. the *post-challenge* real response) — distinct from a challenge that never cleared.
+    /// Only thrown when the caller opts in via `failsOnHTTP404`; the price scrapers keep their
+    /// historical "any failure = no quote" behavior.
+    case httpNotFound
 }
 
 /// Drives hidden `WKWebView`s to scrape sites behind a Cloudflare/bot-detection
@@ -37,18 +42,25 @@ final class HeadlessWebScraper: @unchecked Sendable {
     /// page is in the DOM), then runs `extractScript` and returns its
     /// (string) result. `extractScript` should end with a `JSON.stringify(...)`
     /// so the caller can decode a known shape.
+    ///
+    /// `failsOnHTTP404`: when true, a 404 on the page's own response throws
+    /// `ScrapeError.httpNotFound` immediately instead of polling to timeout —
+    /// used by the lego.com price path, where "removed from the store" (404)
+    /// and "retired but page still up" must stay distinguishable (see AGENTS.md).
     func loadAndExtract(
         url: URL,
         readinessScript: String,
         extractScript: String,
-        timeout: TimeInterval = 20
+        timeout: TimeInterval = 20,
+        failsOnHTTP404: Bool = false
     ) async throws -> String {
         let load = WebViewLoad(processPool: processPool)
         return try await load.run(
             url: url,
             readinessScript: readinessScript,
             extractScript: extractScript,
-            timeout: timeout
+            timeout: timeout,
+            failsOnHTTP404: failsOnHTTP404
         )
     }
 }
@@ -60,6 +72,10 @@ final class HeadlessWebScraper: @unchecked Sendable {
 private final class WebViewLoad: NSObject {
     private let webView: WKWebView
     private var navigationContinuation: CheckedContinuation<Void, Error>?
+    /// Status of the page's own HTTP response, captured in `decidePolicyFor navigationResponse`.
+    /// Updated on every navigation response, so after a Cloudflare interstitial (403/503) it ends
+    /// up holding the real page's status once the challenge clears and the browser reloads.
+    private var lastHTTPStatusCode: Int?
 
     init(processPool: WKProcessPool) {
         let configuration = WKWebViewConfiguration()
@@ -77,7 +93,8 @@ private final class WebViewLoad: NSObject {
         url: URL,
         readinessScript: String,
         extractScript: String,
-        timeout: TimeInterval
+        timeout: TimeInterval,
+        failsOnHTTP404: Bool = false
     ) async throws -> String {
         attachToKeyWindowIfNeeded()
         defer { webView.removeFromSuperview() }
@@ -89,6 +106,9 @@ private final class WebViewLoad: NSObject {
 
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
+            if failsOnHTTP404, lastHTTPStatusCode == 404 {
+                throw ScrapeError.httpNotFound
+            }
             let readyResult = try? await webView.evaluateJavaScript(readinessScript)
             if let ready = readyResult as? Bool, ready {
                 let extracted = try await webView.evaluateJavaScript(extractScript)
@@ -120,6 +140,20 @@ private final class WebViewLoad: NSObject {
 }
 
 extension WebViewLoad: WKNavigationDelegate {
+    nonisolated func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationResponse: WKNavigationResponse,
+        decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
+    ) {
+        if let httpResponse = navigationResponse.response as? HTTPURLResponse {
+            let statusCode = httpResponse.statusCode
+            Task { @MainActor [weak self] in
+                self?.lastHTTPStatusCode = statusCode
+            }
+        }
+        decisionHandler(.allow)
+    }
+
     nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         Task { @MainActor [weak self] in
             self?.navigationContinuation?.resume()

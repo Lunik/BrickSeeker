@@ -1,6 +1,4 @@
 import Foundation
-import WebKit
-import UIKit
 
 struct StorePrice: Equatable, Sendable {
     let amount: Double?
@@ -17,13 +15,13 @@ enum LegoStoreError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .timedOut:
-            return "Prix indisponible (lego.com n'a pas répondu)"
+            return String(localized: "Prix indisponible (lego.com n'a pas répondu)")
         case .pageUnavailable:
-            return "Page lego.com indisponible"
+            return String(localized: "Page lego.com indisponible")
         case .setNotOnStore:
-            return "Ce set n'est plus sur lego.com"
+            return String(localized: "Ce set n'est plus sur lego.com")
         case .offline:
-            return "Hors-ligne"
+            return String(localized: "Hors-ligne")
         }
     }
 }
@@ -35,13 +33,18 @@ protocol LegoStoreRepositoryProtocol: Sendable {
 /// lego.com sits behind a Cloudflare Managed Challenge (confirmed via the `cf-mitigated: challenge`
 /// response header and a "Just a moment..." interstitial) — no plain HTTP client (URLSession,
 /// curl, httpx) can pass it regardless of headers/UA, since it requires executing the page's JS
-/// like a real browser does. A hidden WKWebView is the workaround: it's a genuine WebKit engine,
-/// so it solves the challenge the same way Safari would. See AGENTS.md before touching this.
-/// `@unchecked Sendable` because WKWebView/UIApplication access is confined to the @MainActor
-/// methods below — there's no other shared mutable state on this stateless utility class.
-final class LegoStoreRepository: NSObject, LegoStoreRepositoryProtocol, @unchecked Sendable {
-    private let pollInterval: UInt64 = 700_000_000
-    private let timeout: TimeInterval = 25
+/// like a real browser does. The page is driven through `HeadlessWebScraper` (the same hidden
+/// WKWebView pipeline as the BrickLink/Amazon scrapers — one WKWebView code path in the app, #82):
+/// readiness = the `og:title` meta present (absent on the challenge interstitial), extraction =
+/// the OpenGraph price/availability metas. See AGENTS.md before touching this.
+///
+/// End-state semantics, all deliberately distinct (see AGENTS.md):
+/// - price present → `StorePrice` with an amount;
+/// - retired set (real page, no `product:price:amount`) → `StorePrice(amount: nil, …)`;
+/// - removed from the store entirely (HTTP 404, e.g. 75019-1) → `.setNotOnStore`;
+/// - challenge never cleared / page never became ready → `.timedOut`.
+final class LegoStoreRepository: LegoStoreRepositoryProtocol, Sendable {
+    private static let timeout: TimeInterval = 25
 
     /// The product page URL shown to the user once a price has been confirmed — same path the
     /// scraper itself loads, so this never drifts from what was actually fetched.
@@ -59,6 +62,30 @@ final class LegoStoreRepository: NSObject, LegoStoreRepositoryProtocol, @uncheck
         return URL(string: "https://www.lego.com/fr-fr/service/building-instructions/\(productId)")
     }
 
+    /// Ready once `og:title` is present — it exists on every real product page regardless of
+    /// retail status (the Cloudflare interstitial has none), so a ready page with no
+    /// `product:price:amount` is a genuinely retired set, not a page still loading.
+    private static let readinessScript = """
+    (function() {
+        const el = document.querySelector('meta[property="og:title"]');
+        return !!el && el.getAttribute('content') !== null;
+    })();
+    """
+
+    private static let extractScript = """
+    (function() {
+        const get = (prop) => {
+            const el = document.querySelector(`meta[property="${prop}"]`);
+            return el ? el.getAttribute('content') : null;
+        };
+        return JSON.stringify({
+            amount: get('product:price:amount'),
+            currency: get('product:price:currency'),
+            availability: get('product:availability')
+        });
+    })();
+    """
+
     @MainActor
     func fetchStorePrice(setNum: String) async throws -> StorePrice {
         guard let url = LegoStoreRepository.storeUrl(setNum: setNum) else {
@@ -68,81 +95,26 @@ final class LegoStoreRepository: NSObject, LegoStoreRepositoryProtocol, @uncheck
             throw LegoStoreError.offline
         }
 
-        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
-        // Tracks the real HTTP status of the page once Cloudflare's challenge resolves and the
-        // browser reloads — distinguishes "this set was removed from lego.com entirely" (404)
-        // from "retired but the page still exists without a price" (handled in extractStorePrice).
-        let statusObserver = StatusCodeObserver()
-        webView.navigationDelegate = statusObserver
-
-        // WKWebView has no real "headless" mode on iOS — content reliably loads/executes JS only
-        // when the view is actually part of a window. Near-zero alpha keeps it invisible to the
-        // user while staying "on screen" enough for the Cloudflare challenge to run normally.
-        let window = UIApplication.shared.connectedScenes
-            .compactMap { ($0 as? UIWindowScene)?.keyWindow }
-            .first
-        window?.insertSubview(webView, at: 0)
-        webView.alpha = 0.01
-        defer { webView.removeFromSuperview() }
-
-        webView.load(URLRequest(url: url))
-
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            try await Task.sleep(nanoseconds: pollInterval)
-            if webView.isLoading { continue }
-            if statusObserver.lastStatusCode == 404 {
-                throw LegoStoreError.setNotOnStore
-            }
-            if let price = try await extractStorePrice(from: webView) {
-                return price
-            }
+        let json: String
+        do {
+            json = try await HeadlessWebScraper.shared.loadAndExtract(
+                url: url,
+                readinessScript: Self.readinessScript,
+                extractScript: Self.extractScript,
+                timeout: Self.timeout,
+                failsOnHTTP404: true
+            )
+        } catch ScrapeError.httpNotFound {
+            throw LegoStoreError.setNotOnStore
+        } catch ScrapeError.challengeUnsolved {
+            throw LegoStoreError.timedOut
+        } catch {
+            throw LegoStoreError.pageUnavailable
         }
-        throw LegoStoreError.timedOut
-    }
 
-    @MainActor
-    private final class StatusCodeObserver: NSObject, WKNavigationDelegate {
-        var lastStatusCode: Int?
-
-        func webView(
-            _ webView: WKWebView,
-            decidePolicyFor navigationResponse: WKNavigationResponse,
-            decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
-        ) {
-            if let httpResponse = navigationResponse.response as? HTTPURLResponse {
-                lastStatusCode = httpResponse.statusCode
-            }
-            decisionHandler(.allow)
-        }
-    }
-
-    /// Returns nil while the page hasn't finished rendering real content yet (mid-challenge or
-    /// mid-redirect) — callers should keep polling. `og:title` is used as the "page is ready"
-    /// signal since it's present on every real product page regardless of retail status; a set
-    /// with no `product:price:amount` once the title is present is a genuinely retired set.
-    @MainActor
-    private func extractStorePrice(from webView: WKWebView) async throws -> StorePrice? {
-        let js = """
-        (function() {
-            const get = (prop) => {
-                const el = document.querySelector(`meta[property="${prop}"]`);
-                return el ? el.getAttribute('content') : null;
-            };
-            return JSON.stringify({
-                title: get('og:title'),
-                amount: get('product:price:amount'),
-                currency: get('product:price:currency'),
-                availability: get('product:availability')
-            });
-        })();
-        """
-        guard let jsonString = try await webView.evaluateJavaScript(js) as? String,
-              let data = jsonString.data(using: .utf8),
-              let payload = try? JSONDecoder().decode(MetaTagsPayload.self, from: data),
-              payload.title != nil
-        else {
-            return nil
+        guard let data = json.data(using: .utf8),
+              let payload = try? JSONDecoder().decode(MetaTagsPayload.self, from: data) else {
+            throw LegoStoreError.pageUnavailable
         }
         return StorePrice(
             amount: payload.amount.flatMap(Double.init),
@@ -152,7 +124,6 @@ final class LegoStoreRepository: NSObject, LegoStoreRepositoryProtocol, @uncheck
     }
 
     private struct MetaTagsPayload: Decodable {
-        let title: String?
         let amount: String?
         let currency: String?
         let availability: String?

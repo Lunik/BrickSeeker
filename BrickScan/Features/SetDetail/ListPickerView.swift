@@ -3,6 +3,8 @@ import SwiftUI
 struct ListPickerView: View {
     @State private var setLists: [SetList] = []
     @State private var isLoading = true
+    @State private var isSaving = false
+    @State private var errorMessage: String?
     @State private var newListName = ""
     @State private var showNewListField = false
     @State private var selectedListId: Int?
@@ -59,14 +61,30 @@ struct ListPickerView: View {
                         }
                     }
                 }
+
+                if let errorMessage {
+                    Section {
+                        Text(errorMessage)
+                            .foregroundStyle(Color.brickDanger)
+                            .font(.footnote)
+                    }
+                }
             }
             .navigationTitle("Choisir une liste")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Enregistrer") {
+                    Button {
                         Task { await confirm() }
+                    } label: {
+                        if isSaving {
+                            ProgressView()
+                        } else {
+                            Text("Enregistrer")
+                        }
                     }
-                    .disabled(selectedListId == nil && (newListName.isEmpty || !showNewListField))
+                    // Also disabled while saving — a second tap during createSetList used to
+                    // fire a second creation (#81).
+                    .disabled(isSaving || (selectedListId == nil && (newListName.isEmpty || !showNewListField)))
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Annuler") { dismiss() }
@@ -78,15 +96,31 @@ struct ListPickerView: View {
 
     private func loadLists() async {
         isLoading = true
-        setLists = (try? await repository.fetchUserSetLists()) ?? []
+        errorMessage = nil
+        do {
+            setLists = try await repository.fetchUserSetLists()
+        } catch {
+            // Surface why the list is empty (e.g. missingCredentials when no account is linked)
+            // instead of an indistinguishable blank list (#81).
+            setLists = []
+            errorMessage = (error as? APIError)?.errorDescription ?? String(localized: "Impossible de charger vos listes. Vérifiez votre réseau.")
+        }
         isLoading = false
     }
 
     private func confirm() async {
+        errorMessage = nil
         if showNewListField, !newListName.isEmpty {
-            if let created = try? await repository.createSetList(name: newListName) {
+            isSaving = true
+            defer { isSaving = false }
+            do {
+                let created = try await repository.createSetList(name: newListName)
                 onConfirm(created.id, created.name)
                 dismiss()
+            } catch {
+                // Réseau, 403, nom refusé… — before this, a failed creation was a silent no-op
+                // and the button just "didn't work" (#81).
+                errorMessage = (error as? APIError)?.errorDescription ?? String(localized: "Impossible de créer la liste. Vérifiez votre réseau.")
             }
         } else if let selectedListId, let list = setLists.first(where: { $0.id == selectedListId }) {
             onConfirm(list.id, list.name)
