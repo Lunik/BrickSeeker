@@ -11,6 +11,14 @@ struct SetDetailView: View {
     @State private var showSettings = false
     @State private var showScanMap = false
     @State private var priceHistory: [PriceHistoryEntry] = []
+    /// Seeded once from `pendingPriceScanEvent` — see the `init` doc. `@State`'s initial value is
+    /// only applied the first time this view identity is created, so later re-inits triggered by
+    /// unrelated `viewModel` changes (e.g. a silent collection-status reconcile) can't retrigger
+    /// the prompt.
+    @State private var priceScanEventForPrompt: ScanEvent?
+    @State private var hasShownPricePrompt = false
+    @State private var showPricePrompt = false
+    @State private var priceInputText = ""
     /// Live query (not a one-shot repository read) so a location fix that arrives while the
     /// sheet is already open — the common case, GPS + geocoding take a few seconds — updates
     /// the freshly-recorded scan row in place.
@@ -30,6 +38,7 @@ struct SetDetailView: View {
         initialStorePriceFetchedAt: Date? = nil,
         reconcileOnAppear: Bool = false,
         isOfflineResult: Bool = false,
+        pendingPriceScanEvent: ScanEvent? = nil,
         onScanAgain: @escaping () -> Void
     ) {
         _viewModel = State(initialValue: SetDetailViewModel(
@@ -44,6 +53,7 @@ struct SetDetailView: View {
             filter: #Predicate<ScanEvent> { $0.setNum == setNum },
             sort: [SortDescriptor(\.scannedAt, order: .reverse)]
         )
+        _priceScanEventForPrompt = State(initialValue: pendingPriceScanEvent)
         self.reconcileOnAppear = reconcileOnAppear
         self.isOfflineResult = isOfflineResult
         self.onScanAgain = onScanAgain
@@ -147,11 +157,20 @@ struct SetDetailView: View {
                 }
                 Button("Annuler", role: .cancel) {}
             }
+            .alert("Quel prix as-tu vu ?", isPresented: $showPricePrompt) {
+                TextField("Prix en €", text: $priceInputText)
+                    .keyboardType(.decimalPad)
+                Button("Enregistrer", action: savePricePrompt)
+                Button("Passer", role: .cancel) {}
+            } message: {
+                Text("Renseigne le prix affiché en magasin pour ce scan — utile pour retrouver le meilleur prix vu ici.")
+            }
             .toast($viewModel.toastMessage)
         }
         .onChange(of: viewModel.collectionStatus) { _, _ in syncCache() }
         .onChange(of: viewModel.collectionListName) { _, _ in syncCache() }
         .onChange(of: viewModel.storePriceFetchedAt) { _, _ in syncStorePriceCache() }
+        .onAppear { presentPricePromptIfNeeded() }
         .task {
             if reconcileOnAppear {
                 await viewModel.silentlyReconcileCollectionStatus()
@@ -168,6 +187,27 @@ struct SetDetailView: View {
         .task {
             reloadPriceHistory()
         }
+    }
+
+    /// Shows the "quel prix as-tu vu ?" alert exactly once per sheet presentation, only when this
+    /// SetDetail was opened from a genuine new camera scan (`priceScanEventForPrompt` — see
+    /// `ScannerViewModel.pendingPriceScanEvent`). Prefills the auto-resolved price (lego.com →
+    /// Amazon → BrickLink neuf) when one was already known, so the user confirms/corrects rather
+    /// than typing from scratch.
+    private func presentPricePromptIfNeeded() {
+        guard !hasShownPricePrompt, let event = priceScanEventForPrompt else { return }
+        hasShownPricePrompt = true
+        if let existing = event.priceSeenEUR {
+            priceInputText = String(format: "%.2f", existing).replacingOccurrences(of: ".", with: ",")
+        }
+        showPricePrompt = true
+    }
+
+    private func savePricePrompt() {
+        guard let event = priceScanEventForPrompt else { return }
+        let normalised = priceInputText.replacingOccurrences(of: ",", with: ".")
+        guard let value = Double(normalised), value > 0 else { return }
+        LocalRepository(modelContext: modelContext).updateScanEventPrice(event, priceSeenEUR: value)
     }
 
     private func syncStorePriceCache() {

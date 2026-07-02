@@ -306,6 +306,13 @@ final class LocalRepository {
         return event
     }
 
+    /// Overwrites the auto-resolved "price seen" with what the user actually typed in the
+    /// "quel prix as-tu vu ?" prompt shown right after a camera scan.
+    func updateScanEventPrice(_ event: ScanEvent, priceSeenEUR: Double?) {
+        event.priceSeenEUR = priceSeenEUR
+        try? modelContext.save()
+    }
+
     /// Attaches a (possibly late-arriving) location fix to a scan event. No-ops if the set
     /// joined the collection in the meantime — the strip-on-add rule must win the race against
     /// a slow GPS fix, or a just-bought set would end up located anyway.

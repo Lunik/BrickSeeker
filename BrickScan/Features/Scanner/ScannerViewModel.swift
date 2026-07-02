@@ -57,6 +57,11 @@ final class ScannerViewModel {
     /// snapshot) because the live lookup failed for lack of network — collection status and prices
     /// are not in that snapshot, so the presenting view should flag them as needing a refresh.
     var lastFoundWasOffline = false
+    /// The `ScanEvent` just recorded for the current `.found` state, when it came from a genuine
+    /// new camera scan (see `recordScanEventIfNeeded`) — `SetDetailView` reads this once to prompt
+    /// "quel prix as-tu vu ?" for that scan. Nil for lookups, live reconciles, and re-views of a
+    /// set already captured earlier in the same batch session.
+    var pendingPriceScanEvent: ScanEvent?
 
     /// "Mode lot": while true, a resolved candidate is added to `batchSession` instead of opening
     /// the blocking detail sheet, so the camera keeps running across several sets — see issue #13.
@@ -133,6 +138,7 @@ final class ScannerViewModel {
         isPaused = false
         candidateDetected = false
         candidateThumbnail = nil
+        pendingPriceScanEvent = nil
     }
 
     func lookupSetNumber(_ setNum: String) {
@@ -157,6 +163,10 @@ final class ScannerViewModel {
         state = .processing
         Task {
             presentFound(legoSet, await fetchCollectionStatus(for: legoSet.setNum), bypassBatch: bypassBatch)
+            // The set number scanned off the box was ambiguous (e.g. missing its "-1" suffix) —
+            // only now, once the user has picked the concrete set, do we know what to attach the
+            // scan history entry to.
+            recordScanEventIfNeeded(setNum: legoSet.setNum, bypassBatch: bypassBatch)
         }
     }
 
@@ -286,12 +296,6 @@ final class ScannerViewModel {
         }
         candidateDetected = false
         ScanStatsStore.shared.recordScan()
-        // Camera scans only (`playsFeedbackSounds` already distinguishes this flow): a History
-        // tap / manual entry / photo import is a lookup, not a "I'm standing in front of the
-        // box" moment — recording those would pollute the per-set scan timeline (issue #46).
-        if playsFeedbackSounds {
-            recordScanEvent(setNum: setNum)
-        }
 
         // Local to this resolution — not written to the published `lastFoundWas...` flags until
         // `presentFound` decides this is the one opening a detail sheet (see its doc comment).
@@ -301,6 +305,7 @@ final class ScannerViewModel {
         if let cached = localRepository?.cachedSet(setNum: setNum) {
             foundWasFromCache = true
             presentFound(cached.asLegoSet(), cached.asCollectionStatus(), bypassBatch: bypassBatch, wasFromCache: true)
+            recordScanEventIfNeeded(setNum: cached.setNum, bypassBatch: bypassBatch)
         } else if !isBatchCapturing {
             state = .processing
         }
@@ -321,6 +326,7 @@ final class ScannerViewModel {
                         bypassBatch: bypassBatch,
                         wasOffline: true
                     )
+                    recordScanEventIfNeeded(setNum: offlineSet.setNum, bypassBatch: bypassBatch)
                     if playsFeedbackSounds { ScanFeedback.playResolutionSucceeded() }
                 } else if !isBatchCapturing {
                     state = .error(APIError.networkUnavailable.errorDescription ?? UserMessage.unknownError)
@@ -345,6 +351,11 @@ final class ScannerViewModel {
                     wasFromCache: foundWasFromCache,
                     wasOffline: foundWasOffline
                 )
+                // Not for a live reconcile of an already cache-shown result — that one already
+                // got its scan event recorded from the cache-hit branch above.
+                if !foundWasFromCache {
+                    recordScanEventIfNeeded(setNum: legoSet.setNum, bypassBatch: bypassBatch)
+                }
                 // No haptic when this is just the live reconcile of a cache-instant result —
                 // the user already got the detection feedback for this candidate.
                 if playsFeedbackSounds, !foundWasFromCache { ScanFeedback.playResolutionSucceeded() }
@@ -374,6 +385,7 @@ final class ScannerViewModel {
                         bypassBatch: bypassBatch,
                         wasOffline: true
                     )
+                    recordScanEventIfNeeded(setNum: offlineSet.setNum, bypassBatch: bypassBatch)
                     if playsFeedbackSounds { ScanFeedback.playResolutionSucceeded() }
                 } else if !isBatchCapturing {
                     state = .error((error as? APIError)?.errorDescription ?? UserMessage.unknownError)
@@ -390,20 +402,32 @@ final class ScannerViewModel {
     /// Appends the scan to the per-set history (issue #46) and, when the user opted in, kicks
     /// off the one-shot location capture in the background — the scan flow never waits on GPS
     /// or geocoding; the fix is attached to the already-saved event whenever it arrives.
-    private func recordScanEvent(setNum: String) {
-        guard let localRepository else { return }
+    ///
+    /// Called once per genuinely new camera-driven presentation of a resolved set (`setNum` here
+    /// is always the final, concrete set number — never the raw, possibly-ambiguous OCR string).
+    /// Guarded against: non-camera lookups (`playsFeedbackSounds`, History tap / manual entry /
+    /// photo import aren't "I'm standing in front of the box" moments), the silent live-reconcile
+    /// of an already cache-shown result (callers only invoke this on the branch that first showed
+    /// the set), and re-opening a set already captured earlier in the same batch session
+    /// (`bypassBatch`, set only by `lookupSetForDetail` from the batch summary — a re-view, not a
+    /// new physical scan).
+    @discardableResult
+    private func recordScanEventIfNeeded(setNum: String, bypassBatch: Bool) -> ScanEvent? {
+        guard playsFeedbackSounds, !bypassBatch, let localRepository else { return nil }
         let cached = localRepository.cachedSet(setNum: setNum)
         // Best locally-known "new" price right now — the "relevé de prix du moment" the scan
-        // history highlights as "meilleur prix vu ici".
+        // history highlights as "meilleur prix vu ici", and the starting value offered in the
+        // "quel prix as-tu vu ?" prompt (see `pendingPriceScanEvent`).
         let priceSeen = resolveNewPrice(
             storePriceEUR: cached?.storePriceEUR,
             quotes: localRepository.cachedPrices(setNum: setNum)
         )
         let event = localRepository.recordScanEvent(setNum: setNum, priceSeenEUR: priceSeen)
+        pendingPriceScanEvent = event
 
         // No location for a set already in the collection — same rule that strips locations
         // when a set gets added: the "where" only matters while still hunting for the deal.
-        guard ScanLocationService.shared.isEnabled, cached?.isInCollection != true else { return }
+        guard ScanLocationService.shared.isEnabled, cached?.isInCollection != true else { return event }
         Task { [weak self] in
             guard let fix = await ScanLocationService.shared.captureLocation() else { return }
             let placeName = await ScanLocationService.reverseGeocode(latitude: fix.latitude, longitude: fix.longitude)
@@ -414,6 +438,7 @@ final class ScannerViewModel {
                 placeName: placeName
             )
         }
+        return event
     }
 
     private func fetchCollectionStatus(for setNum: String) async -> CollectionStatus {
