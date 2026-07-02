@@ -3,6 +3,7 @@ import Observation
 import SwiftData
 
 @Observable
+@MainActor
 final class SettingsViewModel {
     var apiKey: String
     var username = ""
@@ -49,13 +50,12 @@ final class SettingsViewModel {
     /// These five forward to `CollectionPriceUpdater.shared` (rather than mirroring its state
     /// into local properties) so progress stays live even if `SettingsView` is dismissed and
     /// reopened mid-run — the singleton, not this view model, owns the actual job.
-    @MainActor var isUpdatingAllPrices: Bool { CollectionPriceUpdater.shared.isRunning }
-    @MainActor var priceUpdateDone: Int { CollectionPriceUpdater.shared.done }
-    @MainActor var priceUpdateTotal: Int { CollectionPriceUpdater.shared.total }
-    @MainActor var hasResumablePriceUpdate: Bool { CollectionPriceUpdater.shared.hasResumableUpdate }
-    @MainActor var priceUpdateLastCompletedAt: Date? { CollectionPriceUpdater.shared.lastCompletedAt }
+    var isUpdatingAllPrices: Bool { CollectionPriceUpdater.shared.isRunning }
+    var priceUpdateDone: Int { CollectionPriceUpdater.shared.done }
+    var priceUpdateTotal: Int { CollectionPriceUpdater.shared.total }
+    var hasResumablePriceUpdate: Bool { CollectionPriceUpdater.shared.hasResumableUpdate }
+    var priceUpdateLastCompletedAt: Date? { CollectionPriceUpdater.shared.lastCompletedAt }
 
-    @MainActor
     func updateAllPrices(modelContext: ModelContext) async {
         priceUpdateErrorMessage = nil
         let sets = LocalRepository(modelContext: modelContext).ownedSets().map { $0.asLegoSet() }
@@ -82,7 +82,6 @@ final class SettingsViewModel {
         offlineCatalogStore.hasResumableDownload
     }
 
-    @MainActor
     func downloadOfflineCatalog() async {
         isUpdatingOfflineCatalog = true
         offlineCatalogDownloadProgress = 0
@@ -110,7 +109,6 @@ final class SettingsViewModel {
     /// download is in flight, pauses it so its resume data is preserved instead of being lost to
     /// the app suspending/terminating mid-transfer (see `OfflineCatalogStore.
     /// cancelActiveDownloadPreservingProgress`).
-    @MainActor
     func handleScenePhaseChange(isActive: Bool) {
         guard !isActive else { return }
         if isUpdatingOfflineCatalog {
@@ -122,21 +120,15 @@ final class SettingsViewModel {
         }
     }
 
-    @MainActor
     func purgeOfflineCatalog() {
         offlineCatalogStore.purge()
         offlineCatalogMetadata = nil
-    }
-
-    var isConfigured: Bool {
-        !apiKey.isEmpty
     }
 
     func save() {
         KeychainService.shared.save(key: .apiKey, value: apiKey)
     }
 
-    @MainActor
     func linkAccount() async -> Bool {
         guard !apiKey.isEmpty, !username.isEmpty, !password.isEmpty else { return false }
 

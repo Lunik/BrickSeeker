@@ -40,10 +40,6 @@ final class ThemeNameStore: @unchecked Sendable {
         self.downloadedAt = nil
     }
 
-    func name(forThemeId themeId: Int) -> String? {
-        namesByThemeId[themeId]
-    }
-
     /// Downloads/refreshes the table if it's never been fetched or is stale; no-ops otherwise, so
     /// callers can invoke this unconditionally whenever the Statistics screen appears. Best-effort:
     /// on failure, whatever's already cached (possibly nothing) is left in place and callers fall
@@ -73,39 +69,14 @@ final class ThemeNameStore: @unchecked Sendable {
 
     /// Parses the `id,name,parent_id` columns of Rebrickable's `themes.csv.gz` dump. Only `id`
     /// and `name` are needed here — theme hierarchy (`parent_id`) isn't used by this app's flat
-    /// "group owned sets by theme id" breakdown.
+    /// "group owned sets by theme id" breakdown. Line splitting and RFC 4180 quote handling live
+    /// in the shared `CSV` helper (also used by `OfflineCatalogStore`).
     private static func parseCSV(_ data: Data) throws -> [Int: String] {
-        guard let text = String(data: data, encoding: .utf8) else {
-            throw APIError.decodingError(CocoaError(.fileReadCorruptFile))
-        }
-
         var names: [Int: String] = [:]
-        var lines = text.split(whereSeparator: { $0.isNewline }).makeIterator()
-        _ = lines.next() // header
-
-        while let line = lines.next() {
-            let fields = splitCSVLine(String(line))
+        for fields in try CSV.records(in: data) {
             guard fields.count >= 2, let id = Int(fields[0]) else { continue }
             names[id] = fields[1]
         }
         return names
-    }
-
-    private static func splitCSVLine(_ line: String) -> [String] {
-        var fields: [String] = []
-        var current = ""
-        var insideQuotes = false
-        for char in line {
-            if char == "\"" {
-                insideQuotes.toggle()
-            } else if char == "," && !insideQuotes {
-                fields.append(current)
-                current = ""
-            } else {
-                current.append(char)
-            }
-        }
-        fields.append(current)
-        return fields
     }
 }

@@ -98,6 +98,7 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(.secondary)
+                        .accessibilityLabel(isAPIKeyVisible ? "Masquer la clé API" : "Afficher la clé API")
                     }
                 } header: {
                     Text("API Key Rebrickable")

@@ -3,6 +3,12 @@ import AVFoundation
 import Observation
 import UIKit
 
+/// Deliberately non-synthesized `==`: `.found` compares **only** `setNum`, ignoring the
+/// `CollectionStatus` payload, so a silent live reconcile of the same set doesn't count as a
+/// state change and re-present the already-open detail sheet. Consequence to keep in mind: an
+/// `.onChange(of: state)` observer does NOT re-fire when only the collection status changes for
+/// the same set — today that's compensated by `SetDetailView`'s own reconcile-on-appear. Don't
+/// "fix" this by comparing the payload without re-testing the sheet re-presentation flow.
 enum ScannerState: Equatable {
     case scanning
     case processing

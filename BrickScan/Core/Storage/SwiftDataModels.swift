@@ -37,10 +37,6 @@ final class CachedSet {
         self.currentListName = currentListName
     }
 
-    var isExpired: Bool {
-        Date().timeIntervalSince(lastScannedAt) > 24 * 60 * 60
-    }
-
     func asLegoSet() -> LegoSet {
         LegoSet(setNum: setNum, name: name, year: year, themeId: themeId, numParts: numParts, setImgUrl: setImgUrl, setUrl: setUrl)
     }
@@ -139,9 +135,5 @@ final class CachedSetList {
     var condition: ListCondition {
         get { ListCondition(rawValue: conditionRaw) ?? .newSet }
         set { conditionRaw = newValue.rawValue }
-    }
-
-    var isExpired: Bool {
-        Date().timeIntervalSince(lastFetchedAt) > 5 * 60
     }
 }

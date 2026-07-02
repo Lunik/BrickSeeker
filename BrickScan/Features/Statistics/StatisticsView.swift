@@ -7,8 +7,8 @@ private let frenchDateStyle = Date.FormatStyle(date: .abbreviated, time: .omitte
 struct StatisticsView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: StatisticsViewModel?
-    @State private var csvURL: URL?
-    @State private var pdfURL: URL?
+    @State private var csvFile: ShareableFile?
+    @State private var pdfFile: ShareableFile?
     let lookupViewModel: ScannerViewModel
 
     var body: some View {
@@ -51,8 +51,8 @@ struct StatisticsView: View {
                 viewModel?.recomputeStats()
             }
         }
-        .sheet(item: $csvURL) { url in ShareSheet(items: [url]) }
-        .sheet(item: $pdfURL) { url in ShareSheet(items: [url]) }
+        .sheet(item: $csvFile) { file in ShareSheet(items: [file.url]) }
+        .sheet(item: $pdfFile) { file in ShareSheet(items: [file.url]) }
     }
 
     private func totalsSection(_ stats: CollectionStats) -> some View {
@@ -184,19 +184,19 @@ struct StatisticsView: View {
             Text("Exporter").font(.headline)
             HStack(spacing: 12) {
                 Button("Exporter en CSV") {
-                    csvURL = CollectionReportExporter.writeCSVToTempFile(
+                    csvFile = CollectionReportExporter.writeCSVToTempFile(
                         sets: viewModel.setsForExport,
                         priceEUR: viewModel.effectivePriceEUR
-                    )
+                    ).map(ShareableFile.init)
                 }
                 Button("Exporter en PDF") {
-                    pdfURL = CollectionReportExporter.writePDFToTempFile(
+                    pdfFile = CollectionReportExporter.writePDFToTempFile(
                         sets: viewModel.setsForExport,
                         stats: viewModel.stats,
                         priceEUR: viewModel.effectivePriceEUR,
                         lastSyncedAt: LocalRepository(modelContext: modelContext).lastFullSyncAt(),
                         lastPriceUpdateAt: viewModel.priceUpdateLastCompletedAt
-                    )
+                    ).map(ShareableFile.init)
                 }
             }
         }
@@ -221,11 +221,17 @@ struct StatisticsView: View {
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .foregroundStyle(.primary)
+        // One VoiceOver phrase ("Sets, 128") instead of three separate stops per card.
+        .accessibilityElement(children: .combine)
     }
 }
 
-extension URL: @retroactive Identifiable {
-    public var id: String { absoluteString }
+/// Local `Identifiable` wrapper for `.sheet(item:)` — deliberately not a retroactive
+/// `Identifiable` conformance on `URL` itself, which would collide if Apple (or another
+/// module) ever declares one.
+private struct ShareableFile: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
 }
 
 private struct ShareSheet: UIViewControllerRepresentable {

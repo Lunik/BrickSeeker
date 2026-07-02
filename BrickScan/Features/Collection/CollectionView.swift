@@ -75,6 +75,8 @@ struct CollectionView: View {
                 } label: {
                     Image(systemName: filter.isFilterActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                 }
+                .accessibilityLabel("Filtres")
+                .accessibilityValue(filter.isFilterActive ? "Actifs" : "Inactifs")
             }
         }
         .sheet(isPresented: $showFilters) {

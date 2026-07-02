@@ -57,6 +57,7 @@ struct HomeView: View {
                     } label: {
                         Image(systemName: "gearshape")
                     }
+                    .accessibilityLabel("Réglages")
                 }
             }
             .navigationDestination(isPresented: $showCollection) {
@@ -241,9 +242,11 @@ struct HomeView: View {
                     .buttonStyle(.plain)
                 }
 
-                // Fixed height regardless of which branch renders: letting this row appear/
-                // disappear reflows the ScrollView content while .refreshable's pull gesture is
-                // still tracking, which can cancel the in-flight sync task on some iOS versions.
+                // Every branch renders exactly one line (including the blank placeholder), so the
+                // row never appears/disappears: that reflowed the ScrollView content while
+                // .refreshable's pull gesture was still tracking, which can cancel the in-flight
+                // sync task on some iOS versions. `minHeight` (not a fixed height) so Dynamic
+                // Type XXL isn't clipped.
                 HStack(spacing: 6) {
                     if viewModel.isSyncing {
                         ProgressView().controlSize(.small)
@@ -258,7 +261,7 @@ struct HomeView: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .frame(height: 16, alignment: .leading)
+                .frame(minHeight: 16, alignment: .leading)
             }
         }
     }
@@ -307,6 +310,8 @@ struct HomeView: View {
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .foregroundStyle(.primary)
+        // One VoiceOver phrase ("Sets scannés, 12") instead of three separate stops per card.
+        .accessibilityElement(children: .combine)
     }
 
     /// Same layout as `statCard` (icon + two text lines) for a tile that navigates somewhere
@@ -327,6 +332,7 @@ struct HomeView: View {
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .foregroundStyle(.primary)
+        .accessibilityElement(children: .combine)
     }
 
     private var scanButton: some View {
@@ -339,6 +345,7 @@ struct HomeView: View {
                 .clipShape(Circle())
                 .shadow(radius: 8)
         }
+        .accessibilityLabel("Scanner un set")
         .padding(.bottom, 32)
     }
 }

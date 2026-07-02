@@ -54,15 +54,6 @@ final class LocalRepository {
         cacheSet(legoSet, isInCollection: isInCollection, listId: listId, listName: nil)
     }
 
-    func recentlyScannedSets(limit: Int = 50) -> [CachedSet] {
-        let descriptor = FetchDescriptor<CachedSet>(
-            predicate: #Predicate { $0.wasScanned },
-            sortBy: [SortDescriptor(\.lastScannedAt, order: .reverse)]
-        )
-        let results = try? modelContext.fetch(descriptor)
-        return Array((results ?? []).prefix(limit))
-    }
-
     func scannedSetsCount() -> Int {
         (try? modelContext.fetchCount(FetchDescriptor<CachedSet>(predicate: #Predicate { $0.wasScanned }))) ?? 0
     }
@@ -105,7 +96,8 @@ final class LocalRepository {
     /// Full collection sync (offline browsing of owned sets). Distinct from the per-set
     /// fetchUserSet check (always live) — see AGENTS.md before touching either.
     func syncCollection(_ userSets: [UserSet], lists: [SetList]) {
-        let listNameById = Dictionary(uniqueKeysWithValues: lists.map { ($0.id, $0.name) })
+        // External API data — a duplicated list id must not crash the sync (first wins).
+        let listNameById = Dictionary(lists.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
 
         // A set owned in multiple lists appears multiple times; keep only the first occurrence
         // since CachedSet (like the rest of the app) assumes one current list per set.

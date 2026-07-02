@@ -10,13 +10,11 @@ struct SetThumbnailView: View {
 
     var body: some View {
         CachedRemoteImage(url: URL(string: imageUrl ?? "")) {
-            AnyView(
-                Image(systemName: "shippingbox")
-                    .resizable()
-                    .scaledToFit()
-                    .foregroundStyle(.secondary)
-                    .padding(size * 0.18)
-            )
+            Image(systemName: "shippingbox")
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(.secondary)
+                .padding(size * 0.18)
         }
         .padding(4)
         .frame(width: size, height: size)

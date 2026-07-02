@@ -10,8 +10,6 @@ final class CollectionViewModel {
     /// pattern as `StatisticsViewModel.themeNames`.
     var themeNames: [Int: String] = [:]
 
-    let filter = CollectionFilterState.shared
-
     private let localRepository: LocalRepository
     private let themeNameStore: ThemeNameStore
 
@@ -27,10 +25,6 @@ final class CollectionViewModel {
             await themeNameStore.refreshIfNeeded()
             themeNames = themeNameStore.namesByThemeId
         }
-    }
-
-    var filteredSets: [CachedSet] {
-        cachedSets.filteredAndSorted(by: filter)
     }
 
     var availableThemeIds: [Int] {

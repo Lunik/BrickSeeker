@@ -5,10 +5,10 @@ import SwiftUI
 /// reconcile on open) always re-fetches afterward and swaps in the result if it changed —
 /// `refreshesLive: false` (used for list-row thumbnails) only fetches when nothing is cached yet,
 /// since re-fetching on every row appearance during scrolling would be wasteful.
-struct CachedRemoteImage: View {
+struct CachedRemoteImage<Placeholder: View>: View {
     let url: URL?
     var refreshesLive: Bool = false
-    @ViewBuilder var placeholder: () -> AnyView
+    @ViewBuilder var placeholder: () -> Placeholder
 
     @State private var uiImage: UIImage?
 

@@ -43,13 +43,11 @@ struct SetDetailView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     CachedRemoteImage(url: URL(string: viewModel.legoSet.setImgUrl ?? ""), refreshesLive: true) {
-                        AnyView(
-                            Image(systemName: "shippingbox")
-                                .resizable()
-                                .scaledToFit()
-                                .foregroundStyle(.secondary)
-                                .padding(40)
-                        )
+                        Image(systemName: "shippingbox")
+                            .resizable()
+                            .scaledToFit()
+                            .foregroundStyle(.secondary)
+                            .padding(40)
                     }
                     .frame(height: 220)
 
@@ -249,6 +247,7 @@ struct SetDetailView: View {
                     }
                 }
                 .disabled(pricesBusy)
+                .accessibilityLabel("Actualiser les prix")
             }
 
             legoStoreRow
@@ -271,10 +270,10 @@ struct SetDetailView: View {
             if let amount = viewModel.storePrice?.amount {
                 let code = viewModel.storePrice?.currency ?? "EUR"
                 if let url = LegoStoreRepository.storeUrl(setNum: viewModel.legoSet.setNum) {
-                    Link(formattedAmount(Decimal(amount), currency: code), destination: url)
+                    Link(Decimal(amount).formatted(.currency(code: code)), destination: url)
                         .foregroundStyle(.primary)
                 } else {
-                    Text(formattedAmount(Decimal(amount), currency: code))
+                    Text(Decimal(amount).formatted(.currency(code: code)))
                 }
             } else {
                 priceStatus(loading: viewModel.isLoadingStorePrice)
@@ -303,7 +302,7 @@ struct SetDetailView: View {
                                 .font(.caption2)
                                 .foregroundStyle(pct < 0 ? .green : Color.brickDanger)
                         }
-                        Text(formattedAmount(ppp, currency: currency))
+                        Text(ppp.formatted(.currency(code: currency)))
                             .foregroundStyle(.primary)
                     }
                 }
@@ -330,10 +329,10 @@ struct SetDetailView: View {
                             .foregroundStyle(promo.color)
                     }
                     if let sourceURL = quote.sourceURL {
-                        Link(formattedAmount(quote.amount, currency: quote.currency), destination: sourceURL)
+                        Link(quote.amount.formatted(.currency(code: quote.currency)), destination: sourceURL)
                             .foregroundStyle(.primary)
                     } else {
-                        Text(formattedAmount(quote.amount, currency: quote.currency))
+                        Text(quote.amount.formatted(.currency(code: quote.currency)))
                     }
                 }
             } else {
@@ -377,13 +376,6 @@ struct SetDetailView: View {
         let pct = Int((((source - storeAmount) / storeAmount) * 100).rounded())
         guard pct != 0 else { return nil }
         return ("\(pct > 0 ? "+" : "")\(pct)%", pct < 0 ? .green : .red)
-    }
-
-    private func formattedAmount(_ amount: Decimal, currency: String) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = currency
-        return formatter.string(from: amount as NSDecimalNumber) ?? "\(amount) \(currency)"
     }
 
     private func refreshAllPrices() async {

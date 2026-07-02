@@ -48,7 +48,10 @@ final class OfflineCatalogStore: @unchecked Sendable {
 
         if let data = try? Data(contentsOf: snapshotURL),
            let sets = try? JSONDecoder().decode([LegoSet].self, from: data) {
-            self.setsByNum = Dictionary(uniqueKeysWithValues: sets.map { ($0.setNum, $0) })
+            // `uniquingKeysWith`, not `uniqueKeysWithValues`: a duplicate set_num in the dump (or
+            // a corrupted snapshot) must not crash at launch — first occurrence wins, matching
+            // syncCollection's dedup rule.
+            self.setsByNum = Dictionary(sets.map { ($0.setNum, $0) }, uniquingKeysWith: { first, _ in first })
         } else {
             self.setsByNum = [:]
         }
@@ -109,7 +112,7 @@ final class OfflineCatalogStore: @unchecked Sendable {
             return (sets, newMetadata)
         }.value
 
-        setsByNum = Dictionary(uniqueKeysWithValues: sets.map { ($0.setNum, $0) })
+        setsByNum = Dictionary(sets.map { ($0.setNum, $0) }, uniquingKeysWith: { first, _ in first })
         metadata = newMetadata
     }
 
@@ -286,21 +289,39 @@ final class OfflineCatalogStore: @unchecked Sendable {
         }
         let flags = data[data.startIndex + 3]
         var offset = 10
+        // Every header read below is bounds-checked against `limit` before touching the byte:
+        // `Data`'s subscript traps (not throws) past `endIndex`, and a truncated/corrupt download
+        // must surface as a thrown decoding error the UI can show — never a crash (same
+        // philosophy as the unaligned-ISIZE fix documented below). The last 8 bytes are the
+        // CRC32+ISIZE trailer, so no header field may reach into them.
+        let limit = data.count - 8
 
         if flags & 0x04 != 0 { // FEXTRA
+            guard offset + 2 <= limit else {
+                throw APIError.decodingError(CocoaError(.fileReadCorruptFile))
+            }
             let xlen = Int(data[data.startIndex + offset]) | (Int(data[data.startIndex + offset + 1]) << 8)
             offset += 2 + xlen
         }
         if flags & 0x08 != 0 { // FNAME
-            while data[data.startIndex + offset] != 0 { offset += 1 }
+            while offset < limit, data[data.startIndex + offset] != 0 { offset += 1 }
+            guard offset < limit else { // no NUL terminator before the trailer
+                throw APIError.decodingError(CocoaError(.fileReadCorruptFile))
+            }
             offset += 1
         }
         if flags & 0x10 != 0 { // FCOMMENT
-            while data[data.startIndex + offset] != 0 { offset += 1 }
+            while offset < limit, data[data.startIndex + offset] != 0 { offset += 1 }
+            guard offset < limit else {
+                throw APIError.decodingError(CocoaError(.fileReadCorruptFile))
+            }
             offset += 1
         }
         if flags & 0x02 != 0 { // FHCRC
             offset += 2
+        }
+        guard offset <= limit else {
+            throw APIError.decodingError(CocoaError(.fileReadCorruptFile))
         }
 
         let payload = data.subdata(in: (data.startIndex + offset)..<(data.endIndex - 8))
@@ -338,25 +359,12 @@ final class OfflineCatalogStore: @unchecked Sendable {
     }
 
     /// Parses the `set_num,name,year,theme_id,num_parts,img_url` columns Rebrickable's dump
-    /// publishes into `LegoSet` (`set_img_url` here is renamed from the dump's `img_url`). Does a
-    /// straightforward quoted-field CSV scan rather than pulling in a dependency, since the shape
-    /// is fixed and small (six columns, this is the only place in the app that needs it).
+    /// publishes into `LegoSet` (`set_img_url` here is renamed from the dump's `img_url`).
+    /// Line splitting and RFC 4180 quote handling live in the shared `CSV` helper (also used by
+    /// `ThemeNameStore`) — see its doc comments for the CRLF gotcha found against a real dump.
     static func parseCSV(_ data: Data) throws -> [LegoSet] {
-        guard let text = String(data: data, encoding: .utf8) else {
-            throw APIError.decodingError(CocoaError(.fileReadCorruptFile))
-        }
-
         var sets: [LegoSet] = []
-        // NOT `split(separator: "\n")`: the real dump uses CRLF line endings, and Swift's
-        // `Character` treats "\r\n" as a single indivisible grapheme cluster that never equals
-        // the standalone "\n" `Character` — that split found zero line breaks against a real
-        // download (the whole file became "one line"), silently producing 0 parsed sets with no
-        // error. `isNewline` recognizes "\r\n", "\n", and "\r" all as line breaks.
-        var lines = text.split(whereSeparator: { $0.isNewline }).makeIterator()
-        _ = lines.next() // header
-
-        while let line = lines.next() {
-            let fields = Self.splitCSVLine(String(line))
+        for fields in try CSV.records(in: data) {
             guard fields.count >= 6,
                   let year = Int(fields[2]),
                   let themeId = Int(fields[3]),
@@ -377,25 +385,6 @@ final class OfflineCatalogStore: @unchecked Sendable {
             )
         }
         return sets
-    }
-
-    private static func splitCSVLine(_ line: String) -> [String] {
-        var fields: [String] = []
-        var current = ""
-        var insideQuotes = false
-        var iterator = line.makeIterator()
-        while let char = iterator.next() {
-            if char == "\"" {
-                insideQuotes.toggle()
-            } else if char == "," && !insideQuotes {
-                fields.append(current)
-                current = ""
-            } else {
-                current.append(char)
-            }
-        }
-        fields.append(current)
-        return fields
     }
 }
 

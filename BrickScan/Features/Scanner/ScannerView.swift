@@ -35,6 +35,7 @@ struct ScannerView: View {
                         } label: {
                             Image(systemName: "xmark")
                         }
+                        .accessibilityLabel("Fermer le scanner")
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -44,6 +45,7 @@ struct ScannerView: View {
                         Image(systemName: viewModel.isBatchModeEnabled ? "square.stack.3d.up.fill" : "square.stack.3d.up")
                     }
                     .accessibilityLabel("Mode lot")
+                    .accessibilityValue(viewModel.isBatchModeEnabled ? "Activé" : "Désactivé")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -51,6 +53,8 @@ struct ScannerView: View {
                     } label: {
                         Image(systemName: viewModel.torchOn ? "bolt.fill" : "bolt.slash")
                     }
+                    .accessibilityLabel("Torche")
+                    .accessibilityValue(viewModel.torchOn ? "Activée" : "Désactivée")
                 }
             }
             .sheet(isPresented: setDetailBinding) {
