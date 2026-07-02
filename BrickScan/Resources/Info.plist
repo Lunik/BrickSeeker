@@ -20,6 +20,8 @@
 	<string>1</string>
 	<key>NSCameraUsageDescription</key>
 	<string>BrickScan utilise la caméra pour scanner les boîtes et manuels LEGO</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>BrickScan enregistre la position au moment d'un scan (si vous l'activez) pour retrouver le magasin où vous avez vu le meilleur prix. Position approximative, stockée uniquement sur l'appareil.</string>
 	<key>UIApplicationShortcutItems</key>
 	<array>
 		<dict>

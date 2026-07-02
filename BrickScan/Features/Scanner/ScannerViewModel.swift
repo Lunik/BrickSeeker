@@ -286,6 +286,12 @@ final class ScannerViewModel {
         }
         candidateDetected = false
         ScanStatsStore.shared.recordScan()
+        // Camera scans only (`playsFeedbackSounds` already distinguishes this flow): a History
+        // tap / manual entry / photo import is a lookup, not a "I'm standing in front of the
+        // box" moment — recording those would pollute the per-set scan timeline (issue #46).
+        if playsFeedbackSounds {
+            recordScanEvent(setNum: setNum)
+        }
 
         // Local to this resolution — not written to the published `lastFoundWas...` flags until
         // `presentFound` decides this is the one opening a detail sheet (see its doc comment).
@@ -378,6 +384,35 @@ final class ScannerViewModel {
                     isPaused = false
                 }
             }
+        }
+    }
+
+    /// Appends the scan to the per-set history (issue #46) and, when the user opted in, kicks
+    /// off the one-shot location capture in the background — the scan flow never waits on GPS
+    /// or geocoding; the fix is attached to the already-saved event whenever it arrives.
+    private func recordScanEvent(setNum: String) {
+        guard let localRepository else { return }
+        let cached = localRepository.cachedSet(setNum: setNum)
+        // Best locally-known "new" price right now — the "relevé de prix du moment" the scan
+        // history highlights as "meilleur prix vu ici".
+        let priceSeen = resolveNewPrice(
+            storePriceEUR: cached?.storePriceEUR,
+            quotes: localRepository.cachedPrices(setNum: setNum)
+        )
+        let event = localRepository.recordScanEvent(setNum: setNum, priceSeenEUR: priceSeen)
+
+        // No location for a set already in the collection — same rule that strips locations
+        // when a set gets added: the "where" only matters while still hunting for the deal.
+        guard ScanLocationService.shared.isEnabled, cached?.isInCollection != true else { return }
+        Task { [weak self] in
+            guard let fix = await ScanLocationService.shared.captureLocation() else { return }
+            let placeName = await ScanLocationService.reverseGeocode(latitude: fix.latitude, longitude: fix.longitude)
+            self?.localRepository?.attachLocation(
+                to: event,
+                latitude: fix.latitude,
+                longitude: fix.longitude,
+                placeName: placeName
+            )
         }
     }
 

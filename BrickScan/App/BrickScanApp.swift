@@ -16,7 +16,7 @@ struct BrickScanApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     var modelContainer: ModelContainer = {
-        let schema = Schema([CachedSet.self, CachedSetList.self, CollectionSyncState.self, CachedSetPrice.self, PriceHistoryEntry.self])
+        let schema = Schema([CachedSet.self, CachedSetList.self, CollectionSyncState.self, CachedSetPrice.self, PriceHistoryEntry.self, ScanEvent.self])
         let configuration = ModelConfiguration(schema: schema)
         return try! ModelContainer(for: schema, configurations: [configuration])
     }()

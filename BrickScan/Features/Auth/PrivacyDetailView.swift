@@ -14,6 +14,7 @@ struct PrivacyDetailView: View {
                         .font(.headline)
                     Text("API Key Rebrickable : dans le Keychain iOS")
                     Text("Sets scannés récemment : dans la base SwiftData locale, sur l'appareil uniquement")
+                    Text("Position des scans (si activée dans les paramètres) : approximative, sur l'appareil uniquement, supprimée dès qu'un set rejoint votre collection ou que l'historique est purgé")
                 }
 
                 Section {

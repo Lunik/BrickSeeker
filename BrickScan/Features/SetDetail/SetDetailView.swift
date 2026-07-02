@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import Charts
+import MapKit
 
 struct SetDetailView: View {
     @State private var viewModel: SetDetailViewModel
@@ -8,7 +9,12 @@ struct SetDetailView: View {
     @State private var showMoveListPicker = false
     @State private var showRemoveConfirmation = false
     @State private var showSettings = false
+    @State private var showScanMap = false
     @State private var priceHistory: [PriceHistoryEntry] = []
+    /// Live query (not a one-shot repository read) so a location fix that arrives while the
+    /// sheet is already open — the common case, GPS + geocoding take a few seconds — updates
+    /// the freshly-recorded scan row in place.
+    @Query private var scanEvents: [ScanEvent]
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
@@ -33,6 +39,11 @@ struct SetDetailView: View {
             initialStorePrice: initialStorePrice,
             initialStorePriceFetchedAt: initialStorePriceFetchedAt
         ))
+        let setNum = legoSet.setNum
+        _scanEvents = Query(
+            filter: #Predicate<ScanEvent> { $0.setNum == setNum },
+            sort: [SortDescriptor(\.scannedAt, order: .reverse)]
+        )
         self.reconcileOnAppear = reconcileOnAppear
         self.isOfflineResult = isOfflineResult
         self.onScanAgain = onScanAgain
@@ -74,6 +85,8 @@ struct SetDetailView: View {
 
                     priceHistoryChart
 
+                    scanHistorySection
+
                     if viewModel.isLoading {
                         ProgressView()
                     }
@@ -109,6 +122,9 @@ struct SetDetailView: View {
             }
             .sheet(isPresented: $showSettings) {
                 SettingsView()
+            }
+            .sheet(isPresented: $showScanMap) {
+                ScanMapView(setNum: viewModel.legoSet.setNum)
             }
             .sheet(isPresented: $showListPicker) {
                 ListPickerView { listId, listName in
@@ -206,6 +222,109 @@ struct SetDetailView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .cardStyle(padding: 12)
         }
+    }
+
+    /// How many scan rows "Tes scans" shows before collapsing into an "et N scans plus
+    /// anciens" line — keeps a much-rescanned set from bloating the sheet.
+    private static let maxVisibleScanRows = 6
+
+    private var locatedScanEvents: [ScanEvent] {
+        scanEvents.filter(\.hasLocation)
+    }
+
+    /// The scan where the lowest price was seen — the "meilleur prix vu ici" the localized
+    /// history exists for. Nil when no scan has a recorded price. `scanEvents` is sorted
+    /// newest-first and `min(by:)` keeps the first of equals, so a tie goes to the most
+    /// recent scan.
+    private var bestPriceScanID: PersistentIdentifier? {
+        scanEvents
+            .filter { $0.priceSeenEUR != nil }
+            .min { ($0.priceSeenEUR ?? .infinity) < ($1.priceSeenEUR ?? .infinity) }?
+            .persistentModelID
+    }
+
+    /// "Tes scans" — one row per camera scan of this set (issue #46), newest first, with the
+    /// place captured at scan time when location was enabled, plus a mini-map of the located
+    /// ones. Hidden entirely for a set never camera-scanned.
+    @ViewBuilder
+    private var scanHistorySection: some View {
+        if !scanEvents.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Tes scans")
+                        .font(.subheadline.bold())
+                    Spacer()
+                    Text("\(scanEvents.count) scan\(scanEvents.count > 1 ? "s" : "")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                ForEach(scanEvents.prefix(Self.maxVisibleScanRows), id: \.persistentModelID) { event in
+                    scanEventRow(event)
+                }
+                if scanEvents.count > Self.maxVisibleScanRows {
+                    Text("et \(scanEvents.count - Self.maxVisibleScanRows) scans plus anciens")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if !locatedScanEvents.isEmpty {
+                    scanMiniMap
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardStyle(padding: 12)
+        }
+    }
+
+    private func scanEventRow(_ event: ScanEvent) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(event.scannedAt.formatted(ScanMapView.dateStyle))
+                if let placeName = event.placeName {
+                    Label(placeName, systemImage: "mappin.and.ellipse")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                if let price = event.priceSeenEUR {
+                    Text(Decimal(price).formatted(.currency(code: "EUR")))
+                        .foregroundStyle(.primary)
+                }
+                if event.persistentModelID == bestPriceScanID {
+                    Text(event.hasLocation ? "Meilleur prix vu ici" : "Meilleur prix")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.green)
+                }
+            }
+        }
+        .font(.subheadline)
+    }
+
+    /// Non-interactive preview of where this set was scanned — tapping opens the full-screen
+    /// map (`ScanMapView`), where pins are selectable.
+    private var scanMiniMap: some View {
+        Map {
+            ForEach(locatedScanEvents, id: \.persistentModelID) { event in
+                if let latitude = event.latitude, let longitude = event.longitude {
+                    Marker(
+                        event.placeName ?? event.scannedAt.formatted(ScanMapView.dateStyle),
+                        systemImage: "shippingbox.fill",
+                        coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+                    )
+                    .tint(event.persistentModelID == bestPriceScanID ? .green : AppTheme.shared.accent)
+                }
+            }
+        }
+        .frame(height: 140)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .allowsHitTesting(false)
+        .contentShape(Rectangle())
+        .onTapGesture { showScanMap = true }
+        .accessibilityLabel("Carte des scans de ce set")
+        .accessibilityAddTraits(.isButton)
     }
 
     /// Whether any price source is currently being (re)fetched — drives the
