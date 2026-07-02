@@ -10,18 +10,19 @@ struct BatchScanItem: Identifiable, Equatable {
     var isLoadingPrice = true
 
     /// Best (most negative) percentage gap between a scraped market price and the official
-    /// lego.com price — the same "± vs store" comparison `SetDetailView` shows per-row, used here
-    /// to pick the single number that ranks a set across a whole batch session. `nil` until both
-    /// the store price and at least one matching-currency quote are in.
+    /// lego.com price — the same "± vs store" comparison `SetDetailView` shows per-row
+    /// (`PriceComparison.percentVsStore`), used here to pick the single number that ranks a set
+    /// across a whole batch session. `nil` until both the store price and at least one
+    /// matching-currency quote are in.
     var dealPercent: Int? {
-        guard let storeAmount = storePrice?.amount, storeAmount > 0 else { return nil }
-        let storeCurrency = storePrice?.currency ?? "EUR"
-        let percents = priceQuotes.compactMap { quote -> Int? in
-            guard quote.currency == storeCurrency else { return nil }
-            let amount = (quote.amount as NSDecimalNumber).doubleValue
-            return Int((((amount - storeAmount) / storeAmount) * 100).rounded())
-        }
-        return percents.min()
+        priceQuotes.compactMap { quote in
+            PriceComparison.percentVsStore(
+                amount: quote.amount,
+                currency: quote.currency,
+                storeAmount: storePrice?.amount,
+                storeCurrency: storePrice?.currency
+            )
+        }.min()
     }
 }
 

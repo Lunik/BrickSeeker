@@ -15,8 +15,10 @@ enum PriceUpdateNotifier {
     /// Notification Center instead of stacking duplicates.
     static func notifyCompleted(total: Int) {
         let content = UNMutableNotificationContent()
-        content.title = "Prix mis à jour"
-        content.body = "Les prix de \(total) set\(total > 1 ? "s" : "") de votre collection ont été actualisés."
+        content.title = String(localized: "Prix mis à jour")
+        content.body = total > 1
+            ? String(localized: "Les prix de \(total) sets de votre collection ont été actualisés.")
+            : String(localized: "Les prix de \(total) set de votre collection ont été actualisés.")
         content.sound = .default
         let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)

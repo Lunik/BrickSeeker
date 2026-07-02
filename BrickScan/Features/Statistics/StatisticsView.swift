@@ -2,13 +2,11 @@ import SwiftUI
 import SwiftData
 import Charts
 
-private let frenchDateStyle = Date.FormatStyle(date: .abbreviated, time: .omitted, locale: Locale(identifier: "fr_FR"))
-
 struct StatisticsView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: StatisticsViewModel?
-    @State private var csvURL: URL?
-    @State private var pdfURL: URL?
+    @State private var csvFile: ShareableFile?
+    @State private var pdfFile: ShareableFile?
     let lookupViewModel: ScannerViewModel
 
     var body: some View {
@@ -40,28 +38,28 @@ struct StatisticsView: View {
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
         }
-        .onChange(of: viewModel?.isUpdatingAllPrices) { _, isUpdating in
-            UIApplication.shared.isIdleTimerDisabled = isUpdating ?? false
+        .onChange(of: CollectionPriceUpdater.shared.isRunning) { _, isUpdating in
+            UIApplication.shared.isIdleTimerDisabled = isUpdating
         }
-        .onChange(of: viewModel?.priceUpdateDone) { _, _ in
+        .onChange(of: CollectionPriceUpdater.shared.done) { _, _ in
             // Each increment means the batch just persisted one more set's price (see
             // CollectionPriceUpdater.start) — recompute so the total/coverage climb live
             // instead of staying frozen until the whole batch finishes (#48).
-            if viewModel?.isUpdatingAllPrices == true {
+            if CollectionPriceUpdater.shared.isRunning {
                 viewModel?.recomputeStats()
             }
         }
-        .sheet(item: $csvURL) { url in ShareSheet(items: [url]) }
-        .sheet(item: $pdfURL) { url in ShareSheet(items: [url]) }
+        .sheet(item: $csvFile) { file in ShareSheet(items: [file.url]) }
+        .sheet(item: $pdfFile) { file in ShareSheet(items: [file.url]) }
     }
 
     private func totalsSection(_ stats: CollectionStats) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Totaux").font(.headline)
             HStack(spacing: 12) {
-                statCard(title: "Sets", value: "\(stats.setCount)", icon: "shippingbox")
-                statCard(title: "Pièces", value: "\(stats.partCount)", icon: "puzzlepiece")
-                statCard(title: "Thèmes", value: "\(stats.themeCount)", icon: "tag")
+                StatCard(title: "Sets", value: "\(stats.setCount)", icon: "shippingbox")
+                StatCard(title: "Pièces", value: "\(stats.partCount)", icon: "puzzlepiece")
+                StatCard(title: "Thèmes", value: "\(stats.themeCount)", icon: "tag")
             }
         }
     }
@@ -91,7 +89,7 @@ struct StatisticsView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Répartition par thème").font(.headline)
             Chart(stats.themeBreakdown.prefix(10)) { entry in
-                BarMark(x: .value("Sets", entry.setCount), y: .value("Thème", viewModel.themeName(forThemeId: entry.themeId)))
+                BarMark(x: .value("Sets", entry.setCount), y: .value("Thème", ThemeNameStore.shared.displayName(forThemeId: entry.themeId)))
             }
             .frame(height: CGFloat(min(stats.themeBreakdown.count, 10)) * 28 + 20)
         }
@@ -153,29 +151,7 @@ struct StatisticsView: View {
     private func priceUpdateSection(_ viewModel: StatisticsViewModel) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Prix de la collection").font(.headline)
-
-            if let lastCompletedAt = viewModel.priceUpdateLastCompletedAt {
-                Text("Dernière actualisation : \(lastCompletedAt.formatted(frenchDateStyle))")
-                    .foregroundStyle(.secondary)
-            }
-
-            if viewModel.isUpdatingAllPrices {
-                ProgressView(value: Double(viewModel.priceUpdateDone), total: Double(max(viewModel.priceUpdateTotal, 1)))
-            }
-
-            if viewModel.isUpdatingAllPrices || viewModel.hasResumablePriceUpdate {
-                Text("\(viewModel.priceUpdateDone) / \(viewModel.priceUpdateTotal) sets")
-                    .foregroundStyle(.secondary)
-            }
-
-            if let errorMessage = viewModel.priceUpdateErrorMessage {
-                Text(errorMessage).foregroundStyle(Color.brickDanger).font(.footnote)
-            }
-
-            Button(priceUpdateButtonTitle(viewModel)) {
-                Task { await viewModel.updateAllPrices(modelContext: modelContext) }
-            }
-            .disabled(viewModel.isUpdatingAllPrices)
+            CollectionPriceUpdateSection(onCompleted: { viewModel.load() })
         }
     }
 
@@ -184,48 +160,32 @@ struct StatisticsView: View {
             Text("Exporter").font(.headline)
             HStack(spacing: 12) {
                 Button("Exporter en CSV") {
-                    csvURL = CollectionReportExporter.writeCSVToTempFile(
+                    csvFile = CollectionReportExporter.writeCSVToTempFile(
                         sets: viewModel.setsForExport,
                         priceEUR: viewModel.effectivePriceEUR
-                    )
+                    ).map(ShareableFile.init)
                 }
                 Button("Exporter en PDF") {
-                    pdfURL = CollectionReportExporter.writePDFToTempFile(
+                    pdfFile = CollectionReportExporter.writePDFToTempFile(
                         sets: viewModel.setsForExport,
                         stats: viewModel.stats,
                         priceEUR: viewModel.effectivePriceEUR,
                         lastSyncedAt: LocalRepository(modelContext: modelContext).lastFullSyncAt(),
-                        lastPriceUpdateAt: viewModel.priceUpdateLastCompletedAt
-                    )
+                        lastPriceUpdateAt: CollectionPriceUpdater.shared.lastCompletedAt
+                    ).map(ShareableFile.init)
                 }
             }
         }
     }
 
-    private func priceUpdateButtonTitle(_ viewModel: StatisticsViewModel) -> String {
-        if viewModel.isUpdatingAllPrices { return "Mise à jour en cours…" }
-        if viewModel.hasResumablePriceUpdate {
-            return "Reprendre (\(viewModel.priceUpdateTotal - viewModel.priceUpdateDone) restants)"
-        }
-        return "Actualiser les prix de la collection"
-    }
-
-    private func statCard(title: String, value: String, icon: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: icon).font(.title2).foregroundStyle(.tint)
-            Text(value).font(.title2.bold())
-            Text(title).font(.caption).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .foregroundStyle(.primary)
-    }
 }
 
-extension URL: @retroactive Identifiable {
-    public var id: String { absoluteString }
+/// Local `Identifiable` wrapper for `.sheet(item:)` — deliberately not a retroactive
+/// `Identifiable` conformance on `URL` itself, which would collide if Apple (or another
+/// module) ever declares one.
+private struct ShareableFile: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
 }
 
 private struct ShareSheet: UIViewControllerRepresentable {

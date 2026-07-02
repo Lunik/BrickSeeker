@@ -68,6 +68,9 @@ struct BrickScanApp: App {
             .tint(AppTheme.shared.accent)
             .preferredColorScheme(AppTheme.shared.colorScheme)
             .task {
+                // Start decoding the offline-catalogue snapshot in the background now, so the
+                // first offline lookup doesn't have to wait for a ~27k-set JSON decode (#69).
+                OfflineCatalogStore.shared.warmUp()
                 if homeViewModel == nil {
                     let vm = HomeViewModel(localRepository: LocalRepository(modelContext: modelContainer.mainContext))
                     homeViewModel = vm

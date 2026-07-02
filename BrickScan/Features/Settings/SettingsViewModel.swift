@@ -3,6 +3,7 @@ import Observation
 import SwiftData
 
 @Observable
+@MainActor
 final class SettingsViewModel {
     var apiKey: String
     var username = ""
@@ -16,8 +17,6 @@ final class SettingsViewModel {
     var offlineCatalogErrorMessage: String?
     var offlineCatalogMetadata: OfflineCatalogStore.Metadata?
 
-    var priceUpdateErrorMessage: String?
-
     private let offlineCatalogStore: OfflineCatalogStore
     /// Set right before `cancelActiveDownloadPreservingProgress()` so the resulting
     /// `.networkUnavailable` thrown back into `downloadOfflineCatalog()` is recognized as a
@@ -26,63 +25,22 @@ final class SettingsViewModel {
     private var pausedForBackgrounding = false
 
     private let repository: RebrickableRepositoryProtocol
-    private let priceRepository: PriceRepositoryProtocol
-    private let legoStoreRepository: LegoStoreRepositoryProtocol
 
     init(
         repository: RebrickableRepositoryProtocol = RebrickableRepository(),
-        offlineCatalogStore: OfflineCatalogStore = .shared,
-        priceRepository: PriceRepositoryProtocol = PriceRepository(),
-        legoStoreRepository: LegoStoreRepositoryProtocol = LegoStoreRepository()
+        offlineCatalogStore: OfflineCatalogStore = .shared
     ) {
         self.apiKey = KeychainService.shared.load(key: .apiKey) ?? ""
         self.isAccountLinked = KeychainService.shared.load(key: .userToken) != nil
         self.repository = repository
         self.offlineCatalogStore = offlineCatalogStore
         self.offlineCatalogMetadata = offlineCatalogStore.metadata
-        self.priceRepository = priceRepository
-        self.legoStoreRepository = legoStoreRepository
-    }
-
-    // MARK: - Collection price batch update
-
-    /// These five forward to `CollectionPriceUpdater.shared` (rather than mirroring its state
-    /// into local properties) so progress stays live even if `SettingsView` is dismissed and
-    /// reopened mid-run — the singleton, not this view model, owns the actual job.
-    @MainActor var isUpdatingAllPrices: Bool { CollectionPriceUpdater.shared.isRunning }
-    @MainActor var priceUpdateDone: Int { CollectionPriceUpdater.shared.done }
-    @MainActor var priceUpdateTotal: Int { CollectionPriceUpdater.shared.total }
-    @MainActor var hasResumablePriceUpdate: Bool { CollectionPriceUpdater.shared.hasResumableUpdate }
-    @MainActor var priceUpdateLastCompletedAt: Date? { CollectionPriceUpdater.shared.lastCompletedAt }
-
-    @MainActor
-    func updateAllPrices(modelContext: ModelContext) async {
-        priceUpdateErrorMessage = nil
-        let sets = LocalRepository(modelContext: modelContext).ownedSets().map { $0.asLegoSet() }
-        guard !sets.isEmpty else {
-            priceUpdateErrorMessage = "Aucun set dans votre collection."
-            return
-        }
-
-        await PriceUpdateNotifier.requestAuthorizationIfNeeded()
-
-        let result = await CollectionPriceUpdater.shared.start(
-            allSets: sets,
-            priceRepository: priceRepository,
-            legoStoreRepository: legoStoreRepository,
-            persist: CollectionPriceUpdater.persistClosure(modelContext: modelContext)
-        )
-
-        if result.completed {
-            PriceUpdateNotifier.notifyCompleted(total: result.total)
-        }
     }
 
     var hasResumableOfflineCatalogDownload: Bool {
         offlineCatalogStore.hasResumableDownload
     }
 
-    @MainActor
     func downloadOfflineCatalog() async {
         isUpdatingOfflineCatalog = true
         offlineCatalogDownloadProgress = 0
@@ -97,12 +55,12 @@ final class SettingsViewModel {
             offlineCatalogMetadata = offlineCatalogStore.metadata
         } catch let error as APIError {
             if pausedForBackgrounding {
-                offlineCatalogErrorMessage = "Téléchargement interrompu — il reprendra où il s'est arrêté à la prochaine ouverture."
+                offlineCatalogErrorMessage = String(localized: "Téléchargement interrompu — il reprendra où il s'est arrêté à la prochaine ouverture.")
             } else {
                 offlineCatalogErrorMessage = error.errorDescription
             }
         } catch {
-            offlineCatalogErrorMessage = "Téléchargement impossible. Vérifiez votre réseau."
+            offlineCatalogErrorMessage = String(localized: "Téléchargement impossible. Vérifiez votre réseau.")
         }
     }
 
@@ -110,33 +68,26 @@ final class SettingsViewModel {
     /// download is in flight, pauses it so its resume data is preserved instead of being lost to
     /// the app suspending/terminating mid-transfer (see `OfflineCatalogStore.
     /// cancelActiveDownloadPreservingProgress`).
-    @MainActor
     func handleScenePhaseChange(isActive: Bool) {
         guard !isActive else { return }
         if isUpdatingOfflineCatalog {
             pausedForBackgrounding = true
             offlineCatalogStore.cancelActiveDownloadPreservingProgress()
         }
-        if isUpdatingAllPrices {
+        if CollectionPriceUpdater.shared.isRunning {
             CollectionPriceUpdater.shared.cancelPreservingProgress()
         }
     }
 
-    @MainActor
     func purgeOfflineCatalog() {
         offlineCatalogStore.purge()
         offlineCatalogMetadata = nil
-    }
-
-    var isConfigured: Bool {
-        !apiKey.isEmpty
     }
 
     func save() {
         KeychainService.shared.save(key: .apiKey, value: apiKey)
     }
 
-    @MainActor
     func linkAccount() async -> Bool {
         guard !apiKey.isEmpty, !username.isEmpty, !password.isEmpty else { return false }
 
@@ -156,7 +107,7 @@ final class SettingsViewModel {
             password = ""
             return false
         } catch {
-            linkAccountErrorMessage = "Connexion impossible. Vérifiez votre réseau."
+            linkAccountErrorMessage = String(localized: "Connexion impossible. Vérifiez votre réseau.")
             password = ""
             return false
         }

@@ -14,23 +14,23 @@ enum APIError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unauthorized:
-            return "API Key invalide"
+            return String(localized: "API Key invalide")
         case .forbidden:
-            return "Nom d'utilisateur ou mot de passe incorrect"
+            return String(localized: "Nom d'utilisateur ou mot de passe incorrect")
         case .notFound:
-            return "Ressource introuvable"
+            return String(localized: "Ressource introuvable")
         case .serverError(let code):
-            return "Erreur serveur (\(code))"
+            return String(localized: "Erreur serveur (\(code))")
         case .decodingError:
-            return "Erreur lors du traitement de la réponse"
+            return String(localized: "Erreur lors du traitement de la réponse")
         case .networkUnavailable:
-            return "Connexion impossible. Vérifiez votre réseau."
+            return String(localized: "Connexion impossible. Vérifiez votre réseau.")
         case .rateLimited:
-            return "Trop de requêtes, veuillez réessayer plus tard"
+            return String(localized: "Trop de requêtes, veuillez réessayer plus tard")
         case .missingCredentials:
-            return "Identifiants manquants"
+            return String(localized: "Identifiants manquants")
         case .unknown:
-            return "Une erreur inconnue est survenue"
+            return String(localized: "Une erreur inconnue est survenue")
         }
     }
 }

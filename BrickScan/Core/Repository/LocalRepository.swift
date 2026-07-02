@@ -54,15 +54,6 @@ final class LocalRepository {
         cacheSet(legoSet, isInCollection: isInCollection, listId: listId, listName: nil)
     }
 
-    func recentlyScannedSets(limit: Int = 50) -> [CachedSet] {
-        let descriptor = FetchDescriptor<CachedSet>(
-            predicate: #Predicate { $0.wasScanned },
-            sortBy: [SortDescriptor(\.lastScannedAt, order: .reverse)]
-        )
-        let results = try? modelContext.fetch(descriptor)
-        return Array((results ?? []).prefix(limit))
-    }
-
     func scannedSetsCount() -> Int {
         (try? modelContext.fetchCount(FetchDescriptor<CachedSet>(predicate: #Predicate { $0.wasScanned }))) ?? 0
     }
@@ -105,7 +96,8 @@ final class LocalRepository {
     /// Full collection sync (offline browsing of owned sets). Distinct from the per-set
     /// fetchUserSet check (always live) — see AGENTS.md before touching either.
     func syncCollection(_ userSets: [UserSet], lists: [SetList]) {
-        let listNameById = Dictionary(uniqueKeysWithValues: lists.map { ($0.id, $0.name) })
+        // External API data — a duplicated list id must not crash the sync (first wins).
+        let listNameById = Dictionary(lists.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
 
         // A set owned in multiple lists appears multiple times; keep only the first occurrence
         // since CachedSet (like the rest of the app) assumes one current list per set.
@@ -114,12 +106,16 @@ final class LocalRepository {
             firstOccurrenceByNum[userSet.setNum] = userSet
         }
 
+        // One fetch of every cached set, indexed by setNum, instead of one fetch per owned set
+        // (a 500-set collection used to mean 500 fetches here, on every sync). The same array
+        // also serves the "previously owned but gone from the sync" cleanup below, which used to
+        // be its own re-fetch.
+        let allCached = (try? modelContext.fetch(FetchDescriptor<CachedSet>())) ?? []
+        let cachedBySetNum = Dictionary(allCached.map { ($0.setNum, $0) }, uniquingKeysWith: { first, _ in first })
+
         for (setNum, userSet) in firstOccurrenceByNum {
             let listName = userSet.listId.flatMap { listNameById[$0] }
-            let existing = try? modelContext.fetch(
-                FetchDescriptor<CachedSet>(predicate: #Predicate { $0.setNum == setNum })
-            ).first
-            if let existing {
+            if let existing = cachedBySetNum[setNum] {
                 existing.name = userSet.legoSet.name
                 existing.year = userSet.legoSet.year
                 existing.themeId = userSet.legoSet.themeId
@@ -140,11 +136,11 @@ final class LocalRepository {
             }
         }
 
+        // `isInCollection` is read after the upsert loop mutated these same instances, so a row
+        // that just became owned is current here — and skipped via `ownedSetNums` regardless,
+        // exactly like the old post-upsert re-fetch behaved.
         let ownedSetNums = Set(firstOccurrenceByNum.keys)
-        let previouslyOwned = (try? modelContext.fetch(
-            FetchDescriptor<CachedSet>(predicate: #Predicate { $0.isInCollection })
-        )) ?? []
-        for cached in previouslyOwned where !ownedSetNums.contains(cached.setNum) {
+        for cached in allCached where cached.isInCollection && !ownedSetNums.contains(cached.setNum) {
             if cached.wasScanned {
                 cached.isInCollection = false
                 cached.currentListId = nil
@@ -164,11 +160,11 @@ final class LocalRepository {
     }
 
     func cacheSetLists(_ setLists: [SetList]) {
+        // One fetch indexed by listId instead of one fetch per list.
+        let cached = (try? modelContext.fetch(FetchDescriptor<CachedSetList>())) ?? []
+        let cachedByListId = Dictionary(cached.map { ($0.listId, $0) }, uniquingKeysWith: { first, _ in first })
         for setList in setLists {
-            let existing = try? modelContext.fetch(
-                FetchDescriptor<CachedSetList>(predicate: #Predicate { $0.listId == setList.id })
-            ).first
-            if let existing {
+            if let existing = cachedByListId[setList.id] {
                 existing.name = setList.name
                 existing.numSets = setList.numSets
                 existing.lastFetchedAt = Date()
@@ -221,28 +217,30 @@ final class LocalRepository {
     /// cache TTL. Left `false` for cache-only writes (e.g. the collection-wide batch updater),
     /// where an empty/partial result can't be distinguished from a transient network hiccup.
     func cachePrices(_ quotes: [PriceQuote], setNum: String, reconcile: Bool = false) {
+        // One fetch of this set's cached price rows, indexed by source, instead of one fetch per
+        // quote — it also serves the reconcile pass.
+        let cached = (try? modelContext.fetch(
+            FetchDescriptor<CachedSetPrice>(predicate: #Predicate { $0.setNum == setNum })
+        )) ?? []
+        var cachedBySource = Dictionary(cached.map { ($0.source, $0) }, uniquingKeysWith: { first, _ in first })
+
         if reconcile {
             let fetchedSources = Set(quotes.map { $0.source.rawValue })
-            let cached = (try? modelContext.fetch(
-                FetchDescriptor<CachedSetPrice>(predicate: #Predicate { $0.setNum == setNum })
-            )) ?? []
             for entry in cached where !fetchedSources.contains(entry.source) {
                 modelContext.delete(entry)
             }
         }
         for quote in quotes {
             let source = quote.source.rawValue
-            let existing = try? modelContext.fetch(
-                FetchDescriptor<CachedSetPrice>(predicate: #Predicate { $0.setNum == setNum && $0.source == source })
-            ).first
-
-            if let existing {
+            if let existing = cachedBySource[source] {
                 existing.amount = quote.amount
                 existing.currency = quote.currency
                 existing.sourceURLString = quote.sourceURL?.absoluteString
                 existing.fetchedAt = quote.fetchedAt
             } else {
-                modelContext.insert(CachedSetPrice(setNum: setNum, quote: quote))
+                let inserted = CachedSetPrice(setNum: setNum, quote: quote)
+                modelContext.insert(inserted)
+                cachedBySource[source] = inserted // a duplicated source in `quotes` updates, not re-inserts
             }
             recordPriceHistory(setNum: setNum, source: source, amount: quote.amount, currency: quote.currency)
         }
@@ -254,11 +252,14 @@ final class LocalRepository {
     /// stacking duplicates every time `SetDetail` is opened or refreshed. Also trims entries older
     /// than 180 days so the table doesn't grow unbounded.
     private func recordPriceHistory(setNum: String, source: String, amount: Decimal, currency: String) {
-        let existing = (try? modelContext.fetch(
-            FetchDescriptor<PriceHistoryEntry>(predicate: #Predicate { $0.setNum == setNum && $0.source == source })
-        )) ?? []
-
-        if let mostRecent = existing.max(by: { $0.fetchedAt < $1.fetchedAt }),
+        // "Already recorded today?" needs only the most recent entry — sort + fetchLimit 1
+        // instead of loading the set's whole history into memory to run max(by:) on it.
+        var latestDescriptor = FetchDescriptor<PriceHistoryEntry>(
+            predicate: #Predicate { $0.setNum == setNum && $0.source == source },
+            sortBy: [SortDescriptor(\.fetchedAt, order: .reverse)]
+        )
+        latestDescriptor.fetchLimit = 1
+        if let mostRecent = (try? modelContext.fetch(latestDescriptor))?.first,
            Calendar.current.isDateInToday(mostRecent.fetchedAt) {
             return
         }
@@ -266,7 +267,12 @@ final class LocalRepository {
         modelContext.insert(PriceHistoryEntry(setNum: setNum, source: source, amount: amount, currency: currency))
 
         let cutoff = Date().addingTimeInterval(-180 * 24 * 60 * 60)
-        for entry in existing where entry.fetchedAt < cutoff {
+        let staleEntries = (try? modelContext.fetch(
+            FetchDescriptor<PriceHistoryEntry>(
+                predicate: #Predicate { $0.setNum == setNum && $0.source == source && $0.fetchedAt < cutoff }
+            )
+        )) ?? []
+        for entry in staleEntries {
             modelContext.delete(entry)
         }
     }

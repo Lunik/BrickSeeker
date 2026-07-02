@@ -3,6 +3,12 @@ import AVFoundation
 import Observation
 import UIKit
 
+/// Deliberately non-synthesized `==`: `.found` compares **only** `setNum`, ignoring the
+/// `CollectionStatus` payload, so a silent live reconcile of the same set doesn't count as a
+/// state change and re-present the already-open detail sheet. Consequence to keep in mind: an
+/// `.onChange(of: state)` observer does NOT re-fire when only the collection status changes for
+/// the same set — today that's compensated by `SetDetailView`'s own reconcile-on-appear. Don't
+/// "fix" this by comparing the payload without re-testing the sheet re-presentation flow.
 enum ScannerState: Equatable {
     case scanning
     case processing
@@ -83,7 +89,8 @@ final class ScannerViewModel {
     private var debounceTasks: [String: Task<Void, Never>] = [:]
     private var isPaused = false
 
-    private var lastFrameProcessedAt: Date?
+    /// Applied to `CameraController.frameInterval` in `onAppear` — the throttle itself runs on
+    /// the camera's session queue so discarded frames never reach the main actor (#70).
     private let frameProcessingInterval: TimeInterval = 0.8
 
     init(repository: RebrickableRepositoryProtocol = RebrickableRepository()) {
@@ -96,12 +103,15 @@ final class ScannerViewModel {
                 guard let self else { return }
                 if granted {
                     self.cameraController.configure()
+                    self.cameraController.frameInterval = self.frameProcessingInterval
                     self.cameraController.onFrame = { [weak self] buffer in
                         Task { @MainActor in
                             self?.handleFrame(buffer)
                         }
                     }
                     self.cameraController.start()
+                    // Warm up the Taptic Engine now so the first detection haptic isn't late.
+                    ScanFeedback.prepare()
                 } else {
                     self.state = .permissionDenied
                 }
@@ -201,11 +211,8 @@ final class ScannerViewModel {
     private func handleFrame(_ pixelBuffer: CVPixelBuffer) {
         guard !isPaused else { return }
 
-        if let lastFrameProcessedAt,
-           Date().timeIntervalSince(lastFrameProcessedAt) < frameProcessingInterval {
-            return
-        }
-        lastFrameProcessedAt = Date()
+        // Frames arrive already throttled to `frameProcessingInterval` — the interval test
+        // lives in `CameraController.captureOutput`, on the session queue (#70).
 
         // Detect on a crop of just the reticle, rather than the full frame with a Vision
         // `regionOfInterest` — restricts "what's detected" to "what's aimed at", and any
@@ -292,7 +299,7 @@ final class ScannerViewModel {
             state = .processing
         }
         if playsFeedbackSounds {
-            ScanFeedback.playCandidateDetectedSound()
+            ScanFeedback.playCandidateDetected()
         }
 
         // Skip the network round-trip (and its timeout) entirely when the device is known
@@ -300,17 +307,19 @@ final class ScannerViewModel {
         // for an actual `APIError.networkUnavailable`, instead of waiting to fail first.
         guard NetworkMonitor.shared.isConnected else {
             if !foundWasFromCache {
-                if let offlineSet = OfflineCatalogStore.shared.lookup(setNum: setNum) {
+                if let offlineSet = await OfflineCatalogStore.shared.lookup(setNum: setNum) {
                     foundWasOffline = true
                     presentFound(
                         offlineSet,
-                        .unknown("Hors-ligne — statut collection et prix à rafraîchir une fois reconnecté"),
+                        .unknown(UserMessage.offlineStatusAndPrices),
                         bypassBatch: bypassBatch,
                         wasOffline: true
                     )
+                    if playsFeedbackSounds { ScanFeedback.playResolutionSucceeded() }
                 } else if !isBatchCapturing {
-                    state = .error(APIError.networkUnavailable.errorDescription ?? "Erreur inconnue")
+                    state = .error(APIError.networkUnavailable.errorDescription ?? UserMessage.unknownError)
                     clearIdentificationLock(for: setNum)
+                    if playsFeedbackSounds { ScanFeedback.playResolutionFailed() }
                 }
                 if !isBatchCapturing {
                     isPaused = false
@@ -330,6 +339,9 @@ final class ScannerViewModel {
                     wasFromCache: foundWasFromCache,
                     wasOffline: foundWasOffline
                 )
+                // No haptic when this is just the live reconcile of a cache-instant result —
+                // the user already got the detection feedback for this candidate.
+                if playsFeedbackSounds, !foundWasFromCache { ScanFeedback.playResolutionSucceeded() }
             case .ambiguous(let sets):
                 state = .ambiguous(sets)
             case .notFound:
@@ -339,6 +351,7 @@ final class ScannerViewModel {
                 if !foundWasFromCache, !isBatchCapturing {
                     state = .notFound
                     isPaused = false
+                    if playsFeedbackSounds { ScanFeedback.playResolutionFailed() }
                     // "Set non trouvé" isn't a reason to lock this set number out for 30s like a
                     // successful identification — the user is told to rescan right away, so let
                     // them, including rescanning the exact same box (e.g. after repositioning it).
@@ -348,16 +361,18 @@ final class ScannerViewModel {
         } catch {
             if !foundWasFromCache {
                 if case .networkUnavailable = error as? APIError,
-                   let offlineSet = OfflineCatalogStore.shared.lookup(setNum: setNum) {
+                   let offlineSet = await OfflineCatalogStore.shared.lookup(setNum: setNum) {
                     presentFound(
                         offlineSet,
-                        .unknown("Hors-ligne — statut collection et prix à rafraîchir une fois reconnecté"),
+                        .unknown(UserMessage.offlineStatusAndPrices),
                         bypassBatch: bypassBatch,
                         wasOffline: true
                     )
+                    if playsFeedbackSounds { ScanFeedback.playResolutionSucceeded() }
                 } else if !isBatchCapturing {
-                    state = .error((error as? APIError)?.errorDescription ?? "Erreur inconnue")
+                    state = .error((error as? APIError)?.errorDescription ?? UserMessage.unknownError)
                     clearIdentificationLock(for: setNum)
+                    if playsFeedbackSounds { ScanFeedback.playResolutionFailed() }
                 }
                 if !isBatchCapturing {
                     isPaused = false
@@ -368,15 +383,15 @@ final class ScannerViewModel {
 
     private func fetchCollectionStatus(for setNum: String) async -> CollectionStatus {
         guard NetworkMonitor.shared.isConnected else {
-            return .unknown("Hors-ligne — statut collection à rafraîchir une fois reconnecté")
+            return .unknown(UserMessage.offlineStatus)
         }
         do {
             let userSet = try await repository.fetchUserSet(setNum: setNum)
             return userSet.map(CollectionStatus.inCollection) ?? .notInCollection
         } catch let error as APIError {
-            return .unknown(error.errorDescription ?? "Statut de collection inconnu")
+            return .unknown(error.errorDescription ?? UserMessage.unknownCollectionStatus)
         } catch {
-            return .unknown("Statut de collection inconnu")
+            return .unknown(UserMessage.unknownCollectionStatus)
         }
     }
 }

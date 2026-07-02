@@ -9,14 +9,12 @@ struct SetThumbnailView: View {
     var size: CGFloat = 52
 
     var body: some View {
-        CachedRemoteImage(url: URL(string: imageUrl ?? "")) {
-            AnyView(
-                Image(systemName: "shippingbox")
-                    .resizable()
-                    .scaledToFit()
-                    .foregroundStyle(.secondary)
-                    .padding(size * 0.18)
-            )
+        CachedRemoteImage(url: URL(string: imageUrl ?? ""), targetSize: size) {
+            Image(systemName: "shippingbox")
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(.secondary)
+                .padding(size * 0.18)
         }
         .padding(4)
         .frame(width: size, height: size)

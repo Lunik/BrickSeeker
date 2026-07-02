@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// One of LEGO's three primary brand colors, selectable in Settings. Each comes with a
-/// stronger variant (links/CTAs) and a soft tint (badges/highlights), matching the
+/// One of LEGO's three primary brand colors, selectable in Settings, matching the
 /// "BrickScan — Identité LEGO" design tokens.
 enum BrandColor: String, CaseIterable, Identifiable {
     case red, yellow, blue
@@ -24,21 +23,6 @@ enum BrandColor: String, CaseIterable, Identifiable {
         }
     }
 
-    var accentStrong: Color {
-        switch self {
-        case .red: Color(hex: "C20812")
-        case .yellow: Color(hex: "8F5E00")
-        case .blue: Color(hex: "00568F")
-        }
-    }
-
-    var accentSoft: Color {
-        switch self {
-        case .red: Color(hex: "FBE3E3")
-        case .yellow: Color(hex: "FCEFC9")
-        case .blue: Color(hex: "DBEAF6")
-        }
-    }
 }
 
 enum AppearanceMode: String, CaseIterable, Identifiable {
@@ -102,8 +86,6 @@ final class AppTheme {
     }
 
     var accent: Color { brandColor.accent }
-    var accentStrong: Color { brandColor.accentStrong }
-    var accentSoft: Color { brandColor.accentSoft }
     var colorScheme: ColorScheme? { appearanceMode.colorScheme }
 }
 

@@ -15,8 +15,8 @@ import Foundation
 /// are deliberately NOT part of this snapshot and stay live-only, same as everywhere else in the
 /// app (see AGENTS.md).
 ///
-/// `@unchecked Sendable` because `setsByNum`/`metadata` are only mutated from `@MainActor` call
-/// sites (`download()`/`purge()`) and read-only elsewhere; there's no concurrent mutation.
+/// `@unchecked Sendable` because `snapshotLoad`/`metadata` are only mutated from `@MainActor`
+/// members (`lookup`/`warmUp`/`download()`/`purge()`); there's no concurrent mutation.
 final class OfflineCatalogStore: @unchecked Sendable {
     static let shared = OfflineCatalogStore()
 
@@ -36,7 +36,13 @@ final class OfflineCatalogStore: @unchecked Sendable {
     /// `cancelActiveDownloadPreservingProgress()` reach the right task to cancel.
     private var activeDownload: ActiveDownload?
 
-    private(set) var setsByNum: [String: LegoSet]
+    /// Decodes the on-disk snapshot (~27k `LegoSet`s of JSON — genuinely slow) into the lookup
+    /// table. Created lazily by `snapshotLoadTask()` as a `Task.detached`, so the decode never
+    /// runs on the main actor — it used to run synchronously in `init`, i.e. on the main actor
+    /// in the middle of the first offline scan (`ScannerViewModel.resolveSet`) or Settings
+    /// opening, a perceptible freeze on older devices. `warmUp()` kicks it off at app launch so
+    /// the typical first lookup finds it already finished.
+    private var snapshotLoad: Task<[String: LegoSet], Never>?
     private(set) var metadata: Metadata?
 
     init() {
@@ -46,12 +52,8 @@ final class OfflineCatalogStore: @unchecked Sendable {
         self.metadataURL = directory.appendingPathComponent("OfflineCatalogMetadata.json")
         self.resumeDataURL = directory.appendingPathComponent("OfflineCatalogResumeData")
 
-        if let data = try? Data(contentsOf: snapshotURL),
-           let sets = try? JSONDecoder().decode([LegoSet].self, from: data) {
-            self.setsByNum = Dictionary(uniqueKeysWithValues: sets.map { ($0.setNum, $0) })
-        } else {
-            self.setsByNum = [:]
-        }
+        // Metadata is a few bytes — fine to keep loading synchronously. The snapshot itself is
+        // deliberately NOT loaded here; see `snapshotLoad`.
         if let data = try? Data(contentsOf: metadataURL) {
             self.metadata = try? JSONDecoder(dateDecodingStrategy: .iso8601).decode(Metadata.self, from: data)
         } else {
@@ -59,14 +61,39 @@ final class OfflineCatalogStore: @unchecked Sendable {
         }
     }
 
-    /// Mirrors `RebrickableRepository.resolveSet`'s two-suffix lookup order: most set numbers
-    /// encountered while scanning omit the "-1" variant suffix that Rebrickable's catalogue
-    /// actually keys on, so the exact variant is tried first.
-    func lookup(setNum: String) -> LegoSet? {
-        setsByNum["\(setNum)-1"] ?? setsByNum[setNum]
+    @MainActor
+    private func snapshotLoadTask() -> Task<[String: LegoSet], Never> {
+        if let snapshotLoad { return snapshotLoad }
+        let snapshotURL = self.snapshotURL
+        let task = Task.detached(priority: .userInitiated) { () -> [String: LegoSet] in
+            guard let data = try? Data(contentsOf: snapshotURL),
+                  let sets = try? JSONDecoder().decode([LegoSet].self, from: data) else { return [:] }
+            // `uniquingKeysWith`, not `uniqueKeysWithValues`: a duplicate set_num in the dump (or
+            // a corrupted snapshot) must not crash — first occurrence wins, matching
+            // syncCollection's dedup rule.
+            return Dictionary(sets.map { ($0.setNum, $0) }, uniquingKeysWith: { first, _ in first })
+        }
+        snapshotLoad = task
+        return task
     }
 
-    var isEmpty: Bool { setsByNum.isEmpty }
+    /// Starts decoding the snapshot in the background if it hasn't started yet. Called at app
+    /// launch so the decode overlaps the splash screen instead of blocking the first lookup.
+    @MainActor
+    func warmUp() {
+        _ = snapshotLoadTask()
+    }
+
+    /// Mirrors `RebrickableRepository.resolveSet`'s two-suffix lookup order: most set numbers
+    /// encountered while scanning omit the "-1" variant suffix that Rebrickable's catalogue
+    /// actually keys on, so the exact variant is tried first. Quasi-instant once the snapshot is
+    /// loaded (awaiting an already-finished task); before the user's first download the table is
+    /// simply empty and this returns nil, same as before.
+    @MainActor
+    func lookup(setNum: String) async -> LegoSet? {
+        let setsByNum = await snapshotLoadTask().value
+        return setsByNum["\(setNum)-1"] ?? setsByNum[setNum]
+    }
 
     /// True once a download has stopped (network loss, or the app backgrounding mid-download via
     /// `cancelActiveDownloadPreservingProgress()`) and left resumable data on disk — the next
@@ -94,7 +121,7 @@ final class OfflineCatalogStore: @unchecked Sendable {
 
         let snapshotURL = self.snapshotURL
         let metadataURL = self.metadataURL
-        let (sets, newMetadata) = try await Task.detached(priority: .userInitiated) {
+        let (setsByNum, newMetadata) = try await Task.detached(priority: .userInitiated) {
             let compressedData = try Data(contentsOf: downloadedFileURL)
             let csv = try Self.gunzip(compressedData)
             let sets = try Self.parseCSV(csv)
@@ -106,10 +133,13 @@ final class OfflineCatalogStore: @unchecked Sendable {
             let metadataData = try JSONEncoder(dateEncodingStrategy: .iso8601).encode(newMetadata)
             try metadataData.write(to: metadataURL, options: .atomic)
 
-            return (sets, newMetadata)
+            let setsByNum = Dictionary(sets.map { ($0.setNum, $0) }, uniquingKeysWith: { first, _ in first })
+            return (setsByNum, newMetadata)
         }.value
 
-        setsByNum = Dictionary(uniqueKeysWithValues: sets.map { ($0.setNum, $0) })
+        // Replace any pending/completed lazy load with the freshly-built table (already
+        // completed — awaiting it is immediate).
+        snapshotLoad = Task { setsByNum }
         metadata = newMetadata
     }
 
@@ -137,7 +167,7 @@ final class OfflineCatalogStore: @unchecked Sendable {
         try? FileManager.default.removeItem(at: snapshotURL)
         try? FileManager.default.removeItem(at: metadataURL)
         clearResumeData()
-        setsByNum = [:]
+        snapshotLoad = Task { [:] }
         metadata = nil
     }
 
@@ -286,21 +316,39 @@ final class OfflineCatalogStore: @unchecked Sendable {
         }
         let flags = data[data.startIndex + 3]
         var offset = 10
+        // Every header read below is bounds-checked against `limit` before touching the byte:
+        // `Data`'s subscript traps (not throws) past `endIndex`, and a truncated/corrupt download
+        // must surface as a thrown decoding error the UI can show — never a crash (same
+        // philosophy as the unaligned-ISIZE fix documented below). The last 8 bytes are the
+        // CRC32+ISIZE trailer, so no header field may reach into them.
+        let limit = data.count - 8
 
         if flags & 0x04 != 0 { // FEXTRA
+            guard offset + 2 <= limit else {
+                throw APIError.decodingError(CocoaError(.fileReadCorruptFile))
+            }
             let xlen = Int(data[data.startIndex + offset]) | (Int(data[data.startIndex + offset + 1]) << 8)
             offset += 2 + xlen
         }
         if flags & 0x08 != 0 { // FNAME
-            while data[data.startIndex + offset] != 0 { offset += 1 }
+            while offset < limit, data[data.startIndex + offset] != 0 { offset += 1 }
+            guard offset < limit else { // no NUL terminator before the trailer
+                throw APIError.decodingError(CocoaError(.fileReadCorruptFile))
+            }
             offset += 1
         }
         if flags & 0x10 != 0 { // FCOMMENT
-            while data[data.startIndex + offset] != 0 { offset += 1 }
+            while offset < limit, data[data.startIndex + offset] != 0 { offset += 1 }
+            guard offset < limit else {
+                throw APIError.decodingError(CocoaError(.fileReadCorruptFile))
+            }
             offset += 1
         }
         if flags & 0x02 != 0 { // FHCRC
             offset += 2
+        }
+        guard offset <= limit else {
+            throw APIError.decodingError(CocoaError(.fileReadCorruptFile))
         }
 
         let payload = data.subdata(in: (data.startIndex + offset)..<(data.endIndex - 8))
@@ -338,25 +386,12 @@ final class OfflineCatalogStore: @unchecked Sendable {
     }
 
     /// Parses the `set_num,name,year,theme_id,num_parts,img_url` columns Rebrickable's dump
-    /// publishes into `LegoSet` (`set_img_url` here is renamed from the dump's `img_url`). Does a
-    /// straightforward quoted-field CSV scan rather than pulling in a dependency, since the shape
-    /// is fixed and small (six columns, this is the only place in the app that needs it).
+    /// publishes into `LegoSet` (`set_img_url` here is renamed from the dump's `img_url`).
+    /// Line splitting and RFC 4180 quote handling live in the shared `CSV` helper (also used by
+    /// `ThemeNameStore`) — see its doc comments for the CRLF gotcha found against a real dump.
     static func parseCSV(_ data: Data) throws -> [LegoSet] {
-        guard let text = String(data: data, encoding: .utf8) else {
-            throw APIError.decodingError(CocoaError(.fileReadCorruptFile))
-        }
-
         var sets: [LegoSet] = []
-        // NOT `split(separator: "\n")`: the real dump uses CRLF line endings, and Swift's
-        // `Character` treats "\r\n" as a single indivisible grapheme cluster that never equals
-        // the standalone "\n" `Character` — that split found zero line breaks against a real
-        // download (the whole file became "one line"), silently producing 0 parsed sets with no
-        // error. `isNewline` recognizes "\r\n", "\n", and "\r" all as line breaks.
-        var lines = text.split(whereSeparator: { $0.isNewline }).makeIterator()
-        _ = lines.next() // header
-
-        while let line = lines.next() {
-            let fields = Self.splitCSVLine(String(line))
+        for fields in try CSV.records(in: data) {
             guard fields.count >= 6,
                   let year = Int(fields[2]),
                   let themeId = Int(fields[3]),
@@ -377,25 +412,6 @@ final class OfflineCatalogStore: @unchecked Sendable {
             )
         }
         return sets
-    }
-
-    private static func splitCSVLine(_ line: String) -> [String] {
-        var fields: [String] = []
-        var current = ""
-        var insideQuotes = false
-        var iterator = line.makeIterator()
-        while let char = iterator.next() {
-            if char == "\"" {
-                insideQuotes.toggle()
-            } else if char == "," && !insideQuotes {
-                fields.append(current)
-                current = ""
-            } else {
-                current.append(char)
-            }
-        }
-        fields.append(current)
-        return fields
     }
 }
 

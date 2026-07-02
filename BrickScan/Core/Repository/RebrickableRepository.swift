@@ -116,7 +116,7 @@ final class RebrickableRepository: RebrickableRepositoryProtocol, @unchecked Sen
     // the HTTP status matters. Real collection status is read back separately
     // via fetchUserSet.
     func addSetToList(setNum: String, listId: Int) async throws {
-        try await withUserTokenRetryVoid { userToken in
+        try await withUserTokenRetry { userToken in
             try await self.client.post(
                 path: RebrickableEndpoint.setListSetsPath(userToken: userToken, listId: listId),
                 formBody: ["set_num": setNum, "quantity": "1"]
@@ -128,7 +128,7 @@ final class RebrickableRepository: RebrickableRepositoryProtocol, @unchecked Sen
     // Rebrickable has no endpoint to change a set's list_id directly, so a
     // move is a delete from the old list followed by an add to the new one.
     func moveSetToList(setNum: String, fromListId: Int, toListId: Int) async throws {
-        try await withUserTokenRetryVoid { userToken in
+        try await withUserTokenRetry { userToken in
             try await self.client.delete(
                 path: RebrickableEndpoint.setListSetPath(userToken: userToken, listId: fromListId, setNum: setNum)
             )
@@ -138,7 +138,7 @@ final class RebrickableRepository: RebrickableRepositoryProtocol, @unchecked Sen
 
     // Endpoint 7
     func removeSetFromCollection(setNum: String) async throws {
-        try await withUserTokenRetryVoid { userToken in
+        try await withUserTokenRetry { userToken in
             try await self.client.delete(
                 path: RebrickableEndpoint.userSetPath(userToken: userToken, setNum: setNum)
             )
@@ -176,18 +176,6 @@ final class RebrickableRepository: RebrickableRepositoryProtocol, @unchecked Sen
         } catch APIError.forbidden {
             let newToken = try await reauthenticateAndRefreshToken()
             return try await operation(newToken)
-        }
-    }
-
-    private func withUserTokenRetryVoid(_ operation: @escaping (String) async throws -> Void) async throws {
-        guard let userToken = KeychainService.shared.load(key: .userToken) else {
-            throw APIError.missingCredentials
-        }
-        do {
-            try await operation(userToken)
-        } catch APIError.forbidden {
-            let newToken = try await reauthenticateAndRefreshToken()
-            try await operation(newToken)
         }
     }
 

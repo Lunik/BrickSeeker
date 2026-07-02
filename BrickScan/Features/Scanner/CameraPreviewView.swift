@@ -14,6 +14,14 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     private let ciContext = CIContext()
 
     var onFrame: ((CVPixelBuffer) -> Void)?
+    /// Minimum interval between frames delivered to `onFrame`; 0 delivers everything. The
+    /// scanning pipeline only processes ~1 frame per 0.8 s (`ScannerViewModel.
+    /// frameProcessingInterval`, which sets this) — testing the interval here, on the session
+    /// queue, means the ~29 discarded frames per second never allocate a `Task` and hop to the
+    /// main actor just to be thrown away (#70).
+    var frameInterval: TimeInterval = 0
+    /// Only touched from `sessionQueue` (the sample-buffer delegate queue).
+    private var lastFrameDeliveredAt: Date?
 
     func configure() {
         sessionQueue.async {
@@ -70,6 +78,12 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
         from connection: AVCaptureConnection
     ) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        if frameInterval > 0,
+           let lastFrameDeliveredAt,
+           Date().timeIntervalSince(lastFrameDeliveredAt) < frameInterval {
+            return
+        }
+        lastFrameDeliveredAt = Date()
         onFrame?(pixelBuffer)
     }
 

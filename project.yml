@@ -4,12 +4,18 @@ options:
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
+  # The app's UI text is French-only by design; the String Catalog
+  # (BrickScan/Resources/Localizable.xcstrings) uses fr as its source language.
+  developmentLanguage: fr
 
 settings:
   base:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     ENABLE_PREVIEWS: YES
+    # Extract Swift string literals into the String Catalog on build (Xcode keeps
+    # Localizable.xcstrings in sync automatically once this is on).
+    SWIFT_EMIT_LOC_STRINGS: YES
 
 targets:
   BrickScan:
