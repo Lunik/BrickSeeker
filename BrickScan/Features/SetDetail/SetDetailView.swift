@@ -157,13 +157,13 @@ struct SetDetailView: View {
                 }
                 Button("Annuler", role: .cancel) {}
             }
-            .alert("Quel prix as-tu vu ?", isPresented: $showPricePrompt) {
-                TextField("Prix en €", text: $priceInputText)
-                    .keyboardType(.decimalPad)
-                Button("Enregistrer", action: savePricePrompt)
-                Button("Passer", role: .cancel) {}
-            } message: {
-                Text("Renseigne le prix affiché en magasin pour ce scan — utile pour retrouver le meilleur prix vu ici.")
+            .sheet(isPresented: $showPricePrompt) {
+                ScanPriceEntryView(
+                    setNum: viewModel.legoSet.setNum,
+                    setName: viewModel.legoSet.name,
+                    priceText: $priceInputText,
+                    onSave: savePricePrompt
+                )
             }
             .toast($viewModel.toastMessage)
         }
@@ -200,7 +200,10 @@ struct SetDetailView: View {
         if let existing = event.priceSeenEUR {
             priceInputText = String(format: "%.2f", existing).replacingOccurrences(of: ".", with: ",")
         }
-        showPricePrompt = true
+        // Defer to the next runloop tick: SetDetail is itself a sheet, and presenting a second
+        // sheet from within the same transaction that presented this view is unreliable in
+        // SwiftUI (same reason BatchSessionSummaryView defers its detail lookup).
+        DispatchQueue.main.async { showPricePrompt = true }
     }
 
     private func savePricePrompt() {
@@ -278,9 +281,9 @@ struct SetDetailView: View {
     /// recent scan.
     private var bestPriceScanID: PersistentIdentifier? {
         scanEvents
-            .filter { $0.priceSeenEUR != nil }
-            .min { ($0.priceSeenEUR ?? .infinity) < ($1.priceSeenEUR ?? .infinity) }?
-            .persistentModelID
+            .compactMap { event in event.priceSeenEUR.map { (event, $0) } }
+            .min { $0.1 < $1.1 }?
+            .0.persistentModelID
     }
 
     /// "Tes scans" — one row per camera scan of this set (issue #46), newest first, with the

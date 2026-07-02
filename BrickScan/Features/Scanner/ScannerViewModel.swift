@@ -411,9 +411,8 @@ final class ScannerViewModel {
     /// the set), and re-opening a set already captured earlier in the same batch session
     /// (`bypassBatch`, set only by `lookupSetForDetail` from the batch summary — a re-view, not a
     /// new physical scan).
-    @discardableResult
-    private func recordScanEventIfNeeded(setNum: String, bypassBatch: Bool) -> ScanEvent? {
-        guard playsFeedbackSounds, !bypassBatch, let localRepository else { return nil }
+    private func recordScanEventIfNeeded(setNum: String, bypassBatch: Bool) {
+        guard playsFeedbackSounds, !bypassBatch, let localRepository else { return }
         let cached = localRepository.cachedSet(setNum: setNum)
         // Best locally-known "new" price right now — the "relevé de prix du moment" the scan
         // history highlights as "meilleur prix vu ici", and the starting value offered in the
@@ -423,11 +422,14 @@ final class ScannerViewModel {
             quotes: localRepository.cachedPrices(setNum: setNum)
         )
         let event = localRepository.recordScanEvent(setNum: setNum, priceSeenEUR: priceSeen)
+
+        // A set already in the collection isn't a deal being hunted: no "where did I see it"
+        // location capture and no "what price did you see" prompt — same rationale, the geo/price
+        // memory only matters while the set is still a candidate purchase (issue #46).
+        guard cached?.isInCollection != true else { return }
         pendingPriceScanEvent = event
 
-        // No location for a set already in the collection — same rule that strips locations
-        // when a set gets added: the "where" only matters while still hunting for the deal.
-        guard ScanLocationService.shared.isEnabled, cached?.isInCollection != true else { return event }
+        guard ScanLocationService.shared.isEnabled else { return }
         Task { [weak self] in
             guard let fix = await ScanLocationService.shared.captureLocation() else { return }
             let placeName = await ScanLocationService.reverseGeocode(latitude: fix.latitude, longitude: fix.longitude)
@@ -438,7 +440,6 @@ final class ScannerViewModel {
                 placeName: placeName
             )
         }
-        return event
     }
 
     private func fetchCollectionStatus(for setNum: String) async -> CollectionStatus {

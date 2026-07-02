@@ -52,8 +52,13 @@ final class ScanLocationService: NSObject, CLLocationManagerDelegate {
     /// timeout (a scan far outlives the moment its location is relevant — better a scan without
     /// position than a position captured three aisles later).
     func captureLocation(timeout: TimeInterval = 15) async -> (latitude: Double, longitude: Double)? {
+        // Read the manager's live status, not the cached `authorizationStatus` property: the
+        // latter is updated asynchronously from the `nonisolated` delegate callback, so right
+        // after the user grants permission it can still read `.notDetermined` and drop the very
+        // first scan's location. `CLLocationManager.authorizationStatus` is synchronous and current.
+        let status = manager.authorizationStatus
         guard isEnabled,
-              authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways else {
+              status == .authorizedWhenInUse || status == .authorizedAlways else {
             return nil
         }
         manager.requestLocation()
