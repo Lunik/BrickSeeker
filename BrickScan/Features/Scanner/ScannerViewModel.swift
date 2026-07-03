@@ -251,6 +251,16 @@ final class ScannerViewModel {
             candidateThumbnail = cameraController.zoomedThumbnail(in: reticleImage, detectionBox: detectionBox)
         }
         candidateDetected = true
+        // Freeze `handleFrame` the moment a candidate enters verification, rather than waiting
+        // for `resolveSet` to flip this after the 1.5s debounce — otherwise a second candidate
+        // seen during that window cancels/restarts the debounce for it, and a wall of visible
+        // set numbers never lets a single one actually resolve (issue #90). Skipped in batch mode,
+        // which deliberately keeps several boxes resolving concurrently (see `resolveSet`'s
+        // `isBatchCapturing` and issue #13) — pausing here would serialize that back to one at a
+        // time.
+        if !isBatchModeEnabled {
+            isPaused = true
+        }
         debounceTasks[setNum]?.cancel()
         // Offline, there's no network round-trip to debounce against — resolving immediately
         // avoids flashing a misleading "Vérification..." label for 1.5s before falling back to
