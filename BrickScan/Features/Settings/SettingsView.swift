@@ -8,6 +8,7 @@ private let frenchDateStyle = Date.FormatStyle(date: .abbreviated, time: .omitte
 struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
     @Bindable private var theme = AppTheme.shared
+    @Bindable private var scanLocation = ScanLocationService.shared
     @State private var preferredPPPText: String = ""
     @State private var showPrivacyDetail = false
     @State private var isAPIKeyVisible = false
@@ -142,6 +143,28 @@ struct SettingsView: View {
                     Text("Compte Rebrickable")
                 } footer: {
                     Text("Nécessaire pour voir et gérer votre collection. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session.")
+                }
+
+                Section {
+                    Toggle("Enregistrer la position des scans", isOn: $scanLocation.isEnabled)
+                        .onChange(of: scanLocation.isEnabled) { _, enabled in
+                            if enabled {
+                                scanLocation.requestPermissionIfNeeded()
+                            }
+                        }
+                    if scanLocation.isPermissionBlocked {
+                        Text("L'accès à la position est refusé dans les réglages iOS — aucune position ne sera enregistrée.")
+                            .foregroundStyle(Color.brickDanger)
+                            .font(.footnote)
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            Link("Ouvrir les réglages iOS", destination: url)
+                                .font(.footnote)
+                        }
+                    }
+                } header: {
+                    Text("Localisation des scans")
+                } footer: {
+                    Text("Capture la position (approximative) au moment d'un scan caméra, pour retrouver le magasin où tu as vu le meilleur prix. Stockée uniquement sur l'appareil, et supprimée dès que le set rejoint ta collection.")
                 }
 
                 Section {

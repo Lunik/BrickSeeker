@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import Charts
+import MapKit
 
 struct SetDetailView: View {
     @State private var viewModel: SetDetailViewModel
@@ -8,7 +9,20 @@ struct SetDetailView: View {
     @State private var showMoveListPicker = false
     @State private var showRemoveConfirmation = false
     @State private var showSettings = false
+    @State private var showScanMap = false
     @State private var priceHistory: [PriceHistoryEntry] = []
+    /// Seeded once from `pendingPriceScanEvent` — see the `init` doc. `@State`'s initial value is
+    /// only applied the first time this view identity is created, so later re-inits triggered by
+    /// unrelated `viewModel` changes (e.g. a silent collection-status reconcile) can't retrigger
+    /// the prompt.
+    @State private var priceScanEventForPrompt: ScanEvent?
+    @State private var hasShownPricePrompt = false
+    @State private var showPricePrompt = false
+    @State private var priceInputText = ""
+    /// Live query (not a one-shot repository read) so a location fix that arrives while the
+    /// sheet is already open — the common case, GPS + geocoding take a few seconds — updates
+    /// the freshly-recorded scan row in place.
+    @Query private var scanEvents: [ScanEvent]
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
@@ -24,6 +38,7 @@ struct SetDetailView: View {
         initialStorePriceFetchedAt: Date? = nil,
         reconcileOnAppear: Bool = false,
         isOfflineResult: Bool = false,
+        pendingPriceScanEvent: ScanEvent? = nil,
         onScanAgain: @escaping () -> Void
     ) {
         _viewModel = State(initialValue: SetDetailViewModel(
@@ -33,6 +48,12 @@ struct SetDetailView: View {
             initialStorePrice: initialStorePrice,
             initialStorePriceFetchedAt: initialStorePriceFetchedAt
         ))
+        let setNum = legoSet.setNum
+        _scanEvents = Query(
+            filter: #Predicate<ScanEvent> { $0.setNum == setNum },
+            sort: [SortDescriptor(\.scannedAt, order: .reverse)]
+        )
+        _priceScanEventForPrompt = State(initialValue: pendingPriceScanEvent)
         self.reconcileOnAppear = reconcileOnAppear
         self.isOfflineResult = isOfflineResult
         self.onScanAgain = onScanAgain
@@ -74,6 +95,8 @@ struct SetDetailView: View {
 
                     priceHistoryChart
 
+                    scanHistorySection
+
                     if viewModel.isLoading {
                         ProgressView()
                     }
@@ -110,6 +133,9 @@ struct SetDetailView: View {
             .sheet(isPresented: $showSettings) {
                 SettingsView()
             }
+            .sheet(isPresented: $showScanMap) {
+                ScanMapView(setNum: viewModel.legoSet.setNum)
+            }
             .sheet(isPresented: $showListPicker) {
                 ListPickerView { listId, listName in
                     Task { await viewModel.addToList(listId: listId, listName: listName) }
@@ -131,11 +157,20 @@ struct SetDetailView: View {
                 }
                 Button("Annuler", role: .cancel) {}
             }
+            .sheet(isPresented: $showPricePrompt) {
+                ScanPriceEntryView(
+                    setNum: viewModel.legoSet.setNum,
+                    setName: viewModel.legoSet.name,
+                    priceText: $priceInputText,
+                    onSave: savePricePrompt
+                )
+            }
             .toast($viewModel.toastMessage)
         }
         .onChange(of: viewModel.collectionStatus) { _, _ in syncCache() }
         .onChange(of: viewModel.collectionListName) { _, _ in syncCache() }
         .onChange(of: viewModel.storePriceFetchedAt) { _, _ in syncStorePriceCache() }
+        .onAppear { presentPricePromptIfNeeded() }
         .task {
             if reconcileOnAppear {
                 await viewModel.silentlyReconcileCollectionStatus()
@@ -152,6 +187,30 @@ struct SetDetailView: View {
         .task {
             reloadPriceHistory()
         }
+    }
+
+    /// Shows the "quel prix as-tu vu ?" prompt exactly once per sheet presentation, only when this
+    /// SetDetail was opened from a genuine new camera scan (`priceScanEventForPrompt` — see
+    /// `ScannerViewModel.pendingPriceScanEvent`). The event always starts with `priceSeenEUR ==
+    /// nil` (see `recordScanEventIfNeeded`) — the field only ever gets a value the user typed here
+    /// — but `event.priceSeenEUR` is still read defensively in case that ever changes upstream.
+    private func presentPricePromptIfNeeded() {
+        guard !hasShownPricePrompt, let event = priceScanEventForPrompt else { return }
+        hasShownPricePrompt = true
+        if let existing = event.priceSeenEUR {
+            priceInputText = String(format: "%.2f", existing).replacingOccurrences(of: ".", with: ",")
+        }
+        // Defer to the next runloop tick: SetDetail is itself a sheet, and presenting a second
+        // sheet from within the same transaction that presented this view is unreliable in
+        // SwiftUI (same reason BatchSessionSummaryView defers its detail lookup).
+        DispatchQueue.main.async { showPricePrompt = true }
+    }
+
+    private func savePricePrompt() {
+        guard let event = priceScanEventForPrompt else { return }
+        let normalised = priceInputText.replacingOccurrences(of: ",", with: ".")
+        guard let value = Double(normalised), value > 0 else { return }
+        LocalRepository(modelContext: modelContext).updateScanEventPrice(event, priceSeenEUR: value)
     }
 
     private func syncStorePriceCache() {
@@ -206,6 +265,109 @@ struct SetDetailView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .cardStyle(padding: 12)
         }
+    }
+
+    /// How many scan rows "Tes scans" shows before collapsing into an "et N scans plus
+    /// anciens" line — keeps a much-rescanned set from bloating the sheet.
+    private static let maxVisibleScanRows = 6
+
+    private var locatedScanEvents: [ScanEvent] {
+        scanEvents.filter(\.hasLocation)
+    }
+
+    /// The scan where the lowest price was seen — the "meilleur prix vu ici" the localized
+    /// history exists for. Nil when no scan has a recorded price. `scanEvents` is sorted
+    /// newest-first and `min(by:)` keeps the first of equals, so a tie goes to the most
+    /// recent scan.
+    private var bestPriceScanID: PersistentIdentifier? {
+        scanEvents
+            .compactMap { event in event.priceSeenEUR.map { (event, $0) } }
+            .min { $0.1 < $1.1 }?
+            .0.persistentModelID
+    }
+
+    /// "Tes scans" — one row per camera scan of this set (issue #46), newest first, with the
+    /// place captured at scan time when location was enabled, plus a mini-map of the located
+    /// ones. Hidden entirely for a set never camera-scanned.
+    @ViewBuilder
+    private var scanHistorySection: some View {
+        if !scanEvents.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Tes scans")
+                        .font(.subheadline.bold())
+                    Spacer()
+                    Text("\(scanEvents.count) scan\(scanEvents.count > 1 ? "s" : "")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                ForEach(scanEvents.prefix(Self.maxVisibleScanRows), id: \.persistentModelID) { event in
+                    scanEventRow(event)
+                }
+                if scanEvents.count > Self.maxVisibleScanRows {
+                    Text("et \(scanEvents.count - Self.maxVisibleScanRows) scans plus anciens")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if !locatedScanEvents.isEmpty {
+                    scanMiniMap
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardStyle(padding: 12)
+        }
+    }
+
+    private func scanEventRow(_ event: ScanEvent) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(event.scannedAt.formatted(ScanMapView.dateStyle))
+                if let placeName = event.placeName {
+                    Label(placeName, systemImage: "mappin.and.ellipse")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                if let price = event.priceSeenEUR {
+                    Text(Decimal(price).formatted(.currency(code: "EUR")))
+                        .foregroundStyle(.primary)
+                }
+                if event.persistentModelID == bestPriceScanID {
+                    Text(event.hasLocation ? "Meilleur prix vu ici" : "Meilleur prix")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.green)
+                }
+            }
+        }
+        .font(.subheadline)
+    }
+
+    /// Non-interactive preview of where this set was scanned — tapping opens the full-screen
+    /// map (`ScanMapView`), where pins are selectable.
+    private var scanMiniMap: some View {
+        Map {
+            ForEach(locatedScanEvents, id: \.persistentModelID) { event in
+                if let latitude = event.latitude, let longitude = event.longitude {
+                    Marker(
+                        event.placeName ?? event.scannedAt.formatted(ScanMapView.dateStyle),
+                        systemImage: "shippingbox.fill",
+                        coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+                    )
+                    .tint(event.persistentModelID == bestPriceScanID ? .green : AppTheme.shared.accent)
+                }
+            }
+        }
+        .frame(height: 140)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .allowsHitTesting(false)
+        .contentShape(Rectangle())
+        .onTapGesture { showScanMap = true }
+        .accessibilityLabel("Carte des scans de ce set")
+        .accessibilityAddTraits(.isButton)
     }
 
     /// Whether any price source is currently being (re)fetched — drives the

@@ -33,6 +33,9 @@ final class LocalRepository {
             let cached = CachedSet(from: legoSet, isInCollection: isInCollection, currentListId: listId, currentListName: listName)
             modelContext.insert(cached)
         }
+        if isInCollection {
+            stripScanLocations(setNums: [legoSet.setNum])
+        }
         try? modelContext.save()
     }
 
@@ -150,6 +153,10 @@ final class LocalRepository {
             }
         }
 
+        // Owned sets lose their scan locations — the position's only purpose is "in which store
+        // did I see this deal", moot once the set is in the collection (issue #46).
+        stripScanLocations(setNums: ownedSetNums)
+
         cacheSetLists(lists)
         if let syncState = try? modelContext.fetch(FetchDescriptor<CollectionSyncState>()).first {
             syncState.lastFullSyncAt = Date()
@@ -186,8 +193,11 @@ final class LocalRepository {
     /// Deliberately does NOT touch `PriceHistoryEntry` — the price-evolution chart in
     /// `SetDetail` is the whole point of recording it over time, and "vider le cache"
     /// is meant to discard reconstructible short-TTL data (cached sets/lists/current
-    /// prices), not a history the app can't get back by re-fetching.
+    /// prices), not a history the app can't get back by re-fetching. `ScanEvent` rows are
+    /// kept for the same reason (they're the "when did I scan this" history), but their
+    /// location fields are stripped: purging the history revokes the "where" (issue #46).
     func clearAll() {
+        stripScanLocations(setNums: nil)
         if let sets = try? modelContext.fetch(FetchDescriptor<CachedSet>()) {
             sets.forEach { modelContext.delete($0) }
         }
@@ -283,5 +293,48 @@ final class LocalRepository {
             FetchDescriptor<PriceHistoryEntry>(predicate: #Predicate { $0.setNum == setNum })
         )) ?? []
         return entries.sorted { $0.fetchedAt < $1.fetchedAt }
+    }
+
+    // MARK: - Scan events (issue #46)
+
+    /// Appends one `ScanEvent` — called from `ScannerViewModel.resolveSet` for camera scans only
+    /// (see the doc on `ScanEvent`). Returned so the caller can attach a location fix later.
+    func recordScanEvent(setNum: String, priceSeenEUR: Double? = nil) -> ScanEvent {
+        let event = ScanEvent(setNum: setNum, priceSeenEUR: priceSeenEUR)
+        modelContext.insert(event)
+        try? modelContext.save()
+        return event
+    }
+
+    /// Overwrites the auto-resolved "price seen" with what the user actually typed in the
+    /// "quel prix as-tu vu ?" prompt shown right after a camera scan.
+    func updateScanEventPrice(_ event: ScanEvent, priceSeenEUR: Double?) {
+        event.priceSeenEUR = priceSeenEUR
+        try? modelContext.save()
+    }
+
+    /// Attaches a (possibly late-arriving) location fix to a scan event. No-ops if the set
+    /// joined the collection in the meantime — the strip-on-add rule must win the race against
+    /// a slow GPS fix, or a just-bought set would end up located anyway.
+    func attachLocation(to event: ScanEvent, latitude: Double, longitude: Double, placeName: String?) {
+        guard cachedSet(setNum: event.setNum)?.isInCollection != true else { return }
+        event.latitude = latitude
+        event.longitude = longitude
+        event.placeName = placeName
+        try? modelContext.save()
+    }
+
+    /// Removes the location fields (never the rows — the "when" history stays) from scan
+    /// events. `setNums == nil` strips everything (history purge).
+    func stripScanLocations(setNums: Set<String>?) {
+        let located = (try? modelContext.fetch(
+            FetchDescriptor<ScanEvent>(predicate: #Predicate { $0.latitude != nil })
+        )) ?? []
+        for event in located where setNums?.contains(event.setNum) != false {
+            event.latitude = nil
+            event.longitude = nil
+            event.placeName = nil
+        }
+        try? modelContext.save()
     }
 }

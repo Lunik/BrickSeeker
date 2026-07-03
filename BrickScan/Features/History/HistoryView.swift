@@ -9,6 +9,7 @@ struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable private var filter = HistoryFilterState.shared
     @State private var showFilters = false
+    @State private var showScanMap = false
     let lookupViewModel: ScannerViewModel
     let onSelect: (String) -> Void
 
@@ -77,7 +78,27 @@ struct HistoryView: View {
                     .accessibilityValue(filter.isFilterActive ? "Actifs" : "Inactifs")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showScanMap = true
+                    } label: {
+                        Image(systemName: "map")
+                    }
+                    .accessibilityLabel("Carte des scans")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button("Fermer") { dismiss() }
+                }
+            }
+            .sheet(isPresented: $showScanMap) {
+                ScanMapView { setNum in
+                    // Dismiss the map first, then resolve on the next runloop tick — the result
+                    // sheet is presented by this same view, and presenting it in the same
+                    // transaction as dismissing the map is unreliable in SwiftUI (same pattern
+                    // as BatchSessionSummaryView).
+                    showScanMap = false
+                    DispatchQueue.main.async {
+                        onSelect(setNum)
+                    }
                 }
             }
             .sheet(isPresented: $showFilters) {

@@ -30,7 +30,8 @@ struct LookupResultSheetsModifier: ViewModifier {
                         initialStorePrice: cached?.storePriceEUR.map { StorePrice(amount: $0, currency: "EUR", availability: cached?.storeAvailability) },
                         initialStorePriceFetchedAt: cached?.storePriceFetchedAt,
                         reconcileOnAppear: viewModel.lastFoundWasFromCache,
-                        isOfflineResult: viewModel.lastFoundWasOffline
+                        isOfflineResult: viewModel.lastFoundWasOffline,
+                        pendingPriceScanEvent: viewModel.pendingPriceScanEvent
                     ) {
                         viewModel.resumeScanning()
                     }
