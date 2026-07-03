@@ -20,6 +20,16 @@
         }
       }
     },
+    "%@ %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@"
+          }
+        }
+      }
+    },
     "%@%lld%%" : {
 
     },
@@ -639,10 +649,16 @@
     "Valeur estimée" : {
 
     },
+    "Verdict" : {
+
+    },
     "Vérifier le prix d'un set LEGO" : {
 
     },
     "Vérifier le prix du set LEGO ${setNumber}" : {
+
+    },
+    "Vérifier un prix vu en magasin" : {
 
     },
     "Vider" : {
