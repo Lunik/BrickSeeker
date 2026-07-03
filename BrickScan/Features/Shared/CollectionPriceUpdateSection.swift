@@ -47,6 +47,16 @@ struct CollectionPriceUpdateSection: View {
             Task { await updateAllPrices() }
         }
         .disabled(updater.isRunning)
+
+        if !updater.isRunning && !updater.hasResumableUpdate && missingPriceCount > 0 {
+            Button(String(localized: "Compléter les prix manquants (\(missingPriceCount))")) {
+                Task { await updateMissingPrices() }
+            }
+        }
+    }
+
+    private var missingPriceCount: Int {
+        LocalRepository(modelContext: modelContext).ownedSets().filter { $0.storePriceEUR == nil }.count
     }
 
     private var buttonTitle: String {
@@ -61,8 +71,19 @@ struct CollectionPriceUpdateSection: View {
     }
 
     private func updateAllPrices() async {
-        errorMessage = nil
         let sets = LocalRepository(modelContext: modelContext).ownedSets().map { $0.asLegoSet() }
+        await runUpdate(sets: sets)
+    }
+
+    private func updateMissingPrices() async {
+        let sets = LocalRepository(modelContext: modelContext).ownedSets()
+            .filter { $0.storePriceEUR == nil }
+            .map { $0.asLegoSet() }
+        await runUpdate(sets: sets)
+    }
+
+    private func runUpdate(sets: [LegoSet]) async {
+        errorMessage = nil
         guard !sets.isEmpty else {
             errorMessage = String(localized: "Aucun set dans votre collection.")
             return
