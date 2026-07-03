@@ -20,6 +20,7 @@ struct SetDetailView: View {
     @State private var showPricePrompt = false
     @State private var priceInputText = ""
     @State private var scanEventPendingDeletion: ScanEvent?
+    @State private var showStorePriceCheck = false
     /// Live query (not a one-shot repository read) so a location fix that arrives while the
     /// sheet is already open — the common case, GPS + geocoding take a few seconds — updates
     /// the freshly-recorded scan row in place.
@@ -123,6 +124,11 @@ struct SetDetailView: View {
                 }
                 .padding(16)
             }
+            .overlay(alignment: .bottomTrailing) {
+                if !viewModel.isInCollection {
+                    storePriceCheckFAB
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Fermer") {
@@ -179,6 +185,15 @@ struct SetDetailView: View {
                     referencePriceEUR: viewModel.storePrice?.amount,
                     priceText: $priceInputText,
                     onSave: savePricePrompt
+                )
+            }
+            .sheet(isPresented: $showStorePriceCheck) {
+                StorePriceCheckView(
+                    setNum: viewModel.legoSet.setNum,
+                    setName: viewModel.legoSet.name,
+                    storeAmount: viewModel.storePrice?.amount,
+                    storeCurrency: viewModel.storePrice?.currency,
+                    quotes: viewModel.priceQuotes
                 )
             }
             .toast($viewModel.toastMessage)
@@ -640,6 +655,24 @@ struct SetDetailView: View {
                 .font(.footnote)
             }
         }
+    }
+
+    /// Floating button that opens `StorePriceCheckView` on tap — never auto-presented (issue
+    /// #94), shown only for a set not yet in the collection since there's no reason to compare a
+    /// rayon price for one already owned.
+    private var storePriceCheckFAB: some View {
+        Button {
+            showStorePriceCheck = true
+        } label: {
+            Image(systemName: "tag.fill")
+                .font(.title2)
+                .foregroundStyle(.white)
+                .padding(16)
+                .background(AppTheme.shared.accent, in: Circle())
+                .shadow(radius: 4)
+        }
+        .padding(20)
+        .accessibilityLabel("Vérifier un prix vu en magasin")
     }
 
     @ViewBuilder
