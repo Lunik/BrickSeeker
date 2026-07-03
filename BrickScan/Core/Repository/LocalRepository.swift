@@ -337,4 +337,53 @@ final class LocalRepository {
         }
         try? modelContext.save()
     }
+
+    /// Removes a single `ScanEvent` occurrence — the "supprimer ce scan" swipe on `SetDetailView`
+    /// (issue #88). Never touches `CachedSet` itself, except that `lastScannedAt` is recomputed
+    /// from the remaining rows when the deleted event was the most recent one, since that field
+    /// otherwise keeps pointing at a scan that no longer exists.
+    func deleteScanEvent(_ event: ScanEvent) {
+        let setNum = event.setNum
+        let wasNewest = (try? modelContext.fetch(
+            FetchDescriptor<ScanEvent>(
+                predicate: #Predicate<ScanEvent> { $0.setNum == setNum },
+                sortBy: [SortDescriptor(\.scannedAt, order: .reverse)]
+            )
+        ))?.first?.persistentModelID == event.persistentModelID
+
+        modelContext.delete(event)
+
+        if wasNewest, let cached = cachedSet(setNum: setNum) {
+            let remaining = (try? modelContext.fetch(
+                FetchDescriptor<ScanEvent>(
+                    predicate: #Predicate<ScanEvent> { $0.setNum == setNum },
+                    sortBy: [SortDescriptor(\.scannedAt, order: .reverse)]
+                )
+            ))?.first
+            if let mostRecent = remaining {
+                cached.lastScannedAt = mostRecent.scannedAt
+            }
+        }
+
+        try? modelContext.save()
+    }
+
+    /// Removes a set from the History screen (issue #88, swipe on `HistoryView`'s row). `CachedSet`
+    /// is a single row shared between History and Collection (`wasScanned` distinguishes their
+    /// origin — see `AGENTS.md`), so a set still owned must not disappear from the Collection: it
+    /// only loses `wasScanned`, falling back to a collection-only row exactly as if it had never
+    /// been scanned. A set no longer owned is deleted outright, taking its `ScanEvent` rows with it.
+    func deleteFromHistory(setNum: String) {
+        guard let cached = cachedSet(setNum: setNum) else { return }
+        if cached.isInCollection {
+            cached.wasScanned = false
+        } else {
+            modelContext.delete(cached)
+            let events = (try? modelContext.fetch(
+                FetchDescriptor<ScanEvent>(predicate: #Predicate<ScanEvent> { $0.setNum == setNum })
+            )) ?? []
+            events.forEach { modelContext.delete($0) }
+        }
+        try? modelContext.save()
+    }
 }

@@ -10,6 +10,7 @@ struct HistoryView: View {
     @Bindable private var filter = HistoryFilterState.shared
     @State private var showFilters = false
     @State private var showScanMap = false
+    @State private var setPendingDeletion: CachedSet?
     let lookupViewModel: ScannerViewModel
     let onSelect: (String) -> Void
 
@@ -62,6 +63,13 @@ struct HistoryView: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                setPendingDeletion = cached
+                            } label: {
+                                Label("Supprimer", systemImage: "trash")
+                            }
+                        }
                     }
                 }
             }
@@ -99,6 +107,25 @@ struct HistoryView: View {
                     DispatchQueue.main.async {
                         onSelect(setNum)
                     }
+                }
+            }
+            .alert(
+                "Retirer de l'Historique ?",
+                isPresented: Binding(
+                    get: { setPendingDeletion != nil },
+                    set: { if !$0 { setPendingDeletion = nil } }
+                ),
+                presenting: setPendingDeletion
+            ) { cached in
+                Button("Retirer", role: .destructive) {
+                    LocalRepository(modelContext: modelContext).deleteFromHistory(setNum: cached.setNum)
+                }
+                Button("Annuler", role: .cancel) {}
+            } message: { cached in
+                if cached.isInCollection {
+                    Text("« \(cached.name) » restera dans ta Collection, mais disparaîtra de l'Historique.")
+                } else {
+                    Text("Tous les scans de « \(cached.name) » seront supprimés.")
                 }
             }
             .sheet(isPresented: $showFilters) {

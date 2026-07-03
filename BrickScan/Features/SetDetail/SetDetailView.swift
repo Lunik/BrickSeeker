@@ -19,6 +19,7 @@ struct SetDetailView: View {
     @State private var hasShownPricePrompt = false
     @State private var showPricePrompt = false
     @State private var priceInputText = ""
+    @State private var scanEventPendingDeletion: ScanEvent?
     /// Live query (not a one-shot repository read) so a location fix that arrives while the
     /// sheet is already open — the common case, GPS + geocoding take a few seconds — updates
     /// the freshly-recorded scan row in place.
@@ -157,6 +158,20 @@ struct SetDetailView: View {
                 }
                 Button("Annuler", role: .cancel) {}
             }
+            .alert(
+                "Supprimer ce scan ?",
+                isPresented: Binding(
+                    get: { scanEventPendingDeletion != nil },
+                    set: { if !$0 { scanEventPendingDeletion = nil } }
+                )
+            ) {
+                Button("Supprimer", role: .destructive) {
+                    if let event = scanEventPendingDeletion {
+                        LocalRepository(modelContext: modelContext).deleteScanEvent(event)
+                    }
+                }
+                Button("Annuler", role: .cancel) {}
+            }
             .sheet(isPresented: $showPricePrompt) {
                 ScanPriceEntryView(
                     setNum: viewModel.legoSet.setNum,
@@ -271,6 +286,9 @@ struct SetDetailView: View {
     /// How many scan rows "Tes scans" shows before collapsing into an "et N scans plus
     /// anciens" line — keeps a much-rescanned set from bloating the sheet.
     private static let maxVisibleScanRows = 6
+    /// Fixed height budgeted per row in the embedded `List` below — sized generously enough for
+    /// a two-line row (date + place name) plus default List row insets.
+    private static let scanRowHeight: CGFloat = 60
 
     private var locatedScanEvents: [ScanEvent] {
         scanEvents.filter(\.hasLocation)
@@ -303,9 +321,28 @@ struct SetDetailView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                ForEach(scanEvents.prefix(Self.maxVisibleScanRows), id: \.persistentModelID) { event in
-                    scanEventRow(event)
+                // A plain, non-scrolling List (rather than the surrounding VStack's usual ForEach)
+                // solely so each row can carry `.swipeActions` — SwiftUI only supports swipe
+                // actions on List rows, not on arbitrary views (issue #88).
+                List {
+                    ForEach(scanEvents.prefix(Self.maxVisibleScanRows), id: \.persistentModelID) { event in
+                        scanEventRow(event)
+                            .listRowInsets(EdgeInsets())
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    scanEventPendingDeletion = event
+                                } label: {
+                                    Label("Supprimer", systemImage: "trash")
+                                }
+                            }
+                    }
                 }
+                .listStyle(.plain)
+                .scrollDisabled(true)
+                .scrollContentBackground(.hidden)
+                .frame(height: CGFloat(min(scanEvents.count, Self.maxVisibleScanRows)) * Self.scanRowHeight)
                 if scanEvents.count > Self.maxVisibleScanRows {
                     Text("et \(scanEvents.count - Self.maxVisibleScanRows) scans plus anciens")
                         .font(.caption)

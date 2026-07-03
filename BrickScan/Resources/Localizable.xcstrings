@@ -4,6 +4,9 @@
     " " : {
 
     },
+    "« %@ » restera dans ta Collection, mais disparaîtra de l'Historique." : {
+
+    },
     "%" : {
 
     },
@@ -522,6 +525,9 @@
     "Retirer" : {
 
     },
+    "Retirer de l'Historique ?" : {
+
+    },
     "Retirer de la collection" : {
 
     },
@@ -576,6 +582,12 @@
     "Supprime les images, prix et listes mis en cache. Votre clé API, votre compte et l'historique des prix sont conservés." : {
 
     },
+    "Supprimer" : {
+
+    },
+    "Supprimer ce scan ?" : {
+
+    },
     "Synchronisation…" : {
 
     },
@@ -601,6 +613,9 @@
 
     },
     "Tous" : {
+
+    },
+    "Tous les scans de « %@ » seront supprimés." : {
 
     },
     "Toutes" : {
