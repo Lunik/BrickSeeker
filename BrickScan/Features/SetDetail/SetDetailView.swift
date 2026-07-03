@@ -161,6 +161,7 @@ struct SetDetailView: View {
                 ScanPriceEntryView(
                     setNum: viewModel.legoSet.setNum,
                     setName: viewModel.legoSet.name,
+                    referencePriceEUR: viewModel.storePrice?.amount,
                     priceText: $priceInputText,
                     onSave: savePricePrompt
                 )
