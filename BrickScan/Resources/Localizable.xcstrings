@@ -4,6 +4,9 @@
     " " : {
 
     },
+    "%" : {
+
+    },
     "%@ · %@" : {
       "localizations" : {
         "fr" : {
@@ -40,6 +43,9 @@
 
     },
     "€" : {
+
+    },
+    "0" : {
 
     },
     "0,00" : {
@@ -312,6 +318,9 @@
     "L'accès à la position est refusé dans les réglages iOS — aucune position ne sera enregistrée." : {
 
     },
+    "Le pourcentage est appliqué au prix lego.com déjà connu pour calculer le prix final." : {
+
+    },
     "Le type détermine la source de prix utilisée pour estimer la valeur de votre collection. Choisissez « Neuf » pour les sets encore scellés (lego.com en priorité) et « Occasion » pour les sets ouverts ou d'occasion (BrickLink occasion)." : {
 
     },
@@ -352,6 +361,9 @@
 
     },
     "Mise à jour en cours…" : {
+
+    },
+    "Mode de saisie" : {
 
     },
     "Mode lot" : {
@@ -432,6 +444,9 @@
     "Prix" : {
 
     },
+    "Prix calculé" : {
+
+    },
     "Prix d'un set LEGO" : {
 
     },
@@ -460,6 +475,9 @@
 
     },
     "Récupère les prix lego.com/Amazon/BrickLink de tous les sets de votre collection, un par un pour ne pas surcharger ces sites. Peut prendre longtemps sur une grande collection — l'app doit rester ouverte au premier plan ; si vous quittez l'app, la mise à jour se met en pause et reprendra où elle s'est arrêtée. Une notification vous prévient à la fin." : {
+
+    },
+    "Réduction (%)" : {
 
     },
     "Réessayer" : {
