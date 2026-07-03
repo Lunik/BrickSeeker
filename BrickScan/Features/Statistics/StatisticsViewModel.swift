@@ -109,24 +109,9 @@ final class StatisticsViewModel {
     /// - `.used`: BrickLink used only — nil when unavailable so occasion sets aren't
     ///   over-valued by a retail proxy.
     func effectivePriceEUR(for set: CachedSet) -> Double? {
-        let condition = set.currentListId.flatMap { conditionByListId[$0] } ?? .newSet
+        let condition = set.currentListId.flatMap { conditionByListId[$0] }
         let quotes = localRepository.cachedPrices(setNum: set.setNum)
-        switch condition {
-        case .newSet:
-            if let legoPrice = set.storePriceEUR { return legoPrice }
-            if let amazon = quotes.first(where: { $0.source == .amazon }) {
-                return NSDecimalNumber(decimal: amazon.amount).doubleValue
-            }
-            if let bricklinkNew = quotes.first(where: { $0.source == .bricklinkNew }) {
-                return NSDecimalNumber(decimal: bricklinkNew.amount).doubleValue
-            }
-            return nil
-        case .used:
-            if let bricklinkUsed = quotes.first(where: { $0.source == .bricklinkUsed }) {
-                return NSDecimalNumber(decimal: bricklinkUsed.amount).doubleValue
-            }
-            return nil
-        }
+        return effectiveValuationPrice(storePriceEUR: set.storePriceEUR, condition: condition, quotes: quotes)
     }
 
     /// `priceByNum` is precomputed by `load()` via `effectivePriceEUR(for:)` — the lego.com →
