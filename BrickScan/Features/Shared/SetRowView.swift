@@ -74,3 +74,23 @@ func resolveCollectionPrice(
         return usedPrice ?? resolveNewPrice(storePriceEUR: storePriceEUR, quotes: quotes)
     }
 }
+
+/// Price resolution used for collection **valuation** (total estimated value / coverage counter,
+/// see issue #47/#87) — unlike `resolveCollectionPrice`, it does NOT cross-fall-back between new
+/// and used sources: an occasion set with no BrickLink-used quote stays priceless rather than
+/// being valued off a retail proxy, and vice versa. Shared by `StatisticsViewModel` (the "X / Y
+/// sets" coverage counter) and `CollectionPriceUpdateSection` (the "compléter les prix manquants"
+/// button) so both agree on what counts as "missing".
+func effectiveValuationPrice(
+    storePriceEUR: Double?,
+    condition: ListCondition?,
+    quotes: [PriceQuote]
+) -> Double? {
+    switch condition ?? .newSet {
+    case .newSet:
+        return resolveNewPrice(storePriceEUR: storePriceEUR, quotes: quotes)
+    case .used:
+        return quotes.first(where: { $0.source == .bricklinkUsed })
+            .map { ($0.amount as NSDecimalNumber).doubleValue }
+    }
+}

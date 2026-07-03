@@ -47,6 +47,29 @@ struct CollectionPriceUpdateSection: View {
             Task { await updateAllPrices() }
         }
         .disabled(updater.isRunning)
+
+        if !updater.isRunning && !updater.hasResumableUpdate && missingPriceCount > 0 {
+            Button(String(localized: "Compléter les prix manquants (\(missingPriceCount))")) {
+                Task { await updateMissingPrices() }
+            }
+        }
+    }
+
+    /// Sets missing from the "valeur estimée" coverage counter (see `StatisticsViewModel
+    /// .effectivePriceEUR`) — not just `storePriceEUR == nil`, since a set can already be valued
+    /// via an Amazon/BrickLink fallback quote even with no lego.com price cached.
+    private func setsMissingPrice() -> [CachedSet] {
+        let repository = LocalRepository(modelContext: modelContext)
+        let conditionByListId = repository.conditionByListId()
+        return repository.ownedSets().filter { set in
+            let condition = set.currentListId.flatMap { conditionByListId[$0] }
+            let quotes = repository.cachedPrices(setNum: set.setNum)
+            return effectiveValuationPrice(storePriceEUR: set.storePriceEUR, condition: condition, quotes: quotes) == nil
+        }
+    }
+
+    private var missingPriceCount: Int {
+        setsMissingPrice().count
     }
 
     private var buttonTitle: String {
@@ -61,8 +84,17 @@ struct CollectionPriceUpdateSection: View {
     }
 
     private func updateAllPrices() async {
-        errorMessage = nil
         let sets = LocalRepository(modelContext: modelContext).ownedSets().map { $0.asLegoSet() }
+        await runUpdate(sets: sets)
+    }
+
+    private func updateMissingPrices() async {
+        let sets = setsMissingPrice().map { $0.asLegoSet() }
+        await runUpdate(sets: sets)
+    }
+
+    private func runUpdate(sets: [LegoSet]) async {
+        errorMessage = nil
         guard !sets.isEmpty else {
             errorMessage = String(localized: "Aucun set dans votre collection.")
             return
