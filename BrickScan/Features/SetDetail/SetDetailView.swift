@@ -13,14 +13,12 @@ struct SetDetailView: View {
     @State private var priceHistory: [PriceHistoryEntry] = []
     /// Seeded once from `pendingPriceScanEvent` — see the `init` doc. `@State`'s initial value is
     /// only applied the first time this view identity is created, so later re-inits triggered by
-    /// unrelated `viewModel` changes (e.g. a silent collection-status reconcile) can't retrigger
-    /// the prompt.
+    /// unrelated `viewModel` changes (e.g. a silent collection-status reconcile) don't lose track
+    /// of which scan the FAB's price entry attaches to.
     @State private var priceScanEventForPrompt: ScanEvent?
-    @State private var hasShownPricePrompt = false
     @State private var showPricePrompt = false
     @State private var priceInputText = ""
     @State private var scanEventPendingDeletion: ScanEvent?
-    @State private var showStorePriceCheck = false
     /// Live query (not a one-shot repository read) so a location fix that arrives while the
     /// sheet is already open — the common case, GPS + geocoding take a few seconds — updates
     /// the freshly-recorded scan row in place.
@@ -125,7 +123,7 @@ struct SetDetailView: View {
                 .padding(16)
             }
             .overlay(alignment: .bottomTrailing) {
-                if !viewModel.isInCollection {
+                if !viewModel.isInCollection, priceScanEventForPrompt != nil {
                     storePriceCheckFAB
                 }
             }
@@ -183,17 +181,10 @@ struct SetDetailView: View {
                     setNum: viewModel.legoSet.setNum,
                     setName: viewModel.legoSet.name,
                     referencePriceEUR: viewModel.storePrice?.amount,
+                    referenceCurrency: viewModel.storePrice?.currency ?? "EUR",
+                    quotes: viewModel.priceQuotes,
                     priceText: $priceInputText,
                     onSave: savePricePrompt
-                )
-            }
-            .sheet(isPresented: $showStorePriceCheck) {
-                StorePriceCheckView(
-                    setNum: viewModel.legoSet.setNum,
-                    setName: viewModel.legoSet.name,
-                    storeAmount: viewModel.storePrice?.amount,
-                    storeCurrency: viewModel.storePrice?.currency,
-                    quotes: viewModel.priceQuotes
                 )
             }
             .toast($viewModel.toastMessage)
@@ -201,7 +192,6 @@ struct SetDetailView: View {
         .onChange(of: viewModel.collectionStatus) { _, _ in syncCache() }
         .onChange(of: viewModel.collectionListName) { _, _ in syncCache() }
         .onChange(of: viewModel.storePriceFetchedAt) { _, _ in syncStorePriceCache() }
-        .onAppear { presentPricePromptIfNeeded() }
         .task {
             if reconcileOnAppear {
                 await viewModel.silentlyReconcileCollectionStatus()
@@ -220,21 +210,18 @@ struct SetDetailView: View {
         }
     }
 
-    /// Shows the "quel prix as-tu vu ?" prompt exactly once per sheet presentation, only when this
-    /// SetDetail was opened from a genuine new camera scan (`priceScanEventForPrompt` — see
-    /// `ScannerViewModel.pendingPriceScanEvent`). The event always starts with `priceSeenEUR ==
-    /// nil` (see `recordScanEventIfNeeded`) — the field only ever gets a value the user typed here
-    /// — but `event.priceSeenEUR` is still read defensively in case that ever changes upstream.
-    private func presentPricePromptIfNeeded() {
-        guard !hasShownPricePrompt, let event = priceScanEventForPrompt else { return }
-        hasShownPricePrompt = true
+    /// Opens the "quel prix as-tu vu ?" sheet — only ever on an explicit FAB tap, never
+    /// auto-presented over the scan result (issue #94, replacing the old auto-opening prompt).
+    /// Requires `priceScanEventForPrompt` (see `ScannerViewModel.pendingPriceScanEvent`), the scan
+    /// this price entry attaches to. The event always starts with `priceSeenEUR == nil` (see
+    /// `recordScanEventIfNeeded`) — the field only ever gets a value the user typed here — but
+    /// `event.priceSeenEUR` is still read defensively in case that ever changes upstream.
+    private func openPricePrompt() {
+        guard let event = priceScanEventForPrompt else { return }
         if let existing = event.priceSeenEUR {
             priceInputText = String(format: "%.2f", existing).replacingOccurrences(of: ".", with: ",")
         }
-        // Defer to the next runloop tick: SetDetail is itself a sheet, and presenting a second
-        // sheet from within the same transaction that presented this view is unreliable in
-        // SwiftUI (same reason BatchSessionSummaryView defers its detail lookup).
-        DispatchQueue.main.async { showPricePrompt = true }
+        showPricePrompt = true
     }
 
     private func savePricePrompt() {
@@ -657,12 +644,12 @@ struct SetDetailView: View {
         }
     }
 
-    /// Floating button that opens `StorePriceCheckView` on tap — never auto-presented (issue
-    /// #94), shown only for a set not yet in the collection since there's no reason to compare a
-    /// rayon price for one already owned.
+    /// Floating button that opens the "quel prix as-tu vu ?" sheet on tap — never auto-presented
+    /// (issue #94), shown only for a set not yet in the collection since there's no reason to
+    /// compare a rayon price for one already owned.
     private var storePriceCheckFAB: some View {
         Button {
-            showStorePriceCheck = true
+            openPricePrompt()
         } label: {
             Image(systemName: "tag.fill")
                 .font(.title2)
