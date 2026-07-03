@@ -1,189 +1,641 @@
 {
-  "sourceLanguage": "fr",
-  "strings": {
-    " ": {},
-    "%@%lld%%": {},
-    "%lld / %lld sets": {},
-    "%lld sets": {},
-    "%lld · %lld pièces": {},
-    "0,12": {},
-    "API Key": {},
-    "API Key Rebrickable": {},
-    "API Key Rebrickable : dans le Keychain iOS": {},
-    "API Key Rebrickable non configurée": {},
-    "API Key invalide": {},
-    "Actifs": {},
-    "Actions": {},
-    "Activité": {},
-    "Activé": {},
-    "Activée": {},
-    "Actualiser les prix": {},
-    "Actualiser les prix de la collection": {},
-    "Afficher la clé API": {},
-    "Ajouter un set": {},
-    "Ajouter à une liste": {},
-    "Annuler": {},
-    "Année": {},
-    "Apparence": {},
-    "Aucun catalogue téléchargé": {},
-    "Aucun résultat": {},
-    "Aucun set LEGO trouvé pour %@.": {},
-    "Aucun set dans votre collection.": {},
-    "Aucun set possédé": {},
-    "Aucun set scanné": {},
-    "Aucune clé API Rebrickable configurée. Ouvre BrickScan et renseigne-la dans Réglages.": {},
-    "Aucune donnée n'est envoyée à un serveur tiers autre que Rebrickable": {},
-    "Aucune liste": {},
-    "Basée sur %lld / %lld sets dont le prix est connu": {},
-    "BrickScan": {},
-    "Catalogue hors-ligne": {},
-    "Ce qui est stocké": {},
-    "Ce qui n'est jamais stocké": {},
-    "Ce set n'est plus sur lego.com": {},
-    "Changer de liste": {},
-    "Choisir un set": {},
-    "Choisir une liste": {},
-    "Choisissez la couleur de marque et l'apparence claire/sombre de l'application.": {},
-    "Cible €/pièce": {},
-    "Collection": {},
-    "Comment BrickScan protège vos données": {},
-    "Compte Rebrickable": {},
-    "Compte Rebrickable lié": {},
-    "Compte non lié — ouvrez Réglages pour lier votre compte Rebrickable.": {},
-    "Confidentialité & données": {},
-    "Configurer le type (neuf/occasion) des listes": {},
-    "Connexion impossible. Vérifiez votre réseau.": {},
-    "Créer une nouvelle liste": {},
-    "Dans votre collection": {},
-    "Dans votre liste « %@ »": {},
-    "Date": {},
-    "Dernière actualisation : %@": {},
-    "Dernière synchronisation : %@": {},
-    "Délier mon compte": {},
-    "Désactivé": {},
-    "Désactivée": {},
-    "Enregistrer": {},
-    "Erreur inconnue": {},
-    "Erreur lors du traitement de la réponse": {},
-    "Erreur serveur (%lld)": {},
-    "Essayez de modifier la recherche ou les filtres.": {},
-    "Exporter": {},
-    "Exporter en CSV": {},
-    "Exporter en PDF": {},
-    "Fermer": {},
-    "Fermer le scanner": {},
-    "Filtres": {},
-    "Génère ta clé sur rebrickable.com/profile, dans la section API Key.": {},
-    "Gérer votre API Key sur Rebrickable": {},
-    "Historique": {},
-    "Hors-ligne": {},
-    "Hors-ligne — statut collection et prix à rafraîchir une fois reconnecté": {},
-    "Hors-ligne — statut collection à rafraîchir une fois reconnecté": {},
-    "Identifiants manquants": {},
-    "Impossible de charger vos listes. Vérifiez votre réseau.": {},
-    "Impossible de créer la liste. Vérifiez votre réseau.": {},
-    "Inactifs": {},
-    "Indisponible": {},
-    "Le type détermine la source de prix utilisée pour estimer la valeur de votre collection. Choisissez « Neuf » pour les sets encore scellés (lego.com en priorité) et « Occasion » pour les sets ouverts ou d'occasion (BrickLink occasion).": {},
-    "Les prix de %lld set de votre collection ont été actualisés.": {},
-    "Les prix de %lld sets de votre collection ont été actualisés.": {},
-    "Les sets que tu scannes apparaîtront ici.": {},
-    "Lier mon compte": {},
-    "Liez votre compte Rebrickable et synchronisez depuis l'accueil.": {},
-    "Liste": {},
-    "Listes": {},
-    "Ma collection": {},
-    "Masquer la clé API": {},
-    "Mise à jour en cours…": {},
-    "Mode lot": {},
-    "Mode lot actif": {},
-    "Mot de passe": {},
-    "Nom d'utilisateur ou email": {},
-    "Nom d'utilisateur ou mot de passe incorrect": {},
-    "Nom de la nouvelle liste": {},
-    "Nom ou numéro de set": {},
-    "Non possédés": {},
-    "Notice de montage": {},
-    "Numéro de set": {},
-    "Numéro de set, ex. 42143": {},
-    "Nécessaire pour voir et gérer votre collection. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session.": {},
-    "OK": {},
-    "Page lego.com indisponible": {},
-    "Paramètres": {},
-    "Pas dans votre collection": {},
-    "Permet d'identifier un set déjà connu même sans réseau. Téléchargé depuis Rebrickable (~25 000 sets) ; le statut collection et les prix restent toujours en ligne.": {},
-    "Plusieurs sets correspondent à %@, ouvre BrickScan pour préciser.": {},
-    "Pointez la caméra vers le numéro de set": {},
-    "Possession": {},
-    "Possédés": {},
-    "Prix": {},
-    "Prix d'un set LEGO": {},
-    "Prix de la collection": {},
-    "Prix indisponible": {},
-    "Prix indisponible (lego.com n'a pas répondu)": {},
-    "Prix mis à jour": {},
-    "Purger le catalogue": {},
-    "Période": {},
-    "Recherche le prix d'un set LEGO sur lego.com, BrickLink et Amazon sans ouvrir BrickScan.": {},
-    "Rechercher": {},
-    "Reprendre (%lld restants)": {},
-    "Ressource introuvable": {},
-    "Retirer": {},
-    "Retirer de la collection": {},
-    "Retirer de la collection ?": {},
-    "Récupère les prix lego.com/Amazon/BrickLink de tous les sets de votre collection, un par un pour ne pas surcharger ces sites. Peut prendre longtemps sur une grande collection — l'app doit rester ouverte au premier plan ; si vous quittez l'app, la mise à jour se met en pause et reprendra où elle s'est arrêtée. Une notification vous prévient à la fin.": {},
-    "Réessayer": {},
-    "Réglages": {},
-    "Réinitialiser": {},
-    "Réinitialiser BrickScan": {},
-    "Réinitialiser BrickScan ?": {},
-    "Réinitialiser les filtres": {},
-    "Répartition par année": {},
-    "Répartition par thème": {},
-    "Résultat hors-ligne — identification depuis le catalogue embarqué": {},
-    "Scanne plusieurs sets en mode lot pour les comparer ici.": {},
-    "Scanner un set": {},
-    "Session de scan": {},
-    "Sets": {},
-    "Sets scannés récemment : dans la base SwiftData locale, sur l'appareil uniquement": {},
-    "Seuil de €/pièce en dessous duquel un set est considéré comme un bon rapport qualité-prix. Affiché en vert sur la fiche set si le prix lego.com est inférieur à cette valeur, en rouge au-dessus.": {},
-    "Source": {},
-    "Statistiques": {},
-    "Statut de collection inconnu": {},
-    "Statut inconnu : %@": {},
-    "Superlatifs": {},
-    "Supprime l'API Key enregistrée et l'historique des sets scannés.": {},
-    "Supprime les images, prix et listes mis en cache. Ne touche pas à votre clé API ni à votre compte, ni à l'historique des prix ; les données seront re-téléchargées au besoin.": {},
-    "Supprime les images, prix et listes mis en cache. Votre clé API, votre compte et l'historique des prix sont conservés.": {},
-    "Synchronisation…": {},
-    "Synchronisez votre collection depuis l'accueil pour voir vos listes Rebrickable ici.": {},
-    "Sélectionner le type de liste": {},
-    "Thème": {},
-    "Torche": {},
-    "Totaux": {},
-    "Tous": {},
-    "Toutes": {},
-    "Tri": {},
-    "Trier par": {},
-    "Trop de requêtes, veuillez réessayer plus tard": {},
-    "Téléchargement impossible. Vérifiez votre réseau.": {},
-    "Téléchargement interrompu — il reprendra où il s'est arrêté à la prochaine ouverture.": {},
-    "Une erreur inconnue est survenue": {},
-    "Valeur cible": {},
-    "Valeur estimée": {},
-    "Vider": {},
-    "Vider le cache": {},
-    "Vider le cache ?": {},
-    "Voir la session (%lld)": {},
-    "Voir le détail": {},
-    "Voir sur Rebrickable": {},
-    "Vos données restent sur votre appareil": {},
-    "Vous gardez le contrôle": {},
-    "Vérifier le prix d'un set LEGO": {},
-    "Vérifier le prix du set LEGO ${setNumber}": {},
-    "Évolution des prix": {},
-    "•": {},
-    "€": {}
+  "sourceLanguage" : "fr",
+  "strings" : {
+    " " : {
+
+    },
+    "%@ · %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "%@%lld%%" : {
+
+    },
+    "%lld · %lld pièces" : {
+
+    },
+    "%lld / %lld sets" : {
+
+    },
+    "%lld scan%@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld scan%2$@"
+          }
+        }
+      }
+    },
+    "%lld sets" : {
+
+    },
+    "•" : {
+
+    },
+    "€" : {
+
+    },
+    "0,00" : {
+
+    },
+    "0,12" : {
+
+    },
+    "Actifs" : {
+
+    },
+    "Actions" : {
+
+    },
+    "Activé" : {
+
+    },
+    "Active la localisation des scans dans les paramètres, puis scanne un set en magasin." : {
+
+    },
+    "Activée" : {
+
+    },
+    "Activité" : {
+
+    },
+    "Actualiser les prix" : {
+
+    },
+    "Actualiser les prix de la collection" : {
+
+    },
+    "Afficher la clé API" : {
+
+    },
+    "Ajouter à une liste" : {
+
+    },
+    "Ajouter un set" : {
+
+    },
+    "Année" : {
+
+    },
+    "Annuler" : {
+
+    },
+    "API Key" : {
+
+    },
+    "API Key invalide" : {
+
+    },
+    "API Key Rebrickable" : {
+
+    },
+    "API Key Rebrickable : dans le Keychain iOS" : {
+
+    },
+    "API Key Rebrickable non configurée" : {
+
+    },
+    "Apparence" : {
+
+    },
+    "Aucun catalogue téléchargé" : {
+
+    },
+    "Aucun résultat" : {
+
+    },
+    "Aucun scan localisé" : {
+
+    },
+    "Aucun set dans votre collection." : {
+
+    },
+    "Aucun set LEGO trouvé pour %@." : {
+
+    },
+    "Aucun set possédé" : {
+
+    },
+    "Aucun set scanné" : {
+
+    },
+    "Aucune clé API Rebrickable configurée. Ouvre BrickScan et renseigne-la dans Réglages." : {
+
+    },
+    "Aucune donnée n'est envoyée à un serveur tiers autre que Rebrickable" : {
+
+    },
+    "Aucune liste" : {
+
+    },
+    "Basée sur %lld / %lld sets dont le prix est connu" : {
+
+    },
+    "BrickScan" : {
+
+    },
+    "Capture la position (approximative) au moment d'un scan caméra, pour retrouver le magasin où tu as vu le meilleur prix. Stockée uniquement sur l'appareil, et supprimée dès que le set rejoint ta collection." : {
+
+    },
+    "Carte des scans" : {
+
+    },
+    "Carte des scans de ce set" : {
+
+    },
+    "Catalogue hors-ligne" : {
+
+    },
+    "Ce qui est stocké" : {
+
+    },
+    "Ce qui n'est jamais stocké" : {
+
+    },
+    "Ce set n'est plus sur lego.com" : {
+
+    },
+    "Changer de liste" : {
+
+    },
+    "Choisir un set" : {
+
+    },
+    "Choisir une liste" : {
+
+    },
+    "Choisissez la couleur de marque et l'apparence claire/sombre de l'application." : {
+
+    },
+    "Cible €/pièce" : {
+
+    },
+    "Collection" : {
+
+    },
+    "Comment BrickScan protège vos données" : {
+
+    },
+    "Compte non lié — ouvrez Réglages pour lier votre compte Rebrickable." : {
+
+    },
+    "Compte Rebrickable" : {
+
+    },
+    "Compte Rebrickable lié" : {
+
+    },
+    "Confidentialité & données" : {
+
+    },
+    "Configurer le type (neuf/occasion) des listes" : {
+
+    },
+    "Connexion impossible. Vérifiez votre réseau." : {
+
+    },
+    "Créer une nouvelle liste" : {
+
+    },
+    "Dans votre collection" : {
+
+    },
+    "Dans votre liste « %@ »" : {
+
+    },
+    "Date" : {
+
+    },
+    "Délier mon compte" : {
+
+    },
+    "Dernière actualisation : %@" : {
+
+    },
+    "Dernière synchronisation : %@" : {
+
+    },
+    "Désactivé" : {
+
+    },
+    "Désactivée" : {
+
+    },
+    "Disponible à l'achat" : {
+
+    },
+    "Enregistrer" : {
+
+    },
+    "Enregistrer la position des scans" : {
+
+    },
+    "Erreur inconnue" : {
+
+    },
+    "Erreur lors du traitement de la réponse" : {
+
+    },
+    "Erreur serveur (%lld)" : {
+
+    },
+    "Essayez de modifier la recherche ou les filtres." : {
+
+    },
+    "et %lld scans plus anciens" : {
+
+    },
+    "Évolution des prix" : {
+
+    },
+    "Exporter" : {
+
+    },
+    "Exporter en CSV" : {
+
+    },
+    "Exporter en PDF" : {
+
+    },
+    "Fermer" : {
+
+    },
+    "Fermer le scanner" : {
+
+    },
+    "Filtres" : {
+
+    },
+    "Génère ta clé sur rebrickable.com/profile, dans la section API Key." : {
+
+    },
+    "Gérer votre API Key sur Rebrickable" : {
+
+    },
+    "Historique" : {
+
+    },
+    "Hors-ligne" : {
+
+    },
+    "Hors-ligne — statut collection à rafraîchir une fois reconnecté" : {
+
+    },
+    "Hors-ligne — statut collection et prix à rafraîchir une fois reconnecté" : {
+
+    },
+    "Identifiants manquants" : {
+
+    },
+    "Impossible de charger vos listes. Vérifiez votre réseau." : {
+
+    },
+    "Impossible de créer la liste. Vérifiez votre réseau." : {
+
+    },
+    "Inactifs" : {
+
+    },
+    "Indisponible" : {
+
+    },
+    "L'accès à la position est refusé dans les réglages iOS — aucune position ne sera enregistrée." : {
+
+    },
+    "Le type détermine la source de prix utilisée pour estimer la valeur de votre collection. Choisissez « Neuf » pour les sets encore scellés (lego.com en priorité) et « Occasion » pour les sets ouverts ou d'occasion (BrickLink occasion)." : {
+
+    },
+    "Les prix de %lld set de votre collection ont été actualisés." : {
+
+    },
+    "Les prix de %lld sets de votre collection ont été actualisés." : {
+
+    },
+    "Les sets que tu scannes apparaîtront ici." : {
+
+    },
+    "Lier mon compte" : {
+
+    },
+    "Liez votre compte Rebrickable et synchronisez depuis l'accueil." : {
+
+    },
+    "Liste" : {
+
+    },
+    "Listes" : {
+
+    },
+    "Localisation des scans" : {
+
+    },
+    "Ma collection" : {
+
+    },
+    "Masquer la clé API" : {
+
+    },
+    "Meilleur prix" : {
+
+    },
+    "Meilleur prix vu ici" : {
+
+    },
+    "Mise à jour en cours…" : {
+
+    },
+    "Mode lot" : {
+
+    },
+    "Mode lot actif" : {
+
+    },
+    "Mot de passe" : {
+
+    },
+    "Nécessaire pour voir et gérer votre collection. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session." : {
+
+    },
+    "Nom d'utilisateur ou email" : {
+
+    },
+    "Nom d'utilisateur ou mot de passe incorrect" : {
+
+    },
+    "Nom de la nouvelle liste" : {
+
+    },
+    "Nom ou numéro de set" : {
+
+    },
+    "Non possédés" : {
+
+    },
+    "Notice de montage" : {
+
+    },
+    "Numéro de set" : {
+
+    },
+    "Numéro de set, ex. 42143" : {
+
+    },
+    "OK" : {
+
+    },
+    "Ouvrir les réglages iOS" : {
+
+    },
+    "Page lego.com indisponible" : {
+
+    },
+    "Paramètres" : {
+
+    },
+    "Pas dans votre collection" : {
+
+    },
+    "Passer" : {
+
+    },
+    "Période" : {
+
+    },
+    "Permet d'identifier un set déjà connu même sans réseau. Téléchargé depuis Rebrickable (~25 000 sets) ; le statut collection et les prix restent toujours en ligne." : {
+
+    },
+    "Plusieurs sets correspondent à %@, ouvre BrickScan pour préciser." : {
+
+    },
+    "Pointez la caméra vers le numéro de set" : {
+
+    },
+    "Position des scans (si activée dans les paramètres) : approximative, sur l'appareil uniquement, supprimée dès qu'un set rejoint votre collection ou que l'historique est purgé" : {
+
+    },
+    "Possédés" : {
+
+    },
+    "Possession" : {
+
+    },
+    "Prix" : {
+
+    },
+    "Prix d'un set LEGO" : {
+
+    },
+    "Prix de la collection" : {
+
+    },
+    "Prix indisponible" : {
+
+    },
+    "Prix indisponible (lego.com n'a pas répondu)" : {
+
+    },
+    "Prix mis à jour" : {
+
+    },
+    "Purger le catalogue" : {
+
+    },
+    "Quel prix as-tu vu ?" : {
+
+    },
+    "Recherche le prix d'un set LEGO sur lego.com, BrickLink et Amazon sans ouvrir BrickScan." : {
+
+    },
+    "Rechercher" : {
+
+    },
+    "Récupère les prix lego.com/Amazon/BrickLink de tous les sets de votre collection, un par un pour ne pas surcharger ces sites. Peut prendre longtemps sur une grande collection — l'app doit rester ouverte au premier plan ; si vous quittez l'app, la mise à jour se met en pause et reprendra où elle s'est arrêtée. Une notification vous prévient à la fin." : {
+
+    },
+    "Réessayer" : {
+
+    },
+    "Réglages" : {
+
+    },
+    "Réinitialiser" : {
+
+    },
+    "Réinitialiser BrickScan" : {
+
+    },
+    "Réinitialiser BrickScan ?" : {
+
+    },
+    "Réinitialiser les filtres" : {
+
+    },
+    "Renseigne le prix affiché en magasin pour ce scan — il sert à repérer le meilleur prix vu, et sur quel lieu." : {
+
+    },
+    "Répartition par année" : {
+
+    },
+    "Répartition par thème" : {
+
+    },
+    "Reprendre (%lld restants)" : {
+
+    },
+    "Ressource introuvable" : {
+
+    },
+    "Résultat hors-ligne — identification depuis le catalogue embarqué" : {
+
+    },
+    "Retiré de la vente" : {
+
+    },
+    "Retirer" : {
+
+    },
+    "Retirer de la collection" : {
+
+    },
+    "Retirer de la collection ?" : {
+
+    },
+    "Rupture de stock" : {
+
+    },
+    "Scanne plusieurs sets en mode lot pour les comparer ici." : {
+
+    },
+    "Scanner un set" : {
+
+    },
+    "Sélectionner le type de liste" : {
+
+    },
+    "Session de scan" : {
+
+    },
+    "Sets" : {
+
+    },
+    "Sets scannés récemment : dans la base SwiftData locale, sur l'appareil uniquement" : {
+
+    },
+    "Seuil de €/pièce en dessous duquel un set est considéré comme un bon rapport qualité-prix. Affiché en vert sur la fiche set si le prix lego.com est inférieur à cette valeur, en rouge au-dessus." : {
+
+    },
+    "Source" : {
+
+    },
+    "Statistiques" : {
+
+    },
+    "Statut de collection inconnu" : {
+
+    },
+    "Statut inconnu : %@" : {
+
+    },
+    "Superlatifs" : {
+
+    },
+    "Supprime l'API Key enregistrée et l'historique des sets scannés." : {
+
+    },
+    "Supprime les images, prix et listes mis en cache. Ne touche pas à votre clé API ni à votre compte, ni à l'historique des prix ; les données seront re-téléchargées au besoin." : {
+
+    },
+    "Supprime les images, prix et listes mis en cache. Votre clé API, votre compte et l'historique des prix sont conservés." : {
+
+    },
+    "Synchronisation…" : {
+
+    },
+    "Synchronisez votre collection depuis l'accueil pour voir vos listes Rebrickable ici." : {
+
+    },
+    "Téléchargement impossible. Vérifiez votre réseau." : {
+
+    },
+    "Téléchargement interrompu — il reprendra où il s'est arrêté à la prochaine ouverture." : {
+
+    },
+    "Tes scans" : {
+
+    },
+    "Thème" : {
+
+    },
+    "Torche" : {
+
+    },
+    "Totaux" : {
+
+    },
+    "Tous" : {
+
+    },
+    "Toutes" : {
+
+    },
+    "Tri" : {
+
+    },
+    "Trier par" : {
+
+    },
+    "Trop de requêtes, veuillez réessayer plus tard" : {
+
+    },
+    "Une erreur inconnue est survenue" : {
+
+    },
+    "Valeur cible" : {
+
+    },
+    "Valeur estimée" : {
+
+    },
+    "Vérifier le prix d'un set LEGO" : {
+
+    },
+    "Vérifier le prix du set LEGO ${setNumber}" : {
+
+    },
+    "Vider" : {
+
+    },
+    "Vider le cache" : {
+
+    },
+    "Vider le cache ?" : {
+
+    },
+    "Voir la session (%lld)" : {
+
+    },
+    "Voir le détail" : {
+
+    },
+    "Voir le set" : {
+
+    },
+    "Voir sur Rebrickable" : {
+
+    },
+    "Vos données restent sur votre appareil" : {
+
+    },
+    "Vous gardez le contrôle" : {
+
+    }
   },
-  "version": "1.0"
+  "version" : "1.0"
 }
