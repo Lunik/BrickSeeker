@@ -299,7 +299,7 @@ final class LocalRepository {
 
     /// Appends one `ScanEvent` — called from `ScannerViewModel.resolveSet` for camera scans only
     /// (see the doc on `ScanEvent`). Returned so the caller can attach a location fix later.
-    func recordScanEvent(setNum: String, priceSeenEUR: Double?) -> ScanEvent {
+    func recordScanEvent(setNum: String, priceSeenEUR: Double? = nil) -> ScanEvent {
         let event = ScanEvent(setNum: setNum, priceSeenEUR: priceSeenEUR)
         modelContext.insert(event)
         try? modelContext.save()

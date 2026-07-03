@@ -67,9 +67,13 @@ final class ScanEvent {
     /// "Carrefour, Nice"). Filled in asynchronously after the scan, so it can stay nil even
     /// when coordinates are present.
     var placeName: String?
-    /// Best locally-known "new" price at the moment of the scan (lego.com retail → Amazon →
-    /// BrickLink new fallback chain, same as History rows) — lets SetDetail flag the scan where
-    /// the best price was seen.
+    /// The in-store price the user actually typed in the "quel prix as-tu vu ?" prompt shown
+    /// right after the scan — nil until they do (skipping the prompt, or scanning a set already
+    /// in the collection where no prompt is shown, leaves this nil). Deliberately never
+    /// backfilled from the online market price (lego.com/Amazon/BrickLink, already shown on the
+    /// price card and tracked separately in `PriceHistoryEntry`) — this field means "seen with my
+    /// own eyes", nothing else. Lets SetDetail flag the scan where the best in-store price was
+    /// actually seen.
     var priceSeenEUR: Double?
 
     init(setNum: String, scannedAt: Date = Date(), priceSeenEUR: Double? = nil) {

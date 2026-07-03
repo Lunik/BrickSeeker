@@ -414,14 +414,12 @@ final class ScannerViewModel {
     private func recordScanEventIfNeeded(setNum: String, bypassBatch: Bool) {
         guard playsFeedbackSounds, !bypassBatch, let localRepository else { return }
         let cached = localRepository.cachedSet(setNum: setNum)
-        // Best locally-known "new" price right now — the "relevé de prix du moment" the scan
-        // history highlights as "meilleur prix vu ici", and the starting value offered in the
-        // "quel prix as-tu vu ?" prompt (see `pendingPriceScanEvent`).
-        let priceSeen = resolveNewPrice(
-            storePriceEUR: cached?.storePriceEUR,
-            quotes: localRepository.cachedPrices(setNum: setNum)
-        )
-        let event = localRepository.recordScanEvent(setNum: setNum, priceSeenEUR: priceSeen)
+        // The event is recorded with no price: `priceSeenEUR` means "the in-store price the user
+        // actually entered", nothing more. It stays nil unless the user types a value and taps
+        // "Enregistrer" in the prompt — skipping the prompt, or scanning an owned set with no
+        // prompt, leaves it nil rather than silently backfilling the online market price (which is
+        // a different thing, already shown on the price card and tracked in price history).
+        let event = localRepository.recordScanEvent(setNum: setNum)
 
         // A set already in the collection isn't a deal being hunted: no "where did I see it"
         // location capture and no "what price did you see" prompt — same rationale, the geo/price

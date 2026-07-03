@@ -189,11 +189,11 @@ struct SetDetailView: View {
         }
     }
 
-    /// Shows the "quel prix as-tu vu ?" alert exactly once per sheet presentation, only when this
+    /// Shows the "quel prix as-tu vu ?" prompt exactly once per sheet presentation, only when this
     /// SetDetail was opened from a genuine new camera scan (`priceScanEventForPrompt` — see
-    /// `ScannerViewModel.pendingPriceScanEvent`). Prefills the auto-resolved price (lego.com →
-    /// Amazon → BrickLink neuf) when one was already known, so the user confirms/corrects rather
-    /// than typing from scratch.
+    /// `ScannerViewModel.pendingPriceScanEvent`). The event always starts with `priceSeenEUR ==
+    /// nil` (see `recordScanEventIfNeeded`) — the field only ever gets a value the user typed here
+    /// — but `event.priceSeenEUR` is still read defensively in case that ever changes upstream.
     private func presentPricePromptIfNeeded() {
         guard !hasShownPricePrompt, let event = priceScanEventForPrompt else { return }
         hasShownPricePrompt = true
