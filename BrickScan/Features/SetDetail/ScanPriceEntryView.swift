@@ -110,7 +110,7 @@ struct ScanPriceEntryView: View {
                         }
                     }
                 } header: {
-                    Text("\(setNum) · \(setName)")
+                    Text("\(setNum.baseSetNum) · \(setName)")
                 } footer: {
                     if mode == .percentage, referencePriceEUR != nil {
                         Text("Le pourcentage est appliqué au prix lego.com déjà connu pour calculer le prix final.")

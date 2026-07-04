@@ -30,6 +30,15 @@ struct LegoSet: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+extension String {
+    /// Strips Rebrickable's variant suffix (`"71045-3"` → `"71045"`). For the vast majority of
+    /// sets the suffix is always `-1` and shown nowhere; only `AmbiguousSetPickerView` needs the
+    /// full `setNum` to disambiguate variants sharing the same base number (see #97).
+    var baseSetNum: String {
+        split(separator: "-").first.map(String.init) ?? self
+    }
+}
+
 struct PaginatedResponse<T: Codable>: Codable {
     let count: Int
     let next: String?

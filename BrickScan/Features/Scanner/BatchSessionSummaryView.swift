@@ -52,7 +52,7 @@ struct BatchSessionSummaryView: View {
             SetThumbnailView(imageUrl: item.legoSet.setImgUrl)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(item.legoSet.setNum)
+                Text(item.legoSet.setNum.baseSetNum)
                     .font(.headline)
                     .foregroundStyle(.primary)
                 Text(item.legoSet.name)

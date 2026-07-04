@@ -16,11 +16,12 @@ To actually tap, you need to take control of the Mac's screen and mouse — that
 
 ## Steps
 
-1. Build and install on a **dedicated test simulator**, not whatever the user has booted (skill
+1. Use the user's own **"iPhone 17 Pro"** simulator (whatever its current UDID is — check with
+   `xcrun simctl list devices | grep "iPhone 17 Pro"`), not a freshly created dedicated one. The
+   user prefers driving their already-booted device over a throwaway `BrickScanTest` device (skill
    `ios-build-test` for the build itself):
    ```bash
-   xcrun simctl create "BrickScanTest" "iPhone 17 Pro" "com.apple.CoreSimulator.SimRuntime.iOS-26-5"
-   xcrun simctl boot <UDID>
+   xcrun simctl list devices | grep "iPhone 17 Pro"   # find <UDID>, boot it if Shutdown
    xcodebuild -project BrickScan.xcodeproj -scheme BrickScan \
      -destination 'id=<UDID>' -derivedDataPath build_sim build 2>&1 | grep -E "error:|BUILD"
    xcrun simctl install <UDID> build_sim/Build/Products/Debug-iphonesimulator/BrickScan.app

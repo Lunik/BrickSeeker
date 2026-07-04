@@ -75,8 +75,7 @@ final class LegoStoreRepository: LegoStoreRepositoryProtocol, Sendable {
     /// The product page URL shown to the user once a price has been confirmed — same path the
     /// scraper itself loads, so this never drifts from what was actually fetched.
     static func storeUrl(setNum: String) -> URL? {
-        let productId = setNum.split(separator: "-").first.map(String.init) ?? setNum
-        return URL(string: "https://www.lego.com/fr-fr/product/\(productId)")
+        URL(string: "https://www.lego.com/fr-fr/product/\(setNum.baseSetNum)")
     }
 
     /// Building instructions page for a set, by product id (same id `storeUrl` derives). The page
@@ -84,8 +83,7 @@ final class LegoStoreRepository: LegoStoreRepositoryProtocol, Sendable {
     /// has instructions, so there's no way to check availability without a full web view — the
     /// link is always shown and lego.com handles the "no instructions" case itself.
     static func instructionsUrl(setNum: String) -> URL? {
-        let productId = setNum.split(separator: "-").first.map(String.init) ?? setNum
-        return URL(string: "https://www.lego.com/fr-fr/service/building-instructions/\(productId)")
+        URL(string: "https://www.lego.com/fr-fr/service/building-instructions/\(setNum.baseSetNum)")
     }
 
     /// Ready once `og:title` is present — it exists on every real product page regardless of
