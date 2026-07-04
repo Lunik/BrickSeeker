@@ -48,8 +48,6 @@ struct HomeView: View {
                         appStatsSection(viewModel)
                         collectionStatsSection(viewModel)
                         wishlistSection(viewModel)
-
-                        quickActionsSection
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 140)
@@ -62,7 +60,7 @@ struct HomeView: View {
                     await Task { await viewModel.syncCollection() }.value
                 }
 
-                scanButton
+                scanButtonCluster
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -271,33 +269,6 @@ struct HomeView: View {
         }
     }
 
-    private var quickActionsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Actions")
-                .font(.headline)
-            HStack(spacing: 12) {
-                actionButton(title: "Photo", icon: "photo.on.rectangle") { showPhotoPicker = true }
-                actionButton(title: "Saisie", icon: "keyboard") { showManualEntry = true }
-            }
-        }
-    }
-
-    private func actionButton(title: String, icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.title2)
-                Text(title)
-                    .font(.caption)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .cardStyle(padding: 0)
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.primary)
-    }
-
     /// Same layout as `StatCard` (icon + two text lines) for a tile that navigates somewhere
     /// rather than displaying a count.
     private func statCardLink(title: String, icon: String) -> some View {
@@ -317,6 +288,25 @@ struct HomeView: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// The three actions (photo, scan, manual entry) as a single floating cluster instead of a
+    /// lone camera button plus a separate `quickActionsSection` in the scrolling content — see
+    /// issue #99. The camera button keeps its original size/action; the satellites reuse the
+    /// same `showPhotoPicker`/`showManualEntry` triggers without duplicating that logic.
+    private var scanButtonCluster: some View {
+        HStack(spacing: 24) {
+            satelliteButton(icon: "photo.on.rectangle", accessibilityLabel: "Depuis mes photos") {
+                showPhotoPicker = true
+            }
+
+            scanButton
+
+            satelliteButton(icon: "keyboard", accessibilityLabel: "Saisie manuelle") {
+                showManualEntry = true
+            }
+        }
+        .padding(.bottom, 32)
+    }
+
     private var scanButton: some View {
         Button(action: onStartScanning) {
             Image(systemName: "camera.fill")
@@ -328,7 +318,19 @@ struct HomeView: View {
                 .shadow(radius: 8)
         }
         .accessibilityLabel("Scanner un set")
-        .padding(.bottom, 32)
+    }
+
+    private func satelliteButton(icon: String, accessibilityLabel: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 20))
+                .foregroundStyle(.primary)
+                .frame(width: 48, height: 48)
+                .background(.thinMaterial)
+                .clipShape(Circle())
+                .shadow(radius: 4)
+        }
+        .accessibilityLabel(accessibilityLabel)
     }
 }
 
