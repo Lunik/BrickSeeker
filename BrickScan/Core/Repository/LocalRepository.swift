@@ -73,10 +73,57 @@ final class LocalRepository {
         (try? modelContext.fetchCount(FetchDescriptor<CachedSet>(predicate: #Predicate { $0.isInCollection }))) ?? 0
     }
 
+    func wishlistSetsCount() -> Int {
+        (try? modelContext.fetchCount(FetchDescriptor<CachedSet>(predicate: #Predicate { $0.isInWishlist }))) ?? 0
+    }
+
     func cachedSet(setNum: String) -> CachedSet? {
         try? modelContext.fetch(
             FetchDescriptor<CachedSet>(predicate: #Predicate { $0.setNum == setNum })
         ).first
+    }
+
+    /// No-ops if no CachedSet row exists yet — wishlist status is only meaningful attached to a
+    /// set already reached through the normal resolve flow (which always caches one first).
+    func setWishlistStatus(setNum: String, isInWishlist: Bool) {
+        guard let existing = cachedSet(setNum: setNum) else { return }
+        existing.isInWishlist = isInWishlist
+        try? modelContext.save()
+    }
+
+    /// Reconciles every *already-cached* set's `isInWishlist` against Brickset's wanted-sets
+    /// list — mirrors `syncCollection`'s reconcile approach. Never creates new rows itself (no
+    /// `LegoSet` data to populate one with here); pair with `cachedSetNums()`/`cacheWishlistSet`
+    /// (see `WishlistSync.apply`) to also cover wanted sets with no local row yet — a set never
+    /// scanned or owned wouldn't otherwise appear anywhere in the app despite being wanted.
+    func syncWishlist(wantedSetNums: Set<String>) {
+        let allCached = (try? modelContext.fetch(FetchDescriptor<CachedSet>())) ?? []
+        for cached in allCached {
+            let shouldBeWanted = wantedSetNums.contains(cached.setNum)
+            if cached.isInWishlist != shouldBeWanted {
+                cached.isInWishlist = shouldBeWanted
+            }
+        }
+        try? modelContext.save()
+    }
+
+    /// Every set number currently in the local cache — used to find which of Brickset's wanted
+    /// sets (see `syncWishlist`) have no cached row yet and need `cacheWishlistSet`.
+    func cachedSetNums() -> Set<String> {
+        Set((try? modelContext.fetch(FetchDescriptor<CachedSet>()))?.map(\.setNum) ?? [])
+    }
+
+    /// Inserts a wishlist-only row for a set with no existing cache entry (never scanned or
+    /// owned) — the counterpart to `syncWishlist`'s reconcile-only pass, using catalog data
+    /// already fetched by the caller (`WishlistSync.apply`) since this type has no network
+    /// access of its own. No-ops if a row already exists (race with a concurrent cache write).
+    func cacheWishlistSet(_ legoSet: LegoSet) {
+        guard cachedSet(setNum: legoSet.setNum) == nil else { return }
+        let cached = CachedSet(from: legoSet)
+        cached.wasScanned = false
+        cached.isInWishlist = true
+        modelContext.insert(cached)
+        try? modelContext.save()
     }
 
     /// No-ops if no CachedSet row exists yet — the price is only meaningful attached to a set

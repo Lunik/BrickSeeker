@@ -36,6 +36,7 @@ struct SetDetailView: View {
         initialListName: String? = nil,
         initialStorePrice: StorePrice? = nil,
         initialStorePriceFetchedAt: Date? = nil,
+        initialIsInWishlist: Bool = false,
         reconcileOnAppear: Bool = false,
         isOfflineResult: Bool = false,
         pendingPriceScanEvent: ScanEvent? = nil,
@@ -46,7 +47,8 @@ struct SetDetailView: View {
             collectionStatus: collectionStatus,
             initialListName: initialListName,
             initialStorePrice: initialStorePrice,
-            initialStorePriceFetchedAt: initialStorePriceFetchedAt
+            initialStorePriceFetchedAt: initialStorePriceFetchedAt,
+            initialIsInWishlist: initialIsInWishlist
         ))
         let setNum = legoSet.setNum
         _scanEvents = Query(
@@ -90,6 +92,8 @@ struct SetDetailView: View {
                     }
 
                     statusBadge
+
+                    wishlistRow
 
                     priceSection
 
@@ -192,6 +196,9 @@ struct SetDetailView: View {
         .onChange(of: viewModel.collectionStatus) { _, _ in syncCache() }
         .onChange(of: viewModel.collectionListName) { _, _ in syncCache() }
         .onChange(of: viewModel.storePriceFetchedAt) { _, _ in syncStorePriceCache() }
+        .onChange(of: viewModel.isInWishlist) { _, isInWishlist in
+            LocalRepository(modelContext: modelContext).setWishlistStatus(setNum: viewModel.legoSet.setNum, isInWishlist: isInWishlist)
+        }
         .task {
             if reconcileOnAppear {
                 await viewModel.silentlyReconcileCollectionStatus()
@@ -642,6 +649,29 @@ struct SetDetailView: View {
                 .font(.footnote)
             }
         }
+    }
+
+    /// Toggles this set's Brickset wishlist status — independent of collection membership (a set
+    /// can be owned, wishlisted, both, or neither), so shown regardless of `isInCollection`/
+    /// `statusIsUnknown`. See `SetDetailViewModel.toggleWishlist` / `AGENTS.md` on why the
+    /// wishlist lives on Brickset rather than as a Rebrickable setlist.
+    private var wishlistRow: some View {
+        Button {
+            Task { await viewModel.toggleWishlist() }
+        } label: {
+            HStack(spacing: 6) {
+                if viewModel.isWishlistLoading {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: viewModel.isInWishlist ? "heart.fill" : "heart")
+                }
+                Text(viewModel.isInWishlist ? "Dans ta liste cadeaux" : "Ajouter à ta liste cadeaux")
+            }
+            .foregroundStyle(viewModel.isInWishlist ? .pink : .secondary)
+        }
+        .buttonStyle(.plain)
+        .disabled(viewModel.isWishlistLoading)
+        .accessibilityLabel(viewModel.isInWishlist ? "Retirer de la liste cadeaux" : "Ajouter à la liste cadeaux")
     }
 
     /// Floating button that opens the "quel prix as-tu vu ?" sheet on tap — never auto-presented

@@ -13,8 +13,21 @@ struct HomeView: View {
     @State private var showManualEntry = false
     @State private var showPhotoPicker = false
     @State private var selectedPhotoItem: PhotosPickerItem?
-    @State private var showCollection = false
-    @State private var showStatistics = false
+    // A single typed destination, not three separate `Bool` + `.navigationDestination(isPresented:)`
+    // pairs — chaining multiple `isPresented:` destinations on the same NavigationStack is prone to
+    // an infinite construct/destroy oscillation between them (SwiftUI can't stably reconcile which
+    // one owns the current path position), reproduced here once a third one (Wishlist) was added:
+    // CollectionView/StatisticsView/WishlistView kept getting created and torn down forever,
+    // freezing the app at ~100% CPU. `.navigationDestination(item:)` has exactly one destination to
+    // resolve, so there's nothing to oscillate between.
+    private enum Destination: Identifiable {
+        case collection
+        case statistics
+        case wishlist
+
+        var id: Self { self }
+    }
+    @State private var destination: Destination?
 
     let onStartScanning: () -> Void
     @Binding var pendingAction: HomeScreenShortcut?
@@ -34,6 +47,7 @@ struct HomeView: View {
 
                         appStatsSection(viewModel)
                         collectionStatsSection(viewModel)
+                        wishlistSection(viewModel)
 
                         quickActionsSection
                     }
@@ -60,11 +74,15 @@ struct HomeView: View {
                     .accessibilityLabel("Réglages")
                 }
             }
-            .navigationDestination(isPresented: $showCollection) {
-                CollectionView(lookupViewModel: lookupViewModel)
-            }
-            .navigationDestination(isPresented: $showStatistics) {
-                StatisticsView(lookupViewModel: lookupViewModel)
+            .navigationDestination(item: $destination) { destination in
+                switch destination {
+                case .collection:
+                    CollectionView(lookupViewModel: lookupViewModel)
+                case .statistics:
+                    StatisticsView(lookupViewModel: lookupViewModel)
+                case .wishlist:
+                    WishlistView(lookupViewModel: lookupViewModel)
+                }
             }
             .sheet(isPresented: $showHistory) {
                 HistoryView(lookupViewModel: lookupViewModel) { setNum in
@@ -173,14 +191,14 @@ struct HomeView: View {
             } else {
                 HStack(spacing: 12) {
                     Button {
-                        showStatistics = true
+                        destination = .statistics
                     } label: {
                         statCardLink(title: "Statistiques", icon: "chart.bar")
                     }
                     .buttonStyle(.plain)
 
                     Button {
-                        showCollection = true
+                        destination = .collection
                     } label: {
                         StatCard(title: "Sets possédés", value: "\(viewModel.ownedSetsCount)", icon: "shippingbox")
                     }
@@ -192,6 +210,48 @@ struct HomeView: View {
                 // .refreshable's pull gesture was still tracking, which can cancel the in-flight
                 // sync task on some iOS versions. `minHeight` (not a fixed height) so Dynamic
                 // Type XXL isn't clipped.
+                HStack(spacing: 6) {
+                    if viewModel.isSyncing {
+                        ProgressView().controlSize(.small)
+                        Text("Synchronisation…")
+                    } else if let errorMessage = viewModel.syncErrorMessage {
+                        Text(errorMessage)
+                    } else if let lastSyncedAt = viewModel.lastSyncedAt {
+                        Text("Dernière synchronisation : \(lastSyncedAt.formatted(date: .abbreviated, time: .shortened))")
+                    } else {
+                        Text(" ")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(minHeight: 16, alignment: .leading)
+            }
+        }
+    }
+
+    /// Independent of `collectionStatsSection` — the wishlist lives on Brickset, a separate
+    /// account from Rebrickable's (see `AGENTS.md`/issue #6), so it's gated on its own linked
+    /// state rather than `viewModel.isAccountLinked`.
+    private func wishlistSection(_ viewModel: HomeViewModel) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Liste cadeaux")
+                .font(.headline)
+
+            if !viewModel.isBricksetAccountLinked {
+                Text("Compte non lié — ouvrez Réglages pour lier votre compte Brickset.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                Button {
+                    destination = .wishlist
+                } label: {
+                    StatCard(title: "Dans la liste cadeaux", value: "\(viewModel.wishlistSetsCount)", icon: "heart")
+                }
+                .buttonStyle(.plain)
+
+                // Same sync as Collection (piggybacks on `syncCollection()`, see
+                // `HomeViewModel`) — mirrors that section's row so both show one consistent
+                // "last synced" state instead of the wishlist looking unsynced next to it.
                 HStack(spacing: 6) {
                     if viewModel.isSyncing {
                         ProgressView().controlSize(.small)

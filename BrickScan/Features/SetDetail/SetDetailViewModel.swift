@@ -18,7 +18,11 @@ final class SetDetailViewModel {
     var isLoadingStorePrice = false
     var storePriceErrorMessage: String?
 
+    var isInWishlist: Bool
+    var isWishlistLoading = false
+
     private let repository: RebrickableRepositoryProtocol
+    private let bricksetRepository: BricksetRepositoryProtocol
     private let legoStoreRepository: LegoStoreRepositoryProtocol
     private let priceRepository: PriceRepositoryProtocol
 
@@ -28,7 +32,9 @@ final class SetDetailViewModel {
         initialListName: String? = nil,
         initialStorePrice: StorePrice? = nil,
         initialStorePriceFetchedAt: Date? = nil,
+        initialIsInWishlist: Bool = false,
         repository: RebrickableRepositoryProtocol = RebrickableRepository(),
+        bricksetRepository: BricksetRepositoryProtocol = BricksetRepository(),
         legoStoreRepository: LegoStoreRepositoryProtocol = LegoStoreRepository(),
         priceRepository: PriceRepositoryProtocol = PriceRepository()
     ) {
@@ -37,7 +43,9 @@ final class SetDetailViewModel {
         self.collectionListName = initialListName
         self.storePrice = initialStorePrice
         self.storePriceFetchedAt = initialStorePriceFetchedAt
+        self.isInWishlist = initialIsInWishlist
         self.repository = repository
+        self.bricksetRepository = bricksetRepository
         self.legoStoreRepository = legoStoreRepository
         self.priceRepository = priceRepository
         // loadStorePriceIfNeeded() always fires a fetch in this case (no fetchedAt to compare
@@ -160,6 +168,38 @@ final class SetDetailViewModel {
             self.collectionStatus = .notInCollection
             self.collectionListName = nil
             self.toastMessage = "Set retiré de la collection"
+        }
+    }
+
+    /// Toggles this set's Brickset `wanted` flag — see `AGENTS.md`/issue #6 on why the wishlist
+    /// lives on Brickset rather than as a Rebrickable setlist (which would count it as *owned*).
+    /// Distinguishes `.missingCredentials` from other failures so the UI can point at Settings
+    /// specifically, rather than a generic error, when no Brickset account is linked yet.
+    @MainActor
+    func toggleWishlist() async {
+        guard NetworkMonitor.shared.isConnected else {
+            errorMessage = UserMessage.offlineStatus
+            return
+        }
+        isWishlistLoading = true
+        errorMessage = nil
+        defer { isWishlistLoading = false }
+        do {
+            if isInWishlist {
+                try await bricksetRepository.removeFromWishlist(setNum: legoSet.setNum)
+                isInWishlist = false
+                toastMessage = "Set retiré de ta liste cadeaux"
+            } else {
+                try await bricksetRepository.addToWishlist(setNum: legoSet.setNum)
+                isInWishlist = true
+                toastMessage = "Set ajouté à ta liste cadeaux"
+            }
+        } catch APIError.missingCredentials {
+            errorMessage = String(localized: "Lie ton compte Brickset dans Réglages pour utiliser la liste cadeaux.")
+        } catch let error as APIError {
+            errorMessage = error.errorDescription
+        } catch {
+            errorMessage = String(localized: "Une erreur est survenue")
         }
     }
 

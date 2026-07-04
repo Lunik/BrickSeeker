@@ -12,6 +12,13 @@ final class SettingsViewModel {
     var linkAccountErrorMessage: String?
     var isAccountLinked: Bool
 
+    var bricksetApiKey: String
+    var bricksetUsername = ""
+    var bricksetPassword = ""
+    var isLinkingBricksetAccount = false
+    var linkBricksetAccountErrorMessage: String?
+    var isBricksetAccountLinked: Bool
+
     var isUpdatingOfflineCatalog = false
     var offlineCatalogDownloadProgress: Double = 0
     var offlineCatalogErrorMessage: String?
@@ -25,14 +32,19 @@ final class SettingsViewModel {
     private var pausedForBackgrounding = false
 
     private let repository: RebrickableRepositoryProtocol
+    private let bricksetRepository: BricksetRepositoryProtocol
 
     init(
         repository: RebrickableRepositoryProtocol = RebrickableRepository(),
+        bricksetRepository: BricksetRepositoryProtocol = BricksetRepository(),
         offlineCatalogStore: OfflineCatalogStore = .shared
     ) {
         self.apiKey = KeychainService.shared.load(key: .apiKey) ?? ""
         self.isAccountLinked = KeychainService.shared.load(key: .userToken) != nil
+        self.bricksetApiKey = KeychainService.shared.load(key: .bricksetApiKey) ?? ""
+        self.isBricksetAccountLinked = KeychainService.shared.hasBricksetUserHash
         self.repository = repository
+        self.bricksetRepository = bricksetRepository
         self.offlineCatalogStore = offlineCatalogStore
         self.offlineCatalogMetadata = offlineCatalogStore.metadata
     }
@@ -77,6 +89,9 @@ final class SettingsViewModel {
         if CollectionPriceUpdater.shared.isRunning {
             CollectionPriceUpdater.shared.cancelPreservingProgress()
         }
+        if BricksetWishlistImporter.shared.isRunning {
+            BricksetWishlistImporter.shared.cancelPreservingProgress()
+        }
     }
 
     func purgeOfflineCatalog() {
@@ -86,6 +101,9 @@ final class SettingsViewModel {
 
     func save() {
         KeychainService.shared.save(key: .apiKey, value: apiKey)
+        if !bricksetApiKey.isEmpty {
+            KeychainService.shared.save(key: .bricksetApiKey, value: bricksetApiKey)
+        }
     }
 
     func linkAccount() async -> Bool {
@@ -116,5 +134,37 @@ final class SettingsViewModel {
     func unlinkAccount() {
         KeychainService.shared.delete(key: .userToken)
         isAccountLinked = false
+    }
+
+    func linkBricksetAccount() async -> Bool {
+        guard !bricksetApiKey.isEmpty, !bricksetUsername.isEmpty, !bricksetPassword.isEmpty else { return false }
+
+        isLinkingBricksetAccount = true
+        linkBricksetAccountErrorMessage = nil
+        defer { isLinkingBricksetAccount = false }
+
+        do {
+            let userHash = try await bricksetRepository.authenticate(
+                apiKey: bricksetApiKey, username: bricksetUsername, password: bricksetPassword
+            )
+            KeychainService.shared.save(key: .bricksetUserHash, value: userHash)
+            bricksetUsername = ""
+            bricksetPassword = ""
+            isBricksetAccountLinked = true
+            return true
+        } catch let error as APIError {
+            linkBricksetAccountErrorMessage = error.errorDescription
+            bricksetPassword = ""
+            return false
+        } catch {
+            linkBricksetAccountErrorMessage = String(localized: "Connexion impossible. Vérifiez votre réseau.")
+            bricksetPassword = ""
+            return false
+        }
+    }
+
+    func unlinkBricksetAccount() {
+        KeychainService.shared.delete(key: .bricksetUserHash)
+        isBricksetAccountLinked = false
     }
 }

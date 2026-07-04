@@ -47,7 +47,8 @@ struct CollectionView: View {
                                 name: cached.name,
                                 setImgUrl: cached.setImgUrl,
                                 subtitle: cached.currentListName,
-                                resolvedPrice: resolvedPrice(for: cached)
+                                resolvedPrice: resolvedPrice(for: cached),
+                                isInWishlist: cached.isInWishlist
                             ) {
                                 EmptyView()
                             }
