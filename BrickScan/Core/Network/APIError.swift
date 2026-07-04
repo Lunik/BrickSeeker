@@ -10,6 +10,12 @@ enum APIError: Error, LocalizedError {
     case rateLimited
     case missingCredentials
     case unknown
+    /// Brickset's API replies HTTP 200 on both success and failure — the outcome lives in the
+    /// JSON envelope's `status`/`message` fields, not the HTTP status code like Rebrickable, so
+    /// its failures can't be mapped onto the HTTP-code-driven cases above. Carries Brickset's
+    /// own (English) message since its error vocabulary isn't documented/stable enough to map
+    /// onto fixed French strings without risking silently mislabeling a different failure.
+    case bricksetError(String)
 
     var errorDescription: String? {
         switch self {
@@ -31,6 +37,8 @@ enum APIError: Error, LocalizedError {
             return String(localized: "Identifiants manquants")
         case .unknown:
             return String(localized: "Une erreur inconnue est survenue")
+        case .bricksetError(let message):
+            return String(localized: "Erreur Brickset : \(message)")
         }
     }
 }

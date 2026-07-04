@@ -9,6 +9,7 @@ struct SetRowView<Trailing: View>: View {
     let setImgUrl: String?
     var subtitle: String? = nil
     var resolvedPrice: Double? = nil
+    var isInWishlist: Bool = false
     @ViewBuilder let trailingContent: () -> Trailing
 
     var body: some View {
@@ -16,7 +17,15 @@ struct SetRowView<Trailing: View>: View {
             SetThumbnailView(imageUrl: setImgUrl)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(setNum).font(.headline)
+                HStack(spacing: 4) {
+                    Text(setNum).font(.headline)
+                    if isInWishlist {
+                        Image(systemName: "heart.fill")
+                            .font(.caption)
+                            .foregroundStyle(.pink)
+                            .accessibilityLabel("Dans ta liste cadeaux")
+                    }
+                }
                 Text(name)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)

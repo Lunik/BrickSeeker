@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var preferredPPPText: String = ""
     @State private var showPrivacyDetail = false
     @State private var isAPIKeyVisible = false
+    @State private var isBricksetAPIKeyVisible = false
     @State private var showClearCacheConfirmation = false
     @State private var isClearingCache = false
     @State private var cacheCleared = false
@@ -143,6 +144,66 @@ struct SettingsView: View {
                     Text("Compte Rebrickable")
                 } footer: {
                     Text("Nécessaire pour voir et gérer votre collection. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session.")
+                }
+
+                Section {
+                    HStack {
+                        Group {
+                            if isBricksetAPIKeyVisible {
+                                TextField("API Key", text: $viewModel.bricksetApiKey)
+                            } else {
+                                SecureField("API Key", text: $viewModel.bricksetApiKey)
+                            }
+                        }
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+
+                        Button {
+                            isBricksetAPIKeyVisible.toggle()
+                        } label: {
+                            Image(systemName: isBricksetAPIKeyVisible ? "eye.slash" : "eye")
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel(isBricksetAPIKeyVisible ? "Masquer la clé API Brickset" : "Afficher la clé API Brickset")
+                    }
+
+                    if viewModel.isBricksetAccountLinked {
+                        Label("Compte Brickset lié", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        Button("Délier mon compte", role: .destructive) {
+                            viewModel.unlinkBricksetAccount()
+                        }
+                    } else {
+                        TextField("Nom d'utilisateur", text: $viewModel.bricksetUsername)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        SecureField("Mot de passe", text: $viewModel.bricksetPassword)
+
+                        if let errorMessage = viewModel.linkBricksetAccountErrorMessage {
+                            Text(errorMessage)
+                                .foregroundStyle(Color.brickDanger)
+                                .font(.footnote)
+                        }
+
+                        if !viewModel.bricksetUsername.isEmpty && !viewModel.bricksetPassword.isEmpty {
+                            Button {
+                                Task { _ = await viewModel.linkBricksetAccount() }
+                            } label: {
+                                if viewModel.isLinkingBricksetAccount {
+                                    ProgressView()
+                                } else {
+                                    Text("Lier mon compte")
+                                }
+                            }
+                            .disabled(viewModel.bricksetApiKey.isEmpty || viewModel.isLinkingBricksetAccount)
+                        }
+                    }
+
+                } header: {
+                    Text("Compte Brickset")
+                } footer: {
+                    Text("Nécessaire pour gérer votre liste cadeaux. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session.")
                 }
 
                 Section {

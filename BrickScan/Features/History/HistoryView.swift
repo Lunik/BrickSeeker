@@ -53,7 +53,8 @@ struct HistoryView: View {
                                 setNum: cached.setNum,
                                 name: cached.name,
                                 setImgUrl: cached.setImgUrl,
-                                resolvedPrice: resolvedPrice(for: cached)
+                                resolvedPrice: resolvedPrice(for: cached),
+                                isInWishlist: cached.isInWishlist
                             ) {
                                 if cached.isInCollection {
                                     Image(systemName: "checkmark.circle.fill")

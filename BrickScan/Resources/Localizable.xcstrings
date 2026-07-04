@@ -39,6 +39,16 @@
     "%lld / %lld sets" : {
 
     },
+    "%lld ajouté%@, %lld déjà dans la liste cadeaux" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld ajouté%2$@, %3$lld déjà dans la liste cadeaux"
+          }
+        }
+      }
+    },
     "%lld scan%@" : {
       "localizations" : {
         "fr" : {
@@ -94,6 +104,18 @@
     "Afficher la clé API" : {
 
     },
+    "Afficher la clé API Brickset" : {
+
+    },
+    "Ajoute un set à ta liste cadeaux depuis sa fiche, ou importe une liste Rebrickable publique." : {
+
+    },
+    "Ajouter à la liste cadeaux" : {
+
+    },
+    "Ajouter à ta liste cadeaux" : {
+
+    },
     "Ajouter à une liste" : {
 
     },
@@ -125,6 +147,9 @@
 
     },
     "Aucun catalogue téléchargé" : {
+
+    },
+    "Aucun numéro de set trouvé dans ce fichier." : {
 
     },
     "Aucun résultat" : {
@@ -184,6 +209,9 @@
     "Changer de liste" : {
 
     },
+    "Choisir un fichier CSV" : {
+
+    },
     "Choisir un set" : {
 
     },
@@ -205,6 +233,15 @@
     "Compléter les prix manquants (%lld)" : {
 
     },
+    "Compte Brickset" : {
+
+    },
+    "Compte Brickset lié" : {
+
+    },
+    "Compte non lié — ouvrez Réglages pour lier votre compte Brickset." : {
+
+    },
     "Compte non lié — ouvrez Réglages pour lier votre compte Rebrickable." : {
 
     },
@@ -224,6 +261,9 @@
 
     },
     "Créer une nouvelle liste" : {
+
+    },
+    "Dans ta liste cadeaux" : {
 
     },
     "Dans votre collection" : {
@@ -257,6 +297,12 @@
 
     },
     "Enregistrer la position des scans" : {
+
+    },
+    "Erreur" : {
+
+    },
+    "Erreur Brickset : %@" : {
 
     },
     "Erreur inconnue" : {
@@ -316,16 +362,31 @@
     "Identifiants manquants" : {
 
     },
+    "Import en cours…" : {
+
+    },
+    "Import impossible. Vérifiez votre réseau." : {
+
+    },
+    "Importer depuis Rebrickable" : {
+
+    },
     "Impossible de charger vos listes. Vérifiez votre réseau." : {
 
     },
     "Impossible de créer la liste. Vérifiez votre réseau." : {
 
     },
+    "Impossible de lire le fichier." : {
+
+    },
     "Inactifs" : {
 
     },
     "Indisponible" : {
+
+    },
+    "Introuvables sur Brickset : %@" : {
 
     },
     "L'accès à la position est refusé dans les réglages iOS — aucune position ne sera enregistrée." : {
@@ -346,6 +407,12 @@
     "Les sets que tu scannes apparaîtront ici." : {
 
     },
+    "Lie d'abord ton compte Brickset ci-dessus." : {
+
+    },
+    "Lie ton compte Brickset dans Réglages pour utiliser la liste cadeaux." : {
+
+    },
     "Lier mon compte" : {
 
     },
@@ -353,6 +420,12 @@
 
     },
     "Liste" : {
+
+    },
+    "Liste cadeaux" : {
+
+    },
+    "Liste cadeaux vide" : {
 
     },
     "Listes" : {
@@ -365,6 +438,9 @@
 
     },
     "Masquer la clé API" : {
+
+    },
+    "Masquer la clé API Brickset" : {
 
     },
     "Meilleur prix" : {
@@ -388,7 +464,13 @@
     "Mot de passe" : {
 
     },
+    "Nécessaire pour gérer votre liste cadeaux. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session." : {
+
+    },
     "Nécessaire pour voir et gérer votre collection. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session." : {
+
+    },
+    "Nom d'utilisateur" : {
 
     },
     "Nom d'utilisateur ou email" : {
@@ -523,6 +605,9 @@
     "Reprendre (%lld restants)" : {
 
     },
+    "Reprendre l'import (%lld restants)" : {
+
+    },
     "Ressource introuvable" : {
 
     },
@@ -542,6 +627,9 @@
 
     },
     "Retirer de la collection ?" : {
+
+    },
+    "Retirer de la liste cadeaux" : {
 
     },
     "Rupture de stock" : {
@@ -598,6 +686,9 @@
     "Supprimer ce scan ?" : {
 
     },
+    "Sur la page de ta custom list Rebrickable, onglet Sets, télécharge le CSV puis choisis-le ici pour ajouter tous ses sets à ta liste cadeaux Brickset." : {
+
+    },
     "Synchronisation…" : {
 
     },
@@ -637,7 +728,13 @@
     "Trier par" : {
 
     },
+    "Trop de requêtes, réessaie dans un instant." : {
+
+    },
     "Trop de requêtes, veuillez réessayer plus tard" : {
+
+    },
+    "Une erreur est survenue" : {
 
     },
     "Une erreur inconnue est survenue" : {

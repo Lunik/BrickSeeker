@@ -22,6 +22,9 @@ final class CachedSet {
     var storePriceEUR: Double?
     var storeAvailability: String?
     var storePriceFetchedAt: Date?
+    /// Mirrors Brickset's `wanted` flag (see `BricksetRepository`) — deliberately independent of
+    /// `isInCollection`: a set can be wishlisted, owned, both, or neither.
+    var isInWishlist: Bool = false
 
     init(from legoSet: LegoSet, isInCollection: Bool = false, currentListId: Int? = nil, currentListName: String? = nil) {
         self.setNum = legoSet.setNum

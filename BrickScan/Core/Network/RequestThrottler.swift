@@ -3,10 +3,17 @@ import Foundation
 actor RequestThrottler {
     static let shared = RequestThrottler()
 
-    private let minimumInterval: TimeInterval = 0.2
+    private let minimumInterval: TimeInterval
     private var lastRequestDate: Date?
 
-    private init() {}
+    // Not private — each remote host (Rebrickable, Brickset, …) should own its own instance, so
+    // a burst of requests to one doesn't needlessly throttle unrelated traffic to the other.
+    // Customizable per-host: 0.2s is fine for Rebrickable, but Brickset returns HTTP 429 on a
+    // back-to-back getSets+setCollection pair spaced only 0.2s apart (confirmed live) — see
+    // `BricksetClient`.
+    init(minimumInterval: TimeInterval = 0.2) {
+        self.minimumInterval = minimumInterval
+    }
 
     func waitIfNeeded() async {
         if let last = lastRequestDate {
