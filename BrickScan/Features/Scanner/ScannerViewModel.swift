@@ -196,6 +196,10 @@ final class ScannerViewModel {
         }
         // `resolveSet` already plays the "candidate detected" sound once at the start of this
         // resolution — don't play it again here just because the set landed in the batch session.
+        // Cache it exactly like a normal `.found` resolution would (via `ScannerView`'s
+        // `onChange(of: state)`) — batch mode never transitions `state` to `.found`, so without
+        // this call these sets would never reach `CachedSet`/History (issue #98).
+        localRepository?.cacheFoundState(.found(legoSet, collectionStatus))
         batchSession.add(legoSet, collectionStatus: collectionStatus)
         resumeScanning()
     }
