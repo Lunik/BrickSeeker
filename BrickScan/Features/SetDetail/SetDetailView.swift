@@ -75,7 +75,7 @@ struct SetDetailView: View {
                     .frame(height: 220)
 
                     VStack(spacing: 4) {
-                        Text(viewModel.legoSet.setNum)
+                        Text(viewModel.legoSet.setNum.baseSetNum)
                             .font(.title2.bold())
                         Text(viewModel.legoSet.name)
                             .font(.title3)

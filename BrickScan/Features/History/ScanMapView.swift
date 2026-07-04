@@ -50,7 +50,7 @@ struct ScanMapView: View {
                         ForEach(events) { event in
                             if let latitude = event.latitude, let longitude = event.longitude {
                                 Marker(
-                                    nameBySetNum[event.setNum] ?? event.setNum,
+                                    nameBySetNum[event.setNum] ?? event.setNum.baseSetNum,
                                     systemImage: "shippingbox.fill",
                                     coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
                                 )
@@ -78,7 +78,7 @@ struct ScanMapView: View {
 
     private func selectedEventCard(_ event: ScanEvent) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(nameBySetNum[event.setNum].map { "\(event.setNum) · \($0)" } ?? event.setNum)
+            Text(nameBySetNum[event.setNum].map { "\(event.setNum.baseSetNum) · \($0)" } ?? event.setNum.baseSetNum)
                 .font(.subheadline.bold())
                 .lineLimit(1)
             if let placeName = event.placeName {

@@ -18,7 +18,7 @@ struct SetRowView<Trailing: View>: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
-                    Text(setNum).font(.headline)
+                    Text(setNum.baseSetNum).font(.headline)
                     if isInWishlist {
                         Image(systemName: "heart.fill")
                             .font(.caption)

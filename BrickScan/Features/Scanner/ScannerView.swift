@@ -150,6 +150,14 @@ struct AmbiguousSetPickerView: View {
     let onSelect: (LegoSet) -> Void
     let onCancel: () -> Void
 
+    /// Base numbers shared by more than one candidate — only these need the full `-N` suffix to
+    /// tell entries apart (e.g. Collectible Minifigures, see #97). Other candidates show the
+    /// base number, consistent with the rest of the app.
+    private var duplicatedBaseSetNums: Set<String> {
+        let counts = Dictionary(grouping: sets, by: \.setNum.baseSetNum).mapValues(\.count)
+        return Set(counts.filter { $0.value > 1 }.keys)
+    }
+
     var body: some View {
         NavigationStack {
             List(sets) { set in
@@ -157,7 +165,8 @@ struct AmbiguousSetPickerView: View {
                     onSelect(set)
                 } label: {
                     VStack(alignment: .leading) {
-                        Text(set.setNum).font(.headline)
+                        Text(duplicatedBaseSetNums.contains(set.setNum.baseSetNum) ? set.setNum : set.setNum.baseSetNum)
+                            .font(.headline)
                         Text(set.name).font(.subheadline).foregroundStyle(.secondary)
                     }
                     .foregroundStyle(.primary)
