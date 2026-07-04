@@ -294,14 +294,14 @@ struct HomeView: View {
     /// same `showPhotoPicker`/`showManualEntry` triggers without duplicating that logic.
     private var scanButtonCluster: some View {
         HStack(spacing: 24) {
-            satelliteButton(icon: "keyboard", accessibilityLabel: "Saisie manuelle") {
-                showManualEntry = true
+            satelliteButton(icon: "photo.on.rectangle", accessibilityLabel: "Depuis mes photos") {
+                showPhotoPicker = true
             }
 
             scanButton
 
-            satelliteButton(icon: "photo.on.rectangle", accessibilityLabel: "Depuis mes photos") {
-                showPhotoPicker = true
+            satelliteButton(icon: "keyboard", accessibilityLabel: "Saisie manuelle") {
+                showManualEntry = true
             }
         }
         .padding(.bottom, 32)
