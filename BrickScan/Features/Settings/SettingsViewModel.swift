@@ -116,6 +116,7 @@ final class SettingsViewModel {
         do {
             let userToken = try await repository.authenticate(apiKey: apiKey, username: username, password: password)
             KeychainService.shared.save(key: .userToken, value: userToken)
+            KeychainService.shared.save(key: .username, value: username)
             username = ""
             password = ""
             isAccountLinked = true
@@ -133,6 +134,7 @@ final class SettingsViewModel {
 
     func unlinkAccount() {
         KeychainService.shared.delete(key: .userToken)
+        KeychainService.shared.delete(key: .username)
         isAccountLinked = false
     }
 

@@ -4,10 +4,23 @@ import SafariServices
 struct PrivacyDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showSafari = false
+    @State private var showBricksetSafari = false
     @State private var showPrivacyPolicy = false
     @State private var showResetConfirmation = false
 
     private static let privacyPolicyURL = URL(string: "https://github.com/Lunik/brickscan/blob/master/PRIVACY.md")!
+    private static let bricksetRequestKeyURL = URL(string: "https://brickset.com/tools/webservices/requestkey")!
+
+    /// The Rebrickable settings page is per-username (`/users/<username>/settings/#api`) — fall
+    /// back to the generic profile page when no account is linked, rather than building a URL
+    /// with an empty/placeholder username segment.
+    private var rebrickableSettingsURL: URL {
+        if let username = KeychainService.shared.load(key: .username), !username.isEmpty,
+           let encoded = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
+            return URL(string: "https://rebrickable.com/users/\(encoded)/settings/#api")!
+        }
+        return URL(string: "https://rebrickable.com/profile")!
+    }
 
     var body: some View {
         NavigationStack {
@@ -36,6 +49,9 @@ struct PrivacyDetailView: View {
                     Button("Gérer votre API Key sur Rebrickable") {
                         showSafari = true
                     }
+                    Button("Obtenir une API Key sur Brickset") {
+                        showBricksetSafari = true
+                    }
                     Button("Lire la politique de confidentialité") {
                         showPrivacyPolicy = true
                     }
@@ -52,7 +68,10 @@ struct PrivacyDetailView: View {
                 }
             }
             .sheet(isPresented: $showSafari) {
-                SafariView(url: URL(string: "https://rebrickable.com/settings/")!)
+                SafariView(url: rebrickableSettingsURL)
+            }
+            .sheet(isPresented: $showBricksetSafari) {
+                SafariView(url: Self.bricksetRequestKeyURL)
             }
             .sheet(isPresented: $showPrivacyPolicy) {
                 SafariView(url: Self.privacyPolicyURL)
