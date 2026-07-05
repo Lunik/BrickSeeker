@@ -4,7 +4,6 @@ import Security
 enum KeychainKey: String {
     case apiKey = "rebrickable_api_key"
     case userToken = "rebrickable_user_token"
-    case username = "rebrickable_username"
     case bricksetApiKey = "brickset_api_key"
     case bricksetUserHash = "brickset_user_hash"
 }
@@ -65,7 +64,6 @@ final class KeychainService: @unchecked Sendable {
     func clearAll() {
         delete(key: .apiKey)
         delete(key: .userToken)
-        delete(key: .username)
         delete(key: .bricksetApiKey)
         delete(key: .bricksetUserHash)
     }
