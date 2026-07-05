@@ -12,8 +12,8 @@ struct PrivacyNoticeView: View {
                     .font(.subheadline.bold())
             }
 
-            bullet("Seule votre API Key est conservée, dans le Keychain iOS chiffré par Apple.")
-            bullet("Vous pouvez révoquer l'accès à tout moment depuis vos paramètres Rebrickable.")
+            bullet("Vos clés API et identifiants sont conservés dans le Keychain iOS chiffré par Apple ; votre historique de scans et votre collection restent sur l'appareil.")
+            bullet("Vous pouvez révoquer l'accès à tout moment depuis vos paramètres Rebrickable ou Brickset.")
 
             HStack {
                 Spacer()

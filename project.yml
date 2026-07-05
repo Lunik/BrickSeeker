@@ -29,6 +29,7 @@ targets:
       properties:
         NSCameraUsageDescription: "BrickScan utilise la caméra pour scanner les boîtes et manuels LEGO"
         NSLocationWhenInUseUsageDescription: "BrickScan enregistre la position au moment d'un scan (si vous l'activez) pour retrouver le magasin où vous avez vu le meilleur prix. Position approximative, stockée uniquement sur l'appareil."
+        ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UILaunchScreen: {}

@@ -295,6 +295,8 @@ struct SettingsView: View {
                     Button("Confidentialité & données") {
                         showPrivacyDetail = true
                     }
+                } footer: {
+                    Text("Données fournies par Rebrickable et Brickset.")
                 }
 
                 Section {

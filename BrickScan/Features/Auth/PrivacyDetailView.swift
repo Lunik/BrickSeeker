@@ -4,7 +4,10 @@ import SafariServices
 struct PrivacyDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showSafari = false
+    @State private var showPrivacyPolicy = false
     @State private var showResetConfirmation = false
+
+    private static let privacyPolicyURL = URL(string: "https://github.com/Lunik/brickscan/blob/master/PRIVACY.md")!
 
     var body: some View {
         NavigationStack {
@@ -12,15 +15,19 @@ struct PrivacyDetailView: View {
                 Section {
                     Label("Ce qui est stocké", systemImage: "internaldrive")
                         .font(.headline)
-                    Text("API Key Rebrickable : dans le Keychain iOS")
-                    Text("Sets scannés récemment : dans la base SwiftData locale, sur l'appareil uniquement")
+                    Text("API Key Rebrickable et clé/identifiants Brickset : dans le Keychain iOS")
+                    Text("Sets scannés récemment et cache de votre collection : dans la base SwiftData locale, sur l'appareil uniquement")
                     Text("Position des scans (si activée dans les paramètres) : approximative, sur l'appareil uniquement, supprimée dès qu'un set rejoint votre collection ou que l'historique est purgé")
+                    Text("Vos mots de passe Rebrickable et Brickset ne sont jamais stockés : ils servent une seule fois à obtenir un jeton de session")
                 }
 
                 Section {
-                    Label("Ce qui n'est jamais stocké", systemImage: "xmark.shield")
+                    Label("Services contactés par l'app", systemImage: "network")
                         .font(.headline)
-                    Text("Aucune donnée n'est envoyée à un serveur tiers autre que Rebrickable")
+                    Text("Rebrickable : catalogue des sets, votre collection (si vous liez votre compte)")
+                    Text("Brickset : votre liste cadeaux, avec vos identifiants Brickset (si vous liez votre compte)")
+                    Text("lego.com, BrickLink et amazon.fr : consultés pour afficher les prix du marché, sans identifiant transmis")
+                    Text("Apple (service de localisation) : conversion de la position en ville approximative, si l'enregistrement de position est activé")
                 }
 
                 Section {
@@ -28,6 +35,9 @@ struct PrivacyDetailView: View {
                         .font(.headline)
                     Button("Gérer votre API Key sur Rebrickable") {
                         showSafari = true
+                    }
+                    Button("Lire la politique de confidentialité") {
+                        showPrivacyPolicy = true
                     }
                     Button("Réinitialiser BrickScan", role: .destructive) {
                         showResetConfirmation = true
@@ -43,6 +53,9 @@ struct PrivacyDetailView: View {
             }
             .sheet(isPresented: $showSafari) {
                 SafariView(url: URL(string: "https://rebrickable.com/settings/")!)
+            }
+            .sheet(isPresented: $showPrivacyPolicy) {
+                SafariView(url: Self.privacyPolicyURL)
             }
             .confirmationDialog(
                 "Réinitialiser BrickScan ?",

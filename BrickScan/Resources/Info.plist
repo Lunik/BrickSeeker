@@ -18,6 +18,8 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>BrickScan utilise la caméra pour scanner les boîtes et manuels LEGO</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
