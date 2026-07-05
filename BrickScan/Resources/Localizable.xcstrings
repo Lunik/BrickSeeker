@@ -344,6 +344,9 @@
     "Génère ta clé sur rebrickable.com/profile, dans la section API Key." : {
 
     },
+    "Gérer votre API Key sur Brickset" : {
+
+    },
     "Gérer votre API Key sur Rebrickable" : {
 
     },
@@ -501,9 +504,6 @@
 
     },
     "Numéro de set, ex. 42143" : {
-
-    },
-    "Obtenir une API Key sur Brickset" : {
 
     },
     "OK" : {

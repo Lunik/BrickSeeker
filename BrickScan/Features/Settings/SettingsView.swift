@@ -229,12 +229,6 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    PrivacyNoticeView()
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                }
-
-                Section {
                     if let metadata = viewModel.offlineCatalogMetadata {
                         HStack {
                             Text("\(metadata.setCount) sets")
@@ -292,6 +286,10 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    PrivacyNoticeView()
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+
                     Button("Confidentialité & données") {
                         showPrivacyDetail = true
                     }
