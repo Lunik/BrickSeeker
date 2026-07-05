@@ -134,13 +134,16 @@
     "API Key Rebrickable" : {
 
     },
-    "API Key Rebrickable : dans le Keychain iOS" : {
+    "API Key Rebrickable et clé/identifiants Brickset : dans le Keychain iOS" : {
 
     },
     "API Key Rebrickable non configurée" : {
 
     },
     "Apparence" : {
+
+    },
+    "Apple (service de localisation) : conversion de la position en ville approximative, si l'enregistrement de position est activé" : {
 
     },
     "Aucun catalogue téléchargé" : {
@@ -170,9 +173,6 @@
     "Aucune clé API Rebrickable configurée. Ouvre BrickScan et renseigne-la dans Réglages." : {
 
     },
-    "Aucune donnée n'est envoyée à un serveur tiers autre que Rebrickable" : {
-
-    },
     "Aucune liste" : {
 
     },
@@ -180,6 +180,9 @@
 
     },
     "BrickScan" : {
+
+    },
+    "Brickset : votre liste cadeaux, avec vos identifiants Brickset (si vous liez votre compte)" : {
 
     },
     "Capture la position (approximative) au moment d'un scan caméra, pour retrouver le magasin où tu as vu le meilleur prix. Stockée uniquement sur l'appareil, et supprimée dès que le set rejoint ta collection." : {
@@ -195,9 +198,6 @@
 
     },
     "Ce qui est stocké" : {
-
-    },
-    "Ce qui n'est jamais stocké" : {
 
     },
     "Ce set n'est plus sur lego.com" : {
@@ -290,6 +290,9 @@
     "Disponible à l'achat" : {
 
     },
+    "Données fournies par Rebrickable et Brickset." : {
+
+    },
     "Enregistrer" : {
 
     },
@@ -339,6 +342,9 @@
 
     },
     "Génère ta clé sur rebrickable.com/profile, dans la section API Key." : {
+
+    },
+    "Gérer votre API Key sur Brickset" : {
 
     },
     "Gérer votre API Key sur Rebrickable" : {
@@ -395,6 +401,9 @@
     "Le type détermine la source de prix utilisée pour estimer la valeur de votre collection. Choisissez « Neuf » pour les sets encore scellés (lego.com en priorité) et « Occasion » pour les sets ouverts ou d'occasion (BrickLink occasion)." : {
 
     },
+    "lego.com, BrickLink et amazon.fr : consultés pour afficher les prix du marché, sans identifiant transmis" : {
+
+    },
     "Les prix de %lld set de votre collection ont été actualisés." : {
 
     },
@@ -414,6 +423,9 @@
 
     },
     "Liez votre compte Rebrickable et synchronisez depuis l'accueil." : {
+
+    },
+    "Lire la politique de confidentialité" : {
 
     },
     "Liste" : {
@@ -560,6 +572,9 @@
     "Quel prix as-tu vu ?" : {
 
     },
+    "Rebrickable : catalogue des sets, votre collection (si vous liez votre compte)" : {
+
+    },
     "Recherche le prix d'un set LEGO sur lego.com, BrickLink et Amazon sans ouvrir BrickScan." : {
 
     },
@@ -641,13 +656,16 @@
     "Sélectionner le type de liste" : {
 
     },
+    "Services contactés par l'app" : {
+
+    },
     "Session de scan" : {
 
     },
     "Sets" : {
 
     },
-    "Sets scannés récemment : dans la base SwiftData locale, sur l'appareil uniquement" : {
+    "Sets scannés récemment et cache de votre collection : dans la base SwiftData locale, sur l'appareil uniquement" : {
 
     },
     "Seuil de €/pièce en dessous duquel un set est considéré comme un bon rapport qualité-prix. Affiché en vert sur la fiche set si le prix lego.com est inférieur à cette valeur, en rouge au-dessus." : {
@@ -777,6 +795,9 @@
 
     },
     "Vos données restent sur votre appareil" : {
+
+    },
+    "Vos mots de passe Rebrickable et Brickset ne sont jamais stockés : ils servent une seule fois à obtenir un jeton de session" : {
 
     },
     "Vous gardez le contrôle" : {
