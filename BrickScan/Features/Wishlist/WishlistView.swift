@@ -16,13 +16,12 @@ struct WishlistView: View {
     /// Memoized from `allCachedPrices` (see the `.onChange` in `body`), same pattern as `CollectionView`.
     @State private var pricesBySetNum: [String: [PriceQuote]] = [:]
 
-    /// Always resolves the "new" fallback chain (lego.com → Amazon → BrickLink new → BrickLink
-    /// used), regardless of any list condition — a wishlist set isn't necessarily owned or tied
-    /// to a `CachedSetList`, and a gift is bought new by default.
+    /// Amazon → lego.com → BrickLink new → BrickLink used (see `resolveWishlistPrice`) — Amazon
+    /// first per request, and always this fixed chain regardless of any list condition, since a
+    /// wishlist set isn't necessarily owned or tied to a `CachedSetList`.
     private func resolvedPrice(for cached: CachedSet) -> Double? {
-        resolveCollectionPrice(
+        resolveWishlistPrice(
             storePriceEUR: cached.storePriceEUR,
-            condition: nil,
             quotes: pricesBySetNum[cached.setNum] ?? []
         )
     }
