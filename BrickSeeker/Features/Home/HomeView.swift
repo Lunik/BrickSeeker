@@ -37,7 +37,7 @@ struct HomeView: View {
             ZStack(alignment: .bottom) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        Text("BrickScan")
+                        Text("BrickSeeker")
                             .font(.largeTitle.bold())
                             .padding(.top, 16)
 

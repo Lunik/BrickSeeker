@@ -9,7 +9,7 @@ struct PrivacyDetailView: View {
     @State private var showPrivacyPolicy = false
     @State private var showResetConfirmation = false
 
-    private static let privacyPolicyURL = URL(string: "https://github.com/Lunik/brickscan/blob/master/PRIVACY.md")!
+    private static let privacyPolicyURL = URL(string: "https://github.com/Lunik/BrickSeeker/blob/master/PRIVACY.md")!
     private static let bricksetRequestKeyURL = URL(string: "https://brickset.com/tools/webservices/requestkey")!
     private static let rebrickableSettingsURL = URL(string: "https://rebrickable.com/api/")!
     private static let bricklinkAPISettingsURL = URL(string: "https://www.bricklink.com/v3/api.page")!
@@ -51,12 +51,12 @@ struct PrivacyDetailView: View {
                     Button("Lire la politique de confidentialité") {
                         showPrivacyPolicy = true
                     }
-                    Button("Réinitialiser BrickScan", role: .destructive) {
+                    Button("Réinitialiser BrickSeeker", role: .destructive) {
                         showResetConfirmation = true
                     }
                 }
             }
-            .navigationTitle("Comment BrickScan protège vos données")
+            .navigationTitle("Comment BrickSeeker protège vos données")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -76,7 +76,7 @@ struct PrivacyDetailView: View {
                 SafariView(url: Self.privacyPolicyURL)
             }
             .confirmationDialog(
-                "Réinitialiser BrickScan ?",
+                "Réinitialiser BrickSeeker ?",
                 isPresented: $showResetConfirmation,
                 titleVisibility: .visible
             ) {
@@ -98,7 +98,7 @@ struct PrivacyDetailView: View {
 }
 
 extension Notification.Name {
-    static let didReset = Notification.Name("BrickScan.didReset")
+    static let didReset = Notification.Name("BrickSeeker.didReset")
 }
 
 private struct SafariView: UIViewControllerRepresentable {

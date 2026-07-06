@@ -1,6 +1,6 @@
 ---
 name: simulator-ui-testing
-description: Drive the BrickScan app inside the iOS Simulator by actually tapping the screen (not just simctl/scripted automation) — for features only observable through real UI interaction, like Siri/Shortcuts App Shortcuts, share sheets, or system dialogs. Use after `ios-build-test` succeeds, when `verify`/`run` need to click something simctl can't reach.
+description: Drive the BrickSeeker app inside the iOS Simulator by actually tapping the screen (not just simctl/scripted automation) — for features only observable through real UI interaction, like Siri/Shortcuts App Shortcuts, share sheets, or system dialogs. Use after `ios-build-test` succeeds, when `verify`/`run` need to click something simctl can't reach.
 ---
 
 # Simulator UI testing — tapping the screen for real
@@ -18,14 +18,14 @@ To actually tap, you need to take control of the Mac's screen and mouse — that
 
 1. Use the user's own **"iPhone 17 Pro"** simulator (whatever its current UDID is — check with
    `xcrun simctl list devices | grep "iPhone 17 Pro"`), not a freshly created dedicated one. The
-   user prefers driving their already-booted device over a throwaway `BrickScanTest` device (skill
+   user prefers driving their already-booted device over a throwaway `BrickSeekerTest` device (skill
    `ios-build-test` for the build itself):
    ```bash
    xcrun simctl list devices | grep "iPhone 17 Pro"   # find <UDID>, boot it if Shutdown
-   xcodebuild -project BrickScan.xcodeproj -scheme BrickScan \
+   xcodebuild -project BrickSeeker.xcodeproj -scheme BrickSeeker \
      -destination 'id=<UDID>' -derivedDataPath build_sim build 2>&1 | grep -E "error:|BUILD"
-   xcrun simctl install <UDID> build_sim/Build/Products/Debug-iphonesimulator/BrickScan.app
-   xcrun simctl launch <UDID> com.lunik.brickscan
+   xcrun simctl install <UDID> build_sim/Build/Products/Debug-iphonesimulator/BrickSeeker.app
+   xcrun simctl launch <UDID> com.lunik.brickseeker
    open -a Simulator --args -CurrentDeviceUDID <UDID>
    ```
    `build_sim/` is gitignored (`build_*`) — never commit it.
@@ -61,7 +61,7 @@ To actually tap, you need to take control of the Mac's screen and mouse — that
    so it survives the Bash tool call returning:
    ```bash
    nohup xcrun simctl spawn <UDID> log stream --level debug \
-     --predicate '(process == "BrickScan" OR subsystem == "com.apple.AppIntents")' \
+     --predicate '(process == "BrickSeeker" OR subsystem == "com.apple.AppIntents")' \
      > /tmp/sim.log 2>&1 &
    disown
    ```

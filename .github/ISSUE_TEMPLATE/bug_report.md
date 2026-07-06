@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a problem with BrickScan
+about: Report a problem with BrickSeeker
 title: "[Bug] "
 labels: bug
 assignees: ''
@@ -26,7 +26,7 @@ If applicable, add screenshots to help explain the problem.
 ## Environment
 - iOS version:
 - Device:
-- BrickScan version/commit:
+- BrickSeeker version/commit:
 
 ## Additional Context
 Any other context about the problem.

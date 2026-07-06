@@ -1,7 +1,7 @@
-# App Review rules that bite BrickScan
+# App Review rules that bite BrickSeeker
 
 Distilled from the current App Store Review Guidelines and Apple developer docs (verified July 2026),
-mapped to BrickScan's actual code. Numbering verified against the live sources below — re-check on major
+mapped to BrickSeeker's actual code. Numbering verified against the live sources below — re-check on major
 guideline revisions.
 
 ## The rules, mapped to this app
@@ -54,13 +54,13 @@ guideline revisions.
 ### 2.1 — App completeness / demo access
 
 - Final, tested build; **if the app needs a login or key to function, provide demo access** in Review Notes.
-- **Applies to:** BrickScan is inert without a user-supplied Rebrickable API key → ship a dedicated reviewer
+- **Applies to:** BrickSeeker is inert without a user-supplied Rebrickable API key → ship a dedicated reviewer
   account + key + step-by-step + a sample set number for manual entry (reviewers have no physical LEGO box).
 - Also: no crash-on-launch. `try! ModelContainer` is a 2.1 risk (fixed in #105 phase 5).
 
 ### 4.8 — Login services
 
-- **Not required here.** Exemption applies: BrickScan is a client for specific third-party services
+- **Not required here.** Exemption applies: BrickSeeker is a client for specific third-party services
   (Rebrickable / Brickset) that the user signs into directly. No Sign in with Apple needed.
 
 ### 2.5.6 — Web browsing uses WebKit
@@ -79,7 +79,7 @@ guideline revisions.
   used (re-grep if that changes).
 - **SDK floor:** uploads must be built with **Xcode 26 / iOS 26 SDK** (since April 2026). Deployment target
   may stay iOS 17.
-- **Age rating:** new questionnaire since Jan 2026; BrickScan expected **4+** (SFSafariViewController opening
+- **Age rating:** new questionnaire since Jan 2026; BrickSeeker expected **4+** (SFSafariViewController opening
   fixed product pages is not an unrestricted web browser).
 - **EU DSA trader status:** must be declared at first submission. Free, non-monetised app → **non-trader**
   available (trader status publishes the developer's address/phone/email publicly).
@@ -94,7 +94,7 @@ Keep this current — hard rule #1 requires a permission link for every automate
 | Rebrickable API v3 | Official REST API, user-supplied key | Permits app use, incl. commercial | "Data provided by Rebrickable" (appreciated) |
 | Rebrickable CDN (images, CSV dumps) | Public downloads | Permitted | — |
 | Brickset API v3 | Official API, user login → hash | App use allowed (verify rate limits) | If used |
-| BrickLink API v3 (Store API, Price Guide) | Official REST API, user-supplied OAuth 1.0a consumer/token pair (own BrickLink dev account) | ToS (help.bricklink.com API Terms of Use, checked #111): requires an app to show a contact email + its own ToS/privacy policy, be solely responsible for its own support, and not replicate/circumvent BrickLink's checkout — none of which block a read-only personal price display; explicit prior authorization is required only to grant *other third parties* access through the app, which BrickScan doesn't do | If used |
+| BrickLink API v3 (Store API, Price Guide) | Official REST API, user-supplied OAuth 1.0a consumer/token pair (own BrickLink dev account) | ToS (help.bricklink.com API Terms of Use, checked #111): requires an app to show a contact email + its own ToS/privacy policy, be solely responsible for its own support, and not replicate/circumvent BrickLink's checkout — none of which block a read-only personal price display; explicit prior authorization is required only to grant *other third parties* access through the app, which BrickSeeker doesn't do | If used |
 | lego.com | **Visible link-out only** (no automated extraction) | Scraping prohibited | n/a |
 | amazon.fr | **Visible link-out only** (PA-API needs affiliate + sales) | Scraping prohibited | n/a |
 

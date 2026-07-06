@@ -1,4 +1,4 @@
-# App Review rejection log — BrickScan
+# App Review rejection log — BrickSeeker
 
 Append-only record of **real** App Review rejections and what each one taught us. Hard rule #8: after any
 rejection the user reports, add a row here; if the rejection is a **new class** of failure not already

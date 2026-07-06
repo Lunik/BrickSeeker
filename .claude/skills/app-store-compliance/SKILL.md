@@ -1,16 +1,16 @@
 ---
 name: app-store-compliance
-description: Apple App Store compliance rules and submission workflow for BrickScan. Use BEFORE any release / TestFlight / App Review submission, whenever adding or changing a network call, a permission, data storage, or a required-reason API, and whenever the user reports an App Review rejection (record it in the rejection log and, if it is a new failure class, add a hard rule here). Enforces the constraints that keep BrickScan shippable: no scraping, no hidden features, no LEGO IP, accurate privacy disclosure.
+description: Apple App Store compliance rules and submission workflow for BrickSeeker. Use BEFORE any release / TestFlight / App Review submission, whenever adding or changing a network call, a permission, data storage, or a required-reason API, and whenever the user reports an App Review rejection (record it in the rejection log and, if it is a new failure class, add a hard rule here). Enforces the constraints that keep BrickSeeker shippable: no scraping, no hidden features, no LEGO IP, accurate privacy disclosure.
 ---
 
-# App Store compliance — BrickScan
+# App Store compliance — BrickSeeker
 
-How to keep BrickScan compliant with the Apple App Store, in code and in App Store Connect. Read the
+How to keep BrickSeeker compliant with the Apple App Store, in code and in App Store Connect. Read the
 hard rules first — they are the constraints that shape every network, permission, data-storage, or
 UI change. The detailed rule mapping, the pre-submission checklist, and the running rejection log are
 in `references/`.
 
-This skill exists because BrickScan sits on top of third-party LEGO data (Rebrickable, BrickLink,
+This skill exists because BrickSeeker sits on top of third-party LEGO data (Rebrickable, BrickLink,
 Brickset) and the LEGO trademark, which is exactly the surface Apple scrutinises. The first full audit
 (July 2026) is in `docs/app-store/compliance-review.md`; remediation is tracked in issues #104 (scraping)
 and #105 (phases 2-6).
@@ -39,7 +39,7 @@ and #105 (phases 2-6).
 3. **Every new required-reason API updates `PrivacyInfo.xcprivacy` in the same PR.** Adding use of a
    required-reason API (UserDefaults, file-timestamp, disk-space, system-boot-time, active-keyboard) means
    adding/updating the matching `NSPrivacyAccessedAPITypes` entry in
-   `BrickScan/Resources/PrivacyInfo.xcprivacy`. Current declared state: **UserDefaults → `CA92.1`**. Missing
+   `BrickSeeker/Resources/PrivacyInfo.xcprivacy`. Current declared state: **UserDefaults → `CA92.1`**. Missing
    or stale manifest = upload blocked.
 
 4. **Every new off-device data flow updates all four disclosure surfaces in the same PR.** If a change
@@ -77,7 +77,7 @@ If any answer is yes, the compliance surfaces above must change **in the same PR
 ## Reference material
 
 - `references/app-review-rules.md` — the App Review rules that actually bite this app, mapped to
-  BrickScan's code, with the authoritative source links and the third-party API authorisation record.
+  BrickSeeker's code, with the authoritative source links and the third-party API authorisation record.
 - `references/submission-checklist.md` — the ordered pre-flight to run before each App Store / TestFlight
   submission.
 - `references/rejection-log.md` — append-only record of real App Review rejections and the prevention rule

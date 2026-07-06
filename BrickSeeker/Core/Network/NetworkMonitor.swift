@@ -15,7 +15,7 @@ final class NetworkMonitor {
     private(set) var isConnected = true
 
     private let monitor = NWPathMonitor()
-    private let queue = DispatchQueue(label: "com.lunik.brickscan.network-monitor")
+    private let queue = DispatchQueue(label: "com.lunik.brickseeker.network-monitor")
 
     private init() {
         monitor.pathUpdateHandler = { [weak self] path in

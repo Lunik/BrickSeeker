@@ -1,6 +1,6 @@
 import AppIntents
 
-struct BrickScanShortcuts: AppShortcutsProvider {
+struct BrickSeekerShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
             intent: CheckSetPriceIntent(),

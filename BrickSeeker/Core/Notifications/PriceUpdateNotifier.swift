@@ -5,7 +5,7 @@ import UserNotifications
 /// finished" ping, not a proactive/periodic alert — see AGENTS.md and issue #5 for why
 /// this app deliberately avoids the latter.
 enum PriceUpdateNotifier {
-    private static let identifier = "com.lunik.brickscan.priceBatchUpdate"
+    private static let identifier = "com.lunik.brickseeker.priceBatchUpdate"
 
     static func requestAuthorizationIfNeeded() async {
         _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])

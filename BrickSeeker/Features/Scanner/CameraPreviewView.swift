@@ -5,7 +5,7 @@ import CoreImage
 final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     let session = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
-    private let sessionQueue = DispatchQueue(label: "com.brickscan.camera.session")
+    private let sessionQueue = DispatchQueue(label: "com.brickseeker.camera.session")
     private var captureDevice: AVCaptureDevice?
     /// Set by `CameraPreviewView` once the preview layer exists — used to map the on-screen
     /// reticle into the pixel buffer's own coordinate space for both the Vision region of

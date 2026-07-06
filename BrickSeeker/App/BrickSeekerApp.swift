@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 @main
-struct BrickScanApp: App {
+struct BrickSeekerApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var isShowingSplash = true
     @State private var isScanning = false

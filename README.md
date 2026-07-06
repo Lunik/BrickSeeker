@@ -1,4 +1,4 @@
-# BrickScan
+# BrickSeeker
 
 A SwiftUI iOS app to scan LEGO® sets, manage your Rebrickable collection, and
 look up what a set is worth across lego.com, BrickLink and Amazon.
@@ -30,14 +30,14 @@ look up what a set is worth across lego.com, BrickLink and Amazon.
 ## Building
 
 The Xcode project is generated from [`project.yml`](project.yml) by XcodeGen
-and is **not committed** (`BrickScan.xcodeproj` is gitignored) — generate it
+and is **not committed** (`BrickSeeker.xcodeproj` is gitignored) — generate it
 after cloning, and after editing `project.yml`. Never edit the `.xcodeproj` or
 `Info.plist` by hand; they're regenerated.
 
 ```bash
 cp Signing.xcconfig.example Signing.xcconfig   # set your signing identity (see below)
 xcodegen generate
-open BrickScan.xcodeproj
+open BrickSeeker.xcodeproj
 ```
 
 ### Signing
@@ -77,10 +77,10 @@ credentials configured, for BrickLink) is simply omitted.
 
 ## Project layout
 
-- `BrickScan/App` — app entry point and root scene.
-- `BrickScan/Core` — networking, repositories, scrapers, storage (SwiftData,
+- `BrickSeeker/App` — app entry point and root scene.
+- `BrickSeeker/Core` — networking, repositories, scrapers, storage (SwiftData,
   Keychain, image cache).
-- `BrickScan/Features` — one folder per screen (Scanner, Home, Collection,
+- `BrickSeeker/Features` — one folder per screen (Scanner, Home, Collection,
   History, SetDetail, Settings, …).
 - `AGENTS.md` — architecture notes and conventions.
 

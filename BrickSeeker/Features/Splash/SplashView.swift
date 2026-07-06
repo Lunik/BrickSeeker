@@ -12,7 +12,7 @@ struct SplashView: View {
                     .scaledToFit()
                     .frame(width: 160, height: 160)
 
-                Text("BrickScan")
+                Text("BrickSeeker")
                     .font(.largeTitle.bold())
                     .foregroundStyle(AppTheme.shared.accent)
             }
