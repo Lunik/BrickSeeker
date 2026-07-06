@@ -7,19 +7,15 @@ import Foundation
 /// Sales" quadrant (as opposed to `guide_type=stock`, current listings), so the surfaced numbers
 /// don't change meaning for existing consumers (`DealVerdict`, `SetRowView`, price history).
 ///
-/// Resolving *which* BrickLink catalog item (type + number) a Rebrickable id maps to: most sets
-/// are addressable directly by Rebrickable's own set number under BrickLink's `SET` type — no
-/// lookup needed. Minifigs (`fig-…` ids) and the handful of sets BrickLink files under a
-/// different type (e.g. individual collectible-minifig boxes) never have a matching `SET` entry;
-/// those only resolve from the **existing, permanent** `BrickLinkMinifigIdStore` cache, entries
-/// the old scraper wrote by reading the item's Rebrickable page's "External Sites" table.
-/// Deliberately **not replicated here**: BrickLink's API has no endpoint that accepts a
-/// Rebrickable id, and re-scraping Rebrickable's rendered page to keep populating this cache
-/// would just be trading one compliance-violating hidden-`WKWebView` scrape (BrickLink) for
-/// another (Rebrickable) — see `app-review-rules.md`'s 5.2.2 entry, which documents this as a
-/// deliberate, known gap rather than an oversight: a `fig-…` item never looked up before this
-/// change (nothing in `BrickLinkMinifigIdStore`) simply has no BrickLink price, same as any other
-/// source with no data for that item, until a compliant mapping source exists.
+/// Resolving *which* BrickLink catalog item (type + number) a Rebrickable id maps to is
+/// unchanged from before: most sets are addressable directly by Rebrickable's own set number
+/// under BrickLink's `SET` type. Minifigs (`fig-…` ids) and the handful of sets BrickLink files
+/// under a different type never have a matching `SET` entry, so those fall back to the permanent
+/// `BrickLinkMinifigIdStore` cache, resolved (once per item, ever) by reading the item's
+/// Rebrickable page's "External Sites" table — BrickLink's API has no endpoint that accepts a
+/// Rebrickable id, and Rebrickable's own API doesn't expose this mapping either, only the
+/// rendered page does. This one remaining scrape is out of scope for #111 (which targets the
+/// BrickLink price-guide scrape specifically) — tracked separately in #117.
 struct BrickLinkPriceRepository: Sendable {
     private struct PriceGuideData: Decodable {
         let currencyCode: String
@@ -31,26 +27,62 @@ struct BrickLinkPriceRepository: Sendable {
         }
     }
 
-    /// Maps the single-letter BrickLink catalog type stored in `BrickLinkCatalogRef` (`S`, `M`,
-    /// …, from the old scraper's cached mappings) to the full type name the Price Guide API's
-    /// `{type}` path segment expects.
+    private struct RawExternalId: Decodable {
+        let id: String
+        let href: String?
+    }
+
+    /// Maps the single-letter BrickLink catalog type used in its URLs/`BrickLinkCatalogRef`
+    /// (`S`, `M`, …) to the full type name the Price Guide API's `{type}` path segment expects.
     private static let apiTypeByLetter: [String: String] = [
         "S": "SET", "M": "MINIFIG", "P": "PART", "B": "BOOK",
         "G": "GEAR", "C": "CATALOG", "I": "INSTRUCTION",
         "O": "ORIGINAL_BOX", "U": "UNSORTED_LOT"
     ]
 
+    static let externalIdReadinessScript = """
+    (function() {
+        var text = document.body ? document.body.innerText : '';
+        return text.indexOf('External Sites') !== -1;
+    })()
+    """
+
+    static let externalIdExtractScript = """
+    (function() {
+        var rows = Array.from(document.querySelectorAll('tr'));
+        for (var i = 0; i < rows.length; i++) {
+            var cells = rows[i].querySelectorAll('td');
+            if (cells.length < 2) continue;
+            if (cells[0].textContent.trim() !== 'BrickLink') continue;
+            var link = cells[1].querySelector('a');
+            var href = link ? link.getAttribute('href') : null;
+            var id = (link ? link.textContent : cells[1].textContent).trim();
+            if (id) return JSON.stringify({ id: id, href: href });
+        }
+        return null;
+    })()
+    """
+
+    // Not defaulted to `.shared` here: that's a main-actor-isolated static property, and a default
+    // argument value must be evaluable in this (nonisolated) init's context. Resolved lazily in
+    // `resolveMappedRef`, where `await` can hop onto the main actor.
     private let client: BrickLinkClient
+    private let scraper: HeadlessWebScraper?
     private let minifigIdStore: BrickLinkMinifigIdStore
 
-    init(client: BrickLinkClient = .shared, minifigIdStore: BrickLinkMinifigIdStore = .shared) {
+    init(
+        client: BrickLinkClient = .shared,
+        scraper: HeadlessWebScraper? = nil,
+        minifigIdStore: BrickLinkMinifigIdStore = .shared
+    ) {
         self.client = client
+        self.scraper = scraper
         self.minifigIdStore = minifigIdStore
     }
 
     func fetchPrices(for legoSet: LegoSet) async throws -> [PriceQuote] {
-        // Fails fast without touching the network when credentials aren't set up yet — matches
-        // `APIError.missingCredentials`'s purpose.
+        // Fails fast without touching the network (or the Rebrickable-page fallback below) when
+        // credentials aren't set up yet — matches `APIError.missingCredentials`'s purpose.
         guard KeychainService.shared.brickLinkOAuth1Credentials != nil else {
             throw APIError.missingCredentials
         }
@@ -62,9 +94,7 @@ struct BrickLinkPriceRepository: Sendable {
             return quotes
         }
 
-        guard let ref = await minifigIdStore.lookup(setNum: setNum) else {
-            throw ScrapeError.notFound
-        }
+        let ref = try await resolveMappedRef(setNum: setNum, isMinifig: isMinifig)
         return try await fetchPrices(ref: ref)
     }
 
@@ -101,5 +131,50 @@ struct BrickLinkPriceRepository: Sendable {
             throw ScrapeError.notFound
         }
         return PriceQuote(source: source, amount: amount, currency: data.currencyCode, sourceURL: itemURL, fetchedAt: Date())
+    }
+
+    /// Reads the on-disk cache, or (first lookup only) resolves and saves it by scraping the
+    /// item's Rebrickable page's "External Sites" table — see the type's doc comment.
+    private func resolveMappedRef(setNum: String, isMinifig: Bool) async throws -> BrickLinkCatalogRef {
+        if let cached = await minifigIdStore.lookup(setNum: setNum) {
+            return cached
+        }
+
+        let scraper: HeadlessWebScraper
+        if let injected = self.scraper {
+            scraper = injected
+        } else {
+            scraper = await HeadlessWebScraper.shared
+        }
+
+        let rebrickablePath = isMinifig ? "minifigs" : "sets"
+        guard let rebrickableURL = URL(string: "https://rebrickable.com/\(rebrickablePath)/\(setNum)/") else {
+            throw ScrapeError.notFound
+        }
+        let externalIdJson = try await scraper.loadAndExtract(
+            url: rebrickableURL,
+            readinessScript: Self.externalIdReadinessScript,
+            extractScript: Self.externalIdExtractScript
+        )
+        guard let externalIdData = externalIdJson.data(using: .utf8),
+              let externalId = try? JSONDecoder().decode(RawExternalId.self, from: externalIdData) else {
+            throw ScrapeError.parsingFailed
+        }
+        let ref = Self.catalogRef(id: externalId.id, href: externalId.href, fallbackType: isMinifig ? "M" : "S")
+        await minifigIdStore.save(setNum: setNum, ref: ref)
+        return ref
+    }
+
+    /// Reads the BrickLink catalog type (`S`, `M`, …) from an "External Sites" link's `href`
+    /// query string — that's the ground truth for which catalog the item was actually filed
+    /// under, since it isn't always the same type the lookup started with (e.g. a Rebrickable
+    /// *set* number can resolve to a BrickLink *minifig* entry). Falls back to `fallbackType`
+    /// only if the href is missing or unparseable.
+    private static func catalogRef(id: String, href: String?, fallbackType: String) -> BrickLinkCatalogRef {
+        if let href, let components = URLComponents(string: href),
+           let first = components.queryItems?.first, let value = first.value {
+            return BrickLinkCatalogRef(type: first.name, id: value)
+        }
+        return BrickLinkCatalogRef(type: fallbackType, id: id)
     }
 }

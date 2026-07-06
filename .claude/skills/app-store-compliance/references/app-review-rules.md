@@ -13,18 +13,18 @@ guideline revisions.
 > must be provided upon request."
 
 - **Applies to:** all price/data sources. Hidden-WKWebView scraping of lego.com / amazon.fr / bricklink.com /
-  rebrickable.com HTML **violated this** (removed in #104). The BrickLink leg was fixed in #111 (official
-  Price Guide API, OAuth 1.0a) — see the authorisation record below.
+  rebrickable.com HTML **violated this** (removed in #104). The BrickLink price-guide leg specifically was
+  fixed in #111 (official Price Guide API, OAuth 1.0a) — see the authorisation record below.
 - **Compliant paths:** official API with third-party-app ToS (Rebrickable ✅, BrickLink ✅ #111), or visible
   `SFSafariViewController` link-out + manual entry (lego.com, amazon.fr).
-- **#111 also removed the Rebrickable-page scrape** that used to resolve which BrickLink catalog item
-  (type + number) a minifig/edge-case-set Rebrickable id maps to (`BrickLinkMinifigIdStore` was written by
-  scraping the item's Rebrickable page's "External Sites" table) — that was itself a 5.2.2/hidden-`WKWebView`
-  violation, just a lower-volume one, and replicating it wasn't judged an acceptable trade-off for keeping
-  BrickLink prices on minifigs. `BrickLinkMinifigIdStore` is now **read-only** (pre-#111 cached entries still
-  resolve; anything not already cached has no BrickLink price, same as any other source with no data for that
-  item) — no code in the app scrapes bricklink.com *or* rebrickable.com anymore. Revisit only if a compliant
-  mapping source turns up (e.g. Rebrickable ever exposes external_ids via its own API).
+- **Remaining scrape, deliberately kept, out of #111's scope:** resolving *which* BrickLink catalog item
+  (type + number) a Rebrickable minifig/edge-case set id maps to still reads the item's Rebrickable page's
+  "External Sites" table via `HeadlessWebScraper` (`BrickLinkPriceRepository.resolveMappedRef`) — neither
+  BrickLink's API nor Rebrickable's API expose that mapping. Permanently cached per item
+  (`BrickLinkMinifigIdStore`), so it runs once ever per item, not per price refresh, unlike the removed
+  price-guide scrape which ran live on every `SetDetail` open. **Tracked in #117** as its own remediation,
+  deliberately kept out of #111 to keep that PR scoped to the price-guide replacement — don't fold it back
+  in without a dedicated issue/PR; see the feedback note in `AGENTS.md` about PR scope discipline.
 
 ### 2.3.1(a) — Hidden / undocumented features
 

@@ -437,16 +437,14 @@ lego.com price.
   meaning silently.
   - **Item-type resolution**: most Rebrickable set numbers are directly usable as BrickLink's own
     `SET` number — tried first, no lookup. Minifigs (`fig-…` ids) and the rare set BrickLink files
-    under a different type (e.g. individual collectible-minifig boxes) only resolve from
-    `BrickLinkMinifigIdStore`'s existing cache (`Core/Storage/`) — **read-only since #111**. That
-    cache used to be populated by scraping the item's Rebrickable page's "External Sites" table,
-    but that scrape was itself the same class of 5.2.2/hidden-WKWebView violation as the BrickLink
-    scrape this issue removed, just lower-volume — replicating it wasn't judged an acceptable
-    trade-off for keeping BrickLink prices on every minifig. A `fig-…` id with no pre-#111 cache
-    entry simply has no BrickLink price (same as any other source with no data), rather than
-    triggering a fresh scrape. Don't add a new resolver that scrapes bricklink.com or
-    rebrickable.com to repopulate this cache — see `app-review-rules.md`'s 5.2.2 entry (in the
-    `app-store-compliance` skill) before reconsidering this.
+    under a different type (e.g. individual collectible-minifig boxes) fall back to
+    `BrickLinkMinifigIdStore`'s cache (`Core/Storage/`), resolved (once per item, ever) by scraping
+    the item's Rebrickable page's "External Sites" table via `HeadlessWebScraper` — neither
+    BrickLink's API nor Rebrickable's API expose this mapping. This is the same class of
+    5.2.2/hidden-WKWebView issue as the BrickLink price-guide scrape this issue replaced, just much
+    lower-volume (once ever per item, permanently cached, vs. live on every `SetDetail` open) —
+    **deliberately out of #111's scope**, tracked separately in #117. Don't fold that remediation
+    into an unrelated PR; see the feedback note below about PR scope discipline.
   - The surfaced item link (`sourceURL` on the `PriceQuote`) is still the plain catalog page
     (`bricklink.com/v2/catalog/catalogitem.page?{S,M,…}={id}`), not an API URL — that's for the
     user to open, unrelated to the signed API call.
@@ -462,6 +460,17 @@ lego.com price.
   loosen back to "title contains lego", and don't re-add a fallback that returns any card without
   the set number. (Amazon/lego.com's own scraping-compliance remediation is tracked separately,
   see the `app-store-compliance` skill — this issue's scope was BrickLink only.)
+
+## PR scope — file adjacent issues, don't fix them inline
+
+If you spot something adjacent-but-out-of-scope while working an issue/PR (e.g. another compliance
+gap, another scrape, another cleanup) — **file a new GitHub issue for it, don't fold it into the
+current PR.** This happened concretely during #111 (BrickLink price-guide scrape → official API):
+the Rebrickable-page scrape used for BrickLink minifig ID mapping was spotted as the same class of
+issue and removed inline, without being asked — reverted after review and refiled as #117. A PR
+should do the one thing it says it does; scope creep, even when the adjacent fix is clearly
+correct, makes the PR harder to review and couples unrelated risk/rollback together. Surface what
+you found (issue, or a note to the user) and keep going on the actual task.
 
 ## Things deliberately not built (don't re-add without asking)
 

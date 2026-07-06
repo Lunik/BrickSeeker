@@ -10,9 +10,9 @@ memory. `[ ]` items are gates; a failed gate blocks submission until fixed.
       `strings <app binary> | grep -Ei "Safari/604|amazon\.fr|catalogPG\.asp|customUserAgent"` → empty.
       (Since #111, `bricklink`/`api.bricklink.com` **will** appear — that's the legitimate official
       Price Guide API client, not scraping; don't treat that string alone as a failure. `catalogPG.asp`
-      — the old scraped price-guide page — is the actual thing that must be gone, along with any
-      `rebrickable\.com/(sets|minifigs)/` scrape traffic — #111 also removed the Rebrickable-page
-      scrape that used to resolve BrickLink minifig ids, see `app-review-rules.md`'s 5.2.2 entry.)
+      — the old scraped price-guide page — is the actual thing that must be gone. The Rebrickable-page
+      "External Sites" scrape for minifig id-mapping, `rebrickable\.com/(sets|minifigs)/`, is a known
+      **remaining** exception — see `app-review-rules.md`'s 5.2.2 entry and #117.)
 - [ ] No crash-on-launch path: `ModelContainer` creation is guarded (do/catch), not `try!`.
 - [ ] `Signing.xcconfig` holds the real `DEVELOPMENT_TEAM` (gitignored); it is **not** in `project.yml`.
 
