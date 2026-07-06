@@ -34,8 +34,11 @@ extension String {
     /// Strips Rebrickable's variant suffix (`"71045-3"` → `"71045"`). For the vast majority of
     /// sets the suffix is always `-1` and shown nowhere; only `AmbiguousSetPickerView` needs the
     /// full `setNum` to disambiguate variants sharing the same base number (see #97).
+    /// Minifig identifiers (`"fig-000123"`) have no variant suffix, so they're returned as-is
+    /// to avoid stripping down to just `"fig"` (see #123).
     var baseSetNum: String {
-        split(separator: "-").first.map(String.init) ?? self
+        guard !hasPrefix("fig-") else { return self }
+        return split(separator: "-").first.map(String.init) ?? self
     }
 }
 
