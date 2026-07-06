@@ -438,13 +438,18 @@ lego.com price.
   - **Item-type resolution**: most Rebrickable set numbers are directly usable as BrickLink's own
     `SET` number — tried first, no lookup. Minifigs (`fig-…` ids) and the rare set BrickLink files
     under a different type (e.g. individual collectible-minifig boxes) fall back to
-    `BrickLinkMinifigIdStore`'s cache (`Core/Storage/`), resolved (once per item, ever) by scraping
-    the item's Rebrickable page's "External Sites" table via `HeadlessWebScraper` — neither
-    BrickLink's API nor Rebrickable's API expose this mapping. This is the same class of
-    5.2.2/hidden-WKWebView issue as the BrickLink price-guide scrape this issue replaced, just much
-    lower-volume (once ever per item, permanently cached, vs. live on every `SetDetail` open) —
-    **deliberately out of #111's scope**, tracked separately in #117. Don't fold that remediation
-    into an unrelated PR; see the feedback note below about PR scope discipline.
+    `BrickLinkMinifigIdStore`'s cache (`Core/Storage/`), resolved (once per item, ever) by
+    `BrickLinkPriceRepository.resolveViaCatalogCrossReference` — neither BrickLink's API (no
+    endpoint accepts a Rebrickable id, no free-text search) nor Rebrickable's API expose this
+    mapping directly, so it's reconstructed from the physical part composition across two **official
+    APIs**: Rebrickable part `external_ids.BrickLink` → BrickLink part *supersets* (intersected over
+    the printed/discriminant parts only) → *subsets* composition check. This replaced the previous
+    hidden-`WKWebView` scrape of the item's Rebrickable "External Sites" table (App Store 5.2.2 /
+    2.3.1(a), **#117**). It favours **precision over recall** (validated on a real collection:
+    ~100% precision, ~53% recall — see #117): it accepts only a *unique*, composition-verified
+    candidate and otherwise abstains (no quote) rather than risk a wrong price. Unresolved items are
+    where a future visible link-out + manual-entry fallback (Option 1) would slot in. If you touch
+    this, keep the abstain-on-ambiguity behaviour — a wrong minifig id surfaces a wrong price.
   - The surfaced item link (`sourceURL` on the `PriceQuote`) is still the plain catalog page
     (`bricklink.com/v2/catalog/catalogitem.page?{S,M,…}={id}`), not an API URL — that's for the
     user to open, unrelated to the signed API call.
