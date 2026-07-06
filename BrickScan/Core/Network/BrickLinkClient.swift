@@ -25,6 +25,12 @@ final class BrickLinkClient: @unchecked Sendable {
     // more permissive, but this app has no need to hammer it.
     private let throttler = RequestThrottler(minimumInterval: 1.0)
 
+    /// Same reasoning as `BricksetClient.maxRetries`: bail out after this many 429 retries
+    /// instead of retrying forever, so one throttled host can't turn a collection-wide price
+    /// refresh (`CollectionPriceUpdater`, one set at a time, ~490 sets on a real collection)
+    /// into an infinite loop.
+    private let maxRetries = 2
+
     private struct Envelope<T: Decodable>: Decodable {
         let meta: Meta
         let data: T?
@@ -41,6 +47,10 @@ final class BrickLinkClient: @unchecked Sendable {
     }
 
     func get<T: Decodable>(path: String, queryItems: [URLQueryItem]) async throws -> T {
+        try await get(path: path, queryItems: queryItems, retriesLeft: maxRetries)
+    }
+
+    private func get<T: Decodable>(path: String, queryItems: [URLQueryItem], retriesLeft: Int) async throws -> T {
         guard let credentials = KeychainService.shared.brickLinkOAuth1Credentials else {
             throw APIError.missingCredentials
         }
@@ -69,8 +79,17 @@ final class BrickLinkClient: @unchecked Sendable {
             throw APIError.networkUnavailable
         }
 
-        guard response is HTTPURLResponse else {
+        guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.unknown
+        }
+
+        // A genuine HTTP-429 (e.g. from a gateway in front of the API, rather than BrickLink's
+        // own envelope) may not carry a JSON body shaped like `Envelope` at all — check the
+        // transport status before a decode failure is treated as fatal, same reasoning as
+        // checking `meta.code` below for BrickLink's *own* 429 (their envelope replies HTTP 200
+        // even on failure, see this type's doc comment, so either can happen independently).
+        guard httpResponse.statusCode != 429 else {
+            return try await retryOrGiveUp(retriesLeft: retriesLeft, response: httpResponse, path: path, queryItems: queryItems)
         }
 
         let envelope: Envelope<T>
@@ -88,7 +107,7 @@ final class BrickLinkClient: @unchecked Sendable {
         case 404:
             throw APIError.notFound
         case 429:
-            throw APIError.rateLimited
+            return try await retryOrGiveUp(retriesLeft: retriesLeft, response: httpResponse, path: path, queryItems: queryItems)
         case 500...599:
             throw APIError.serverError(envelope.meta.code)
         default:
@@ -97,5 +116,40 @@ final class BrickLinkClient: @unchecked Sendable {
 
         guard let value = envelope.data else { throw APIError.notFound }
         return value
+    }
+
+    /// Same shape as `BricksetClient`'s 429 handling: honor a `Retry-After` header if the host
+    /// sent one, otherwise fall back to a fixed delay — BrickLink's own rate-limit signal is an
+    /// application-level `meta.code: 429` inside an HTTP-200 envelope (confirmed live), which has
+    /// no reason to carry a `Retry-After` header the way a gateway-level HTTP 429 might. A touch
+    /// of jitter so several concurrent calls rate-limited at the same moment (e.g.
+    /// `PriceRepository`'s parallel new/used fetch) don't retry in lockstep.
+    private func retryOrGiveUp<T: Decodable>(
+        retriesLeft: Int,
+        response: HTTPURLResponse,
+        path: String,
+        queryItems: [URLQueryItem]
+    ) async throws -> T {
+        guard retriesLeft > 0 else { throw APIError.rateLimited }
+        let delay = Self.retryDelay(from: response) ?? 2.0
+        let jitter = TimeInterval.random(in: 0...1.0)
+        try await Task.sleep(nanoseconds: UInt64((delay + jitter) * 1_000_000_000))
+        return try await get(path: path, queryItems: queryItems, retriesLeft: retriesLeft - 1)
+    }
+
+    /// Parses `Retry-After` as either the plain integer-seconds form or the HTTP-date form (RFC
+    /// 9110 §10.2.3) — capped at 30s so a header value this app doesn't expect can't stall a
+    /// caller for an unreasonable amount of time.
+    private static func retryDelay(from response: HTTPURLResponse) -> TimeInterval? {
+        guard let value = response.value(forHTTPHeaderField: "Retry-After") else { return nil }
+        if let seconds = TimeInterval(value) {
+            return min(seconds, 30)
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "GMT")
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+        guard let date = formatter.date(from: value) else { return nil }
+        return min(max(0, date.timeIntervalSinceNow), 30)
     }
 }
