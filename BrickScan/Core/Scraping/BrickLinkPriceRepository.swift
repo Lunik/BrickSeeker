@@ -131,9 +131,25 @@ struct BrickLinkPriceRepository: Sendable {
         if let cached = await minifigIdStore.lookup(setNum: setNum) {
             return cached
         }
-        let ref = try await resolveViaCatalogCrossReference(setNum: setNum, isMinifig: isMinifig)
-        await minifigIdStore.save(setNum: setNum, ref: ref)
-        return ref
+        // Skip re-running the multi-call, throttled cross-reference for an item that recently
+        // failed — ~half of minifigs legitimately don't resolve, and without this a collection-wide
+        // refresh would re-attempt every one of them each time. TTL'd (see the store), so it retries
+        // eventually.
+        if await minifigIdStore.hasRecentMiss(setNum: setNum) {
+            throw ScrapeError.notFound
+        }
+        do {
+            let ref = try await resolveViaCatalogCrossReference(setNum: setNum, isMinifig: isMinifig)
+            await minifigIdStore.save(setNum: setNum, ref: ref)
+            return ref
+        } catch ScrapeError.notFound {
+            // Genuine "can't resolve" (no parts / no discriminant / ambiguous / verify failed) —
+            // remember it so we don't retry until the TTL. Transient errors (network, throttle,
+            // decode) are a different error type and fall through to propagate *without* being
+            // cached as a miss, so they retry on the next refresh.
+            await minifigIdStore.recordMiss(setNum: setNum)
+            throw ScrapeError.notFound
+        }
     }
 
     /// Pins the BrickLink catalog item for a Rebrickable minifig/edge-case set using only official
