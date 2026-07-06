@@ -305,7 +305,7 @@
     "Disponible à l'achat" : {
 
     },
-    "Données fournies par Rebrickable et Brickset." : {
+    "Données fournies par Rebrickable, Brickset et BrickLink." : {
 
     },
     "Enregistrer" : {
@@ -365,7 +365,7 @@
     "Génère ta clé sur rebrickable.com/profile, dans la section API Key. Nécessaire pour voir et gérer votre collection. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session." : {
 
     },
-    "Gérer vos identifiants API sur BrickLink" : {
+    "Gérer votre api key sur bricklink" : {
 
     },
     "Gérer votre API Key sur Brickset" : {
