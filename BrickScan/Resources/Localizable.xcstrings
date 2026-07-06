@@ -65,6 +65,9 @@
     "•" : {
 
     },
+    "×%lld" : {
+
+    },
     "€" : {
 
     },
@@ -104,6 +107,9 @@
     "Afficher la clé API Brickset" : {
 
     },
+    "Afficher les identifiants" : {
+
+    },
     "Ajoute un set à ta liste cadeaux depuis sa fiche, ou importe une liste Rebrickable publique." : {
 
     },
@@ -125,19 +131,19 @@
     "Annuler" : {
 
     },
+    "API BrickLink" : {
+
+    },
     "API Key" : {
 
     },
     "API Key invalide" : {
 
     },
-    "API Key Rebrickable" : {
-
-    },
-    "API Key Rebrickable et clé/identifiants Brickset : dans le Keychain iOS" : {
-
-    },
     "API Key Rebrickable non configurée" : {
+
+    },
+    "API Key Rebrickable, clé/identifiants Brickset et identifiants API BrickLink (OAuth) : dans le Keychain iOS" : {
 
     },
     "Apparence" : {
@@ -177,6 +183,9 @@
 
     },
     "Basée sur %lld / %lld sets dont le prix est connu" : {
+
+    },
+    "BrickLink (API officielle) : prix neuf/occasion, avec vos identifiants API BrickLink (si vous les renseignez)" : {
 
     },
     "BrickScan" : {
@@ -257,6 +266,12 @@
     "Connexion impossible. Vérifiez votre réseau." : {
 
     },
+    "Consumer Key" : {
+
+    },
+    "Consumer Secret" : {
+
+    },
     "Créer une nouvelle liste" : {
 
     },
@@ -302,6 +317,9 @@
     "Erreur" : {
 
     },
+    "Erreur BrickLink : %@" : {
+
+    },
     "Erreur Brickset : %@" : {
 
     },
@@ -341,7 +359,13 @@
     "Filtres" : {
 
     },
-    "Génère ta clé sur rebrickable.com/profile, dans la section API Key." : {
+    "Génère ces 4 valeurs sur bricklink.com/v3/api.page (section \"Register a Consumer\", puis \"Manage a Consumer\" → génère un jeton). Utilisé pour afficher les prix neuf/occasion BrickLink officiels ; nécessaire uniquement pour cette fonctionnalité." : {
+
+    },
+    "Génère ta clé sur rebrickable.com/profile, dans la section API Key. Nécessaire pour voir et gérer votre collection. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session." : {
+
+    },
+    "Gérer vos identifiants API sur BrickLink" : {
 
     },
     "Gérer votre API Key sur Brickset" : {
@@ -401,7 +425,7 @@
     "Le type détermine la source de prix utilisée pour estimer la valeur de votre collection. Choisissez « Neuf » pour les sets encore scellés (lego.com en priorité) et « Occasion » pour les sets ouverts ou d'occasion (BrickLink occasion)." : {
 
     },
-    "lego.com, BrickLink et amazon.fr : consultés pour afficher les prix du marché, sans identifiant transmis" : {
+    "lego.com et amazon.fr : consultés pour afficher les prix du marché, sans identifiant transmis" : {
 
     },
     "Les prix de %lld set de votre collection ont été actualisés." : {
@@ -452,6 +476,9 @@
     "Masquer la clé API Brickset" : {
 
     },
+    "Masquer les identifiants" : {
+
+    },
     "Meilleur prix" : {
 
     },
@@ -474,9 +501,6 @@
 
     },
     "Nécessaire pour gérer votre liste cadeaux. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session." : {
-
-    },
-    "Nécessaire pour voir et gérer votre collection. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session." : {
 
     },
     "Nom d'utilisateur" : {
@@ -567,6 +591,9 @@
 
     },
     "Purger le catalogue" : {
+
+    },
+    "Quantité : ×%lld" : {
 
     },
     "Quel prix as-tu vu ?" : {
@@ -720,6 +747,12 @@
 
     },
     "Thème" : {
+
+    },
+    "Token Secret" : {
+
+    },
+    "Token Value" : {
 
     },
     "Torche" : {
