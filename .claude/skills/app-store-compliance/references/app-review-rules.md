@@ -17,14 +17,19 @@ guideline revisions.
   fixed in #111 (official Price Guide API, OAuth 1.0a) — see the authorisation record below.
 - **Compliant paths:** official API with third-party-app ToS (Rebrickable ✅, BrickLink ✅ #111), or visible
   `SFSafariViewController` link-out + manual entry (lego.com, amazon.fr).
-- **Remaining scrape, deliberately kept, out of #111's scope:** resolving *which* BrickLink catalog item
-  (type + number) a Rebrickable minifig/edge-case set id maps to still reads the item's Rebrickable page's
-  "External Sites" table via `HeadlessWebScraper` (`BrickLinkPriceRepository.resolveMappedRef`) — neither
-  BrickLink's API nor Rebrickable's API expose that mapping. Permanently cached per item
-  (`BrickLinkMinifigIdStore`), so it runs once ever per item, not per price refresh, unlike the removed
-  price-guide scrape which ran live on every `SetDetail` open. **Tracked in #117** as its own remediation,
-  deliberately kept out of #111 to keep that PR scoped to the price-guide replacement — don't fold it back
-  in without a dedicated issue/PR; see the feedback note in `AGENTS.md` about PR scope discipline.
+- **Minifig/edge-case-set id mapping — resolved in #117 (no scrape):** resolving *which* BrickLink catalog
+  item (type + number) a Rebrickable minifig/edge-case set id maps to used to read the item's Rebrickable
+  page's "External Sites" table via `HeadlessWebScraper`. It now uses **only official APIs**
+  (`BrickLinkPriceRepository.resolveViaCatalogCrossReference`): Rebrickable part `external_ids.BrickLink`
+  → BrickLink part *supersets* (intersected over printed/discriminant parts) → *subsets* composition check,
+  permanently cached per item (`BrickLinkMinifigIdStore`). Neither API exposes the mapping directly, so it's
+  reconstructed from part composition; the resolver favours precision over recall (~100% precision, ~53%
+  recall, validated on a real collection) and abstains rather than risk a wrong price. The ~47% it can't
+  resolve are the intended home for a future visible link-out + manual-entry fallback (Option 1).
+- **Still open — `HeadlessWebScraper` itself remains** (used by `AmazonPriceScraper` + `LegoStoreRepository`
+  for lego.com/amazon.fr HTML). #117 removed only the BrickLink-mapping caller; the Amazon/lego.com scrapes
+  are a separate, still-open 5.2.2/2.3.1(a) gap (see hard rules) — don't treat the class as compliant just
+  because #117 landed.
 
 ### 2.3.1(a) — Hidden / undocumented features
 

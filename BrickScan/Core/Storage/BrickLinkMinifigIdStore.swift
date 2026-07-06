@@ -3,19 +3,20 @@ import Foundation
 /// A resolved BrickLink catalog reference — the single-letter catalog type BrickLink uses in its
 /// URLs (`S` for set, `M` for minifig, `P` for part, `G` for gear, …) plus the item's ID within
 /// that catalog (e.g. `S`+`71039-1`, or `M`+`oct033`).
-struct BrickLinkCatalogRef: Codable, Equatable {
+struct BrickLinkCatalogRef: Codable, Equatable, Hashable {
     let type: String
     let id: String
 }
 
 /// Caches the Rebrickable set/minifig number → resolved BrickLink catalog reference (e.g.
 /// `fig-004396` → `M`+`oct033`, or `71039-6` → `M`+`sh1027` when the CMF box's own set number
-/// has no matching BrickLink set entry), resolved by scraping the item's Rebrickable page (see
-/// `BrickLinkPriceRepository`) — the Rebrickable API doesn't expose this mapping. The mapping is
-/// permanent (BrickLink never reassigns a catalog ID), so entries never expire; this only avoids
-/// re-scraping Rebrickable on every price refresh for the same item. This scrape is out of scope
-/// for #111 (which replaced the BrickLink price-guide scrape specifically) — tracked separately
-/// in #117.
+/// has no matching BrickLink set entry), resolved by cross-referencing official APIs (see
+/// `BrickLinkPriceRepository.resolveViaCatalogCrossReference`) — neither the Rebrickable API nor
+/// the BrickLink API exposes this mapping directly. The mapping is permanent (BrickLink never
+/// reassigns a catalog ID), so entries never expire; this only avoids re-resolving on every price
+/// refresh for the same item. Replacing the previous Rebrickable-page scrape here is the #117
+/// remediation (App Store 5.2.2 / 2.3.1(a)), out of scope for #111 which replaced the BrickLink
+/// price-guide scrape specifically.
 ///
 /// An `actor` (not a `@MainActor` class like `LocalRepository`) since `BrickLinkPriceRepository`
 /// itself is a plain `Sendable` struct with no main-actor affinity, and multiple items' prices
