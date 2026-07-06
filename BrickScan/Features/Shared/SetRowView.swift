@@ -10,6 +10,9 @@ struct SetRowView<Trailing: View>: View {
     var subtitle: String? = nil
     var resolvedPrice: Double? = nil
     var isInWishlist: Bool = false
+    /// Copies owned (issue #115) — only ever passed > 1 by CollectionView, so the "×N" badge
+    /// stays invisible everywhere else (History/Wishlist rows aren't about owned copies).
+    var quantity: Int = 1
     @ViewBuilder let trailingContent: () -> Trailing
 
     var body: some View {
@@ -19,6 +22,11 @@ struct SetRowView<Trailing: View>: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
                     Text(setNum.baseSetNum).font(.headline)
+                    if quantity > 1 {
+                        Text("×\(quantity)")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                    }
                     if isInWishlist {
                         Image(systemName: "heart.fill")
                             .font(.caption)

@@ -91,6 +91,15 @@ final class LocalRepository {
         try? modelContext.save()
     }
 
+    /// No-ops if no CachedSet row exists yet, mirroring `setWishlistStatus` — `cacheSet` never
+    /// touches `quantity` (only `syncCollection`'s full reconcile does), so a quantity edit needs
+    /// this dedicated setter rather than being folded into `cacheSet`.
+    func setQuantity(setNum: String, quantity: Int) {
+        guard let existing = cachedSet(setNum: setNum) else { return }
+        existing.quantity = quantity
+        try? modelContext.save()
+    }
+
     /// Reconciles every *already-cached* set's `isInWishlist` against Brickset's wanted-sets
     /// list — mirrors `syncCollection`'s reconcile approach. Never creates new rows itself (no
     /// `LegoSet` data to populate one with here); pair with `cachedSetNums()`/`cacheWishlistSet`

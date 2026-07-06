@@ -49,6 +49,14 @@ final class NetworkClient: @unchecked Sendable {
         return try await send(request)
     }
 
+    func patch(path: String, formBody: [String: String]) async throws {
+        var request = URLRequest(url: URL(string: baseURL + path)!)
+        request.httpMethod = "PATCH"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.httpBody = Self.encodeFormBody(formBody)
+        _ = try await sendRaw(request)
+    }
+
     func delete(path: String) async throws {
         let request = URLRequest(url: URL(string: baseURL + path)!)
         var mutableRequest = request

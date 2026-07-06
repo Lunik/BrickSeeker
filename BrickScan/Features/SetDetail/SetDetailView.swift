@@ -93,6 +93,8 @@ struct SetDetailView: View {
 
                     statusBadge
 
+                    quantityRow
+
                     wishlistRow
 
                     priceSection
@@ -614,17 +616,27 @@ struct SetDetailView: View {
 
     private func syncCache() {
         let listId: Int?
+        let quantity: Int?
         if case .inCollection(let userSet) = viewModel.collectionStatus {
             listId = userSet.listId
+            quantity = userSet.quantity
         } else {
             listId = nil
+            quantity = nil
         }
-        LocalRepository(modelContext: modelContext).cacheSet(
+        let repository = LocalRepository(modelContext: modelContext)
+        repository.cacheSet(
             viewModel.legoSet,
             isInCollection: viewModel.isInCollection,
             listId: listId,
             listName: viewModel.collectionListName
         )
+        // `cacheSet` never touches `quantity` (see its doc) — propagated separately here so a
+        // quantity edit (or a fresh `fetchUserSet` after one) reaches the SwiftData cache that
+        // Statistics/export read from.
+        if let quantity {
+            repository.setQuantity(setNum: viewModel.legoSet.setNum, quantity: quantity)
+        }
     }
 
     @ViewBuilder
@@ -649,6 +661,27 @@ struct SetDetailView: View {
                 .font(.footnote)
             }
         }
+    }
+
+    /// Number of copies owned (issue #115) — hidden entirely outside the collection, since a
+    /// quantity only means something for a set actually owned. Bound to `collectionStatus`'s
+    /// `UserSet.quantity` rather than a separate `@State`, so it always reflects the last
+    /// server-confirmed value (`updateQuantity` refetches after its PUT).
+    @ViewBuilder
+    private var quantityRow: some View {
+        if case .inCollection(let userSet) = viewModel.collectionStatus {
+            Stepper(value: quantityBinding(current: userSet.quantity), in: 1...99) {
+                Text("Quantité : ×\(userSet.quantity)")
+            }
+            .disabled(viewModel.isLoading)
+        }
+    }
+
+    private func quantityBinding(current: Int) -> Binding<Int> {
+        Binding(
+            get: { current },
+            set: { newValue in Task { await viewModel.updateQuantity(to: newValue) } }
+        )
     }
 
     /// Toggles this set's Brickset wishlist status — independent of collection membership (a set
