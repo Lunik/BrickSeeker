@@ -176,7 +176,7 @@
     "Aucun set scanné" : {
 
     },
-    "Aucune clé API Rebrickable configurée. Ouvre BrickScan et renseigne-la dans Réglages." : {
+    "Aucune clé API Rebrickable configurée. Ouvre BrickSeeker et renseigne-la dans Réglages." : {
 
     },
     "Aucune liste" : {
@@ -188,7 +188,7 @@
     "BrickLink (API officielle) : prix neuf/occasion, avec vos identifiants API BrickLink (si vous les renseignez)" : {
 
     },
-    "BrickScan" : {
+    "BrickSeeker" : {
 
     },
     "Brickset : votre liste cadeaux, avec vos identifiants Brickset (si vous liez votre compte)" : {
@@ -233,7 +233,7 @@
     "Collection" : {
 
     },
-    "Comment BrickScan protège vos données" : {
+    "Comment BrickSeeker protège vos données" : {
 
     },
     "Compléter les prix manquants (%lld)" : {
@@ -554,7 +554,7 @@
     "Permet d'identifier un set déjà connu même sans réseau. Téléchargé depuis Rebrickable (~25 000 sets) ; le statut collection et les prix restent toujours en ligne." : {
 
     },
-    "Plusieurs sets correspondent à %@, ouvre BrickScan pour préciser." : {
+    "Plusieurs sets correspondent à %@, ouvre BrickSeeker pour préciser." : {
 
     },
     "Pointez la caméra vers le numéro de set" : {
@@ -602,7 +602,7 @@
     "Rebrickable : catalogue des sets, votre collection (si vous liez votre compte)" : {
 
     },
-    "Recherche le prix d'un set LEGO sur lego.com, BrickLink et Amazon sans ouvrir BrickScan." : {
+    "Recherche le prix d'un set LEGO sur lego.com, BrickLink et Amazon sans ouvrir BrickSeeker." : {
 
     },
     "Rechercher" : {
@@ -623,10 +623,10 @@
     "Réinitialiser" : {
 
     },
-    "Réinitialiser BrickScan" : {
+    "Réinitialiser BrickSeeker" : {
 
     },
-    "Réinitialiser BrickScan ?" : {
+    "Réinitialiser BrickSeeker ?" : {
 
     },
     "Réinitialiser les filtres" : {
