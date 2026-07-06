@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for BrickScan
+about: Suggest an idea for BrickSeeker
 title: "[Feature] "
 labels: enhancement
 assignees: ''

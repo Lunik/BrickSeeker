@@ -6,7 +6,7 @@ import AppIntents
 struct CheckSetPriceIntent: AppIntent {
     static let title: LocalizedStringResource = "Vérifier le prix d'un set LEGO"
     static let description = IntentDescription(
-        "Recherche le prix d'un set LEGO sur lego.com, BrickLink et Amazon sans ouvrir BrickScan."
+        "Recherche le prix d'un set LEGO sur lego.com, BrickLink et Amazon sans ouvrir BrickSeeker."
     )
     static let openAppWhenRun: Bool = false
 
@@ -20,7 +20,7 @@ struct CheckSetPriceIntent: AppIntent {
     func perform() async throws -> some IntentResult & ProvidesDialog {
         guard KeychainService.shared.hasAPIKey else {
             return .result(
-                dialog: "Aucune clé API Rebrickable configurée. Ouvre BrickScan et renseigne-la dans Réglages."
+                dialog: "Aucune clé API Rebrickable configurée. Ouvre BrickSeeker et renseigne-la dans Réglages."
             )
         }
 
@@ -31,7 +31,7 @@ struct CheckSetPriceIntent: AppIntent {
         case .found(let set):
             legoSet = set
         case .ambiguous:
-            return .result(dialog: "Plusieurs sets correspondent à \(setNumber), ouvre BrickScan pour préciser.")
+            return .result(dialog: "Plusieurs sets correspondent à \(setNumber), ouvre BrickSeeker pour préciser.")
         case .notFound:
             return .result(dialog: "Aucun set LEGO trouvé pour \(setNumber).")
         }

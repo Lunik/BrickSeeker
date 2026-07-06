@@ -4,12 +4,12 @@ import UserNotifications
 
 /// Routes a Home Screen Quick Action (long-press on the app icon) to the entry point it mirrors.
 enum HomeScreenShortcut: String {
-    case scan = "com.lunik.brickscan.scan"
-    case manualEntry = "com.lunik.brickscan.manualEntry"
-    case photo = "com.lunik.brickscan.photo"
+    case scan = "com.lunik.brickseeker.scan"
+    case manualEntry = "com.lunik.brickseeker.manualEntry"
+    case photo = "com.lunik.brickseeker.photo"
 }
 
-/// Holds the shortcut requested by the user until `BrickScanApp` is ready to act on it and clears
+/// Holds the shortcut requested by the user until `BrickSeekerApp` is ready to act on it and clears
 /// it once consumed, so re-foregrounding the app doesn't replay a stale action.
 @Observable
 @MainActor

@@ -1,4 +1,4 @@
-# BrickScan — Revue de conformité App Store
+# BrickSeeker — Revue de conformité App Store
 
 > Revue réalisée en juillet 2026 sur l'ensemble du code de la branche par défaut, en vue de la première publication sur l'App Store (passage d'une licence Apple Developer gratuite à la licence payante).
 >
@@ -20,9 +20,9 @@
 | 2 | **Aucun `PrivacyInfo.xcprivacy`** alors que `UserDefaults` (required-reason API) est utilisé | `ScanStatsStore.swift`, `ScanLocationService.swift`, `AppTheme.swift`, `CollectionPriceUpdater.swift` ; manifeste absent | Manifeste obligatoire (mai 2024) ; catégorie `NSPrivacyAccessedAPICategoryUserDefaults`, raison `CA92.1` | **Blocage certain à l'upload** |
 | 3 | **Textes de confidentialité in-app inexacts** : « aucun serveur tiers autre que Rebrickable » alors que brickset.com (avec identifiants), lego.com, bricklink.com, amazon.fr et Apple CLGeocoder sont contactés | `Auth/PrivacyDetailView.swift:23`, `Auth/PrivacyNoticeView.swift:15` | 5.1.1, 2.3 | Rejet probable |
 | 4 | **Pas de politique de confidentialité** (ni URL ASC, ni lien in-app) | — | 5.1.1 (les deux emplacements obligatoires) | **Rejet certain** |
-| 5 | **Marque « LEGO » dans des chaînes système** (usage caméra, phrases Siri, titres d'intent) | `project.yml` (`NSCameraUsageDescription`), `App/Intents/BrickScanShortcuts.swift`, `CheckSetPriceIntent.swift` | 5.2.1, 4.1(c) | Possible (corrigeable en metadata) |
+| 5 | **Marque « LEGO » dans des chaînes système** (usage caméra, phrases Siri, titres d'intent) | `project.yml` (`NSCameraUsageDescription`), `App/Intents/BrickSeekerShortcuts.swift`, `CheckSetPriceIntent.swift` | 5.2.1, 4.1(c) | Possible (corrigeable en metadata) |
 | 6 | **Icône/splash évoquant le trade dress LEGO** (briques rouges à tenons — art original) | `Assets.xcassets/AppIcon.appiconset`, `SplashIcon.imageset` | 5.2.1 | Faible (garder ; redesign si rejet) |
-| 7 | **`try! ModelContainer`** au lancement → crash au premier écran si échec de migration SwiftData | `App/BrickScanApp.swift:21` | 2.1 | Possible (crash au lancement) |
+| 7 | **`try! ModelContainer`** au lancement → crash au premier écran si échec de migration SwiftData | `App/BrickSeekerApp.swift:21` | 2.1 | Possible (crash au lancement) |
 | 8 | **App inutilisable sans clé API Rebrickable** fournie par l'utilisateur → le reviewer ne peut rien tester | flux global | 2.1 (compte démo requis) | **Rejet certain sans notes de review + clé démo** |
 | 9 | **`ITSAppUsesNonExemptEncryption` absent** | `project.yml` | Export compliance (HTTPS seul → exempt, `false`) | Metadata |
 | 10 | **Métadonnées App Store Connect à compléter** : nutrition labels, statut trader DSA, questionnaire d'âge (janv. 2026), URL de support, build **Xcode 26 / SDK iOS 26** (plancher depuis avril 2026 ; README dit « Xcode 16+ ») | ASC + `README.md` | Exigences ASC | Blocages de soumission |

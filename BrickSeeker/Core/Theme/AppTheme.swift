@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// One of LEGO's three primary brand colors, selectable in Settings, matching the
-/// "BrickScan — Identité LEGO" design tokens.
+/// "BrickSeeker — Identité LEGO" design tokens.
 enum BrandColor: String, CaseIterable, Identifiable {
     case red, yellow, blue
 

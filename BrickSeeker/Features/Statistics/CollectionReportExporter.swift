@@ -21,7 +21,7 @@ enum CollectionReportExporter {
     }
 
     static func writeCSVToTempFile(sets: [CachedSet], priceEUR: (CachedSet) -> Double?) -> URL? {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("collection-brickscan.csv")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("collection-brickseeker.csv")
         do {
             try csv(for: sets, priceEUR: priceEUR).write(to: url, atomically: true, encoding: .utf8)
             return url
@@ -38,7 +38,7 @@ enum CollectionReportExporter {
         lastPriceUpdateAt: Date?
     ) -> URL? {
         let data = pdf(for: sets, stats: stats, priceEUR: priceEUR, lastSyncedAt: lastSyncedAt, lastPriceUpdateAt: lastPriceUpdateAt)
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("collection-brickscan.pdf")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("collection-brickseeker.pdf")
         do {
             try data.write(to: url, options: .atomic)
             return url
@@ -70,7 +70,7 @@ enum CollectionReportExporter {
                 y += bounding.height + spacingAfter
             }
 
-            draw("Inventaire de collection BrickScan", font: .boldSystemFont(ofSize: 20), spacingAfter: 12)
+            draw("Inventaire de collection BrickSeeker", font: .boldSystemFont(ofSize: 20), spacingAfter: 12)
             draw("Relevé du \(Date().formatted(frenchDateStyle))", font: .systemFont(ofSize: 11), color: .darkGray)
             if let lastSyncedAt {
                 draw("Dernière synchronisation collection : \(lastSyncedAt.formatted(frenchDateStyle))", font: .systemFont(ofSize: 11), color: .darkGray)
@@ -98,7 +98,7 @@ enum CollectionReportExporter {
 
             y += 12
             draw(
-                "Valeurs estimées à titre indicatif (prix lego.com, ou Amazon/BrickLink occasion si indisponible chez LEGO). BrickScan n'est pas affilié au LEGO Group.",
+                "Valeurs estimées à titre indicatif (prix lego.com, ou Amazon/BrickLink occasion si indisponible chez LEGO). BrickSeeker n'est pas affilié au LEGO Group.",
                 font: .italicSystemFont(ofSize: 9),
                 color: .gray
             )

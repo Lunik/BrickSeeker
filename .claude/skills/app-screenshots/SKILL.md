@@ -1,16 +1,16 @@
 ---
 name: app-screenshots
-description: Capture, store and update the BrickScan app screenshots used in the repo (README/docs). Use when adding visuals to the repo, refreshing them, or after any UI change that alters the look of an already-captured screen. Enforces the hard rule that no LEGO copyrighted content is ever published.
+description: Capture, store and update the BrickSeeker app screenshots used in the repo (README/docs). Use when adding visuals to the repo, refreshing them, or after any UI change that alters the look of an already-captured screen. Enforces the hard rule that no LEGO copyrighted content is ever published.
 ---
 
-# App screenshots — BrickScan
+# App screenshots — BrickSeeker
 
 How to produce the screenshots shown in the repo (README / `docs/`), where they live, and when to
 refresh them. Read the copyright rule first — it is the constraint that shapes everything else.
 
 ## ⛔ Hard rule: never publish LEGO copyrighted/trademarked content
 
-BrickScan is an open-source repo, not affiliated with the LEGO Group, Rebrickable, BrickLink or
+BrickSeeker is an open-source repo, not affiliated with the LEGO Group, Rebrickable, BrickLink or
 Amazon (see README disclaimer). **No screenshot committed to this repo may show LEGO copyrighted
 or trademarked content.** Concretely, a publishable screenshot must NOT contain:
 

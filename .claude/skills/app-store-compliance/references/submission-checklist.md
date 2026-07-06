@@ -1,4 +1,4 @@
-# Pre-submission checklist — BrickScan
+# Pre-submission checklist — BrickSeeker
 
 Run this top to bottom before every App Store / TestFlight submission (hard rule #7). Do not submit on
 memory. `[ ]` items are gates; a failed gate blocks submission until fixed.
@@ -20,7 +20,7 @@ memory. `[ ]` items are gates; a failed gate blocks submission until fixed.
 
 ## B. Privacy
 
-- [ ] `BrickScan/Resources/PrivacyInfo.xcprivacy` exists, passes `plutil -lint`, and is present at the
+- [ ] `BrickSeeker/Resources/PrivacyInfo.xcprivacy` exists, passes `plutil -lint`, and is present at the
       built `.app` root.
 - [ ] Every required-reason API in the code has a matching `NSPrivacyAccessedAPITypes` entry
       (current: UserDefaults → `CA92.1`). Re-grep for new ones.
@@ -41,7 +41,7 @@ memory. `[ ]` items are gates; a failed gate blocks submission until fixed.
 
 ## D. App Store Connect
 
-- [ ] Bundle id `com.lunik.brickscan` registered; app record created (name BrickScan, primary language FR).
+- [ ] Bundle id `com.lunik.brickseeker` registered; app record created (name BrickSeeker, primary language FR).
 - [ ] `ITSAppUsesNonExemptEncryption=false` (export compliance: exempt).
 - [ ] Age rating questionnaire completed (expected 4+).
 - [ ] EU DSA trader status declared (non-trader for a free app, unless the owner chooses otherwise).

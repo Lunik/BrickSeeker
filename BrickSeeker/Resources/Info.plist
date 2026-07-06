@@ -21,9 +21,9 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSCameraUsageDescription</key>
-	<string>BrickScan utilise la caméra pour scanner les boîtes et manuels LEGO</string>
+	<string>BrickSeeker utilise la caméra pour scanner les boîtes et manuels LEGO</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>BrickScan enregistre la position au moment d'un scan (si vous l'activez) pour retrouver le magasin où vous avez vu le meilleur prix. Position approximative, stockée uniquement sur l'appareil.</string>
+	<string>BrickSeeker enregistre la position au moment d'un scan (si vous l'activez) pour retrouver le magasin où vous avez vu le meilleur prix. Position approximative, stockée uniquement sur l'appareil.</string>
 	<key>UIApplicationShortcutItems</key>
 	<array>
 		<dict>
@@ -32,7 +32,7 @@
 			<key>UIApplicationShortcutItemTitle</key>
 			<string>Scanner un set</string>
 			<key>UIApplicationShortcutItemType</key>
-			<string>com.lunik.brickscan.scan</string>
+			<string>com.lunik.brickseeker.scan</string>
 		</dict>
 		<dict>
 			<key>UIApplicationShortcutItemIconSymbolName</key>
@@ -40,7 +40,7 @@
 			<key>UIApplicationShortcutItemTitle</key>
 			<string>Saisie manuelle</string>
 			<key>UIApplicationShortcutItemType</key>
-			<string>com.lunik.brickscan.manualEntry</string>
+			<string>com.lunik.brickseeker.manualEntry</string>
 		</dict>
 		<dict>
 			<key>UIApplicationShortcutItemIconSymbolName</key>
@@ -48,7 +48,7 @@
 			<key>UIApplicationShortcutItemTitle</key>
 			<string>Importer une photo</string>
 			<key>UIApplicationShortcutItemType</key>
-			<string>com.lunik.brickscan.photo</string>
+			<string>com.lunik.brickseeker.photo</string>
 		</dict>
 	</array>
 	<key>UILaunchScreen</key>

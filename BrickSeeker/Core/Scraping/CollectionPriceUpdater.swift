@@ -105,7 +105,7 @@ final class CollectionPriceUpdater {
     }
 
     /// Resumes a previously paused run with no user interaction — called when the app
-    /// becomes active again (see `BrickScanApp`'s `scenePhase` observer) so the user doesn't
+    /// becomes active again (see `BrickSeekerApp`'s `scenePhase` observer) so the user doesn't
     /// have to reopen Settings and tap "Reprendre" themselves. No-ops if there's nothing to
     /// resume or a run is already in flight.
     @discardableResult
