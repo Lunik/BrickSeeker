@@ -41,20 +41,20 @@ final class NetworkClient: @unchecked Sendable {
         _ = try await sendRaw(request)
     }
 
-    func put(path: String, formBody: [String: String]) async throws {
-        var request = URLRequest(url: URL(string: baseURL + path)!)
-        request.httpMethod = "PUT"
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        request.httpBody = Self.encodeFormBody(formBody)
-        _ = try await sendRaw(request)
-    }
-
     func patch<T: Decodable>(path: String, jsonBody: [String: Any]) async throws -> T {
         var request = URLRequest(url: URL(string: baseURL + path)!)
         request.httpMethod = "PATCH"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: jsonBody)
         return try await send(request)
+    }
+
+    func patch(path: String, formBody: [String: String]) async throws {
+        var request = URLRequest(url: URL(string: baseURL + path)!)
+        request.httpMethod = "PATCH"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.httpBody = Self.encodeFormBody(formBody)
+        _ = try await sendRaw(request)
     }
 
     func delete(path: String) async throws {

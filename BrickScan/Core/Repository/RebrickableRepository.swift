@@ -10,7 +10,7 @@ protocol RebrickableRepositoryProtocol: Sendable {
     func addSetToList(setNum: String, listId: Int) async throws
     func moveSetToList(setNum: String, fromListId: Int, toListId: Int) async throws
     func removeSetFromCollection(setNum: String) async throws
-    func updateSetQuantity(setNum: String, quantity: Int) async throws
+    func updateSetQuantity(setNum: String, listId: Int, quantity: Int) async throws
     func fetchUserSetLists() async throws -> [SetList]
     func createSetList(name: String) async throws -> SetList
 }
@@ -167,15 +167,18 @@ final class RebrickableRepository: RebrickableRepositoryProtocol, @unchecked Sen
     }
 
     // Endpoint 10
-    // `PUT /users/{token}/sets/{set_num}/` sets an absolute quantity across all of the user's
-    // Set Lists (not list-scoped) — verified against the community-maintained OpenAPI spec, since
-    // Rebrickable's own swagger omits parameter/response details. Same undocumented-response-shape
-    // situation as addSetToList, so only the HTTP status is trusted; callers re-read authoritative
-    // state via fetchUserSet.
-    func updateSetQuantity(setNum: String, quantity: Int) async throws {
+    // List-scoped PATCH, not the global `PUT /users/{token}/sets/{set_num}/` — that endpoint sets
+    // quantity across *all* of the user's Set Lists, and per its own description, an increase adds
+    // the extra copy to the user's default Set List rather than the one the set is already in
+    // (confirmed by manual testing: a set in "sealed" jumped to "displayed" on increment). Both
+    // endpoints verified against the community-maintained OpenAPI spec, since Rebrickable's own
+    // swagger omits parameter/response details. Same undocumented-response-shape situation as
+    // addSetToList, so only the HTTP status is trusted; callers re-read authoritative state via
+    // fetchUserSet.
+    func updateSetQuantity(setNum: String, listId: Int, quantity: Int) async throws {
         try await withUserTokenRetry { userToken in
-            try await self.client.put(
-                path: RebrickableEndpoint.userSetPath(userToken: userToken, setNum: setNum),
+            try await self.client.patch(
+                path: RebrickableEndpoint.setListSetPath(userToken: userToken, listId: listId, setNum: setNum),
                 formBody: ["quantity": String(quantity)]
             )
         }

@@ -161,15 +161,16 @@ final class SetDetailViewModel {
         }
     }
 
-    /// Absolute quantity update (issue #115) — no-ops if the set isn't in the collection, the
-    /// value didn't change, or it drops below 1 (removing a set already has its own explicit,
+    /// Absolute quantity update, scoped to the set's current list (issue #115) — no-ops if the set
+    /// isn't in the collection, its list is unknown (same precondition `moveToList` already needs),
+    /// the value didn't change, or it drops below 1 (removing a set already has its own explicit,
     /// confirmed action; the stepper isn't the place to trigger that side effect).
     @MainActor
     func updateQuantity(to newQuantity: Int) async {
-        guard case .inCollection(let userSet) = collectionStatus,
+        guard case .inCollection(let userSet) = collectionStatus, let listId = userSet.listId,
               newQuantity != userSet.quantity, newQuantity >= 1 else { return }
         await perform {
-            try await self.repository.updateSetQuantity(setNum: self.legoSet.setNum, quantity: newQuantity)
+            try await self.repository.updateSetQuantity(setNum: self.legoSet.setNum, listId: listId, quantity: newQuantity)
             await self.refreshCollectionStatus()
         }
     }
