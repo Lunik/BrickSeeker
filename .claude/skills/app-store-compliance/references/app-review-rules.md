@@ -13,9 +13,18 @@ guideline revisions.
 > must be provided upon request."
 
 - **Applies to:** all price/data sources. Hidden-WKWebView scraping of lego.com / amazon.fr / bricklink.com /
-  rebrickable.com HTML **violated this** (removed in #104).
-- **Compliant paths:** official API with third-party-app ToS (Rebrickable ✅ ; BrickLink API — verify ToS),
-  or visible `SFSafariViewController` link-out + manual entry (lego.com, amazon.fr).
+  rebrickable.com HTML **violated this** (removed in #104). The BrickLink price-guide leg specifically was
+  fixed in #111 (official Price Guide API, OAuth 1.0a) — see the authorisation record below.
+- **Compliant paths:** official API with third-party-app ToS (Rebrickable ✅, BrickLink ✅ #111), or visible
+  `SFSafariViewController` link-out + manual entry (lego.com, amazon.fr).
+- **Remaining scrape, deliberately kept, out of #111's scope:** resolving *which* BrickLink catalog item
+  (type + number) a Rebrickable minifig/edge-case set id maps to still reads the item's Rebrickable page's
+  "External Sites" table via `HeadlessWebScraper` (`BrickLinkPriceRepository.resolveMappedRef`) — neither
+  BrickLink's API nor Rebrickable's API expose that mapping. Permanently cached per item
+  (`BrickLinkMinifigIdStore`), so it runs once ever per item, not per price refresh, unlike the removed
+  price-guide scrape which ran live on every `SetDetail` open. **Tracked in #117** as its own remediation,
+  deliberately kept out of #111 to keep that PR scoped to the price-guide replacement — don't fold it back
+  in without a dedicated issue/PR; see the feedback note in `AGENTS.md` about PR scope discipline.
 
 ### 2.3.1(a) — Hidden / undocumented features
 
@@ -80,7 +89,7 @@ Keep this current — hard rule #1 requires a permission link for every automate
 | Rebrickable API v3 | Official REST API, user-supplied key | Permits app use, incl. commercial | "Data provided by Rebrickable" (appreciated) |
 | Rebrickable CDN (images, CSV dumps) | Public downloads | Permitted | — |
 | Brickset API v3 | Official API, user login → hash | App use allowed (verify rate limits) | If used |
-| BrickLink API | Official API, OAuth 1.0a, user creds | **Verify ToS before shipping (#104)** | If used |
+| BrickLink API v3 (Store API, Price Guide) | Official REST API, user-supplied OAuth 1.0a consumer/token pair (own BrickLink dev account) | ToS (help.bricklink.com API Terms of Use, checked #111): requires an app to show a contact email + its own ToS/privacy policy, be solely responsible for its own support, and not replicate/circumvent BrickLink's checkout — none of which block a read-only personal price display; explicit prior authorization is required only to grant *other third parties* access through the app, which BrickScan doesn't do | If used |
 | lego.com | **Visible link-out only** (no automated extraction) | Scraping prohibited | n/a |
 | amazon.fr | **Visible link-out only** (PA-API needs affiliate + sales) | Scraping prohibited | n/a |
 
@@ -94,3 +103,4 @@ Keep this current — hard rule #1 requires a permission link for every automate
 - ITSAppUsesNonExemptEncryption — https://developer.apple.com/documentation/bundleresources/information-property-list/itsappusesnonexemptencryption
 - App privacy details — https://developer.apple.com/app-store/app-privacy-details/
 - Rebrickable API / ToS — https://rebrickable.com/api/ , https://rebrickable.com/terms/
+- BrickLink API / ToS (#111) — https://www.bricklink.com/v3/api.page , https://help.bricklink.com/hc/en-us/articles/360034776133-API-Terms-of-Use

@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var showPrivacyDetail = false
     @State private var isAPIKeyVisible = false
     @State private var isBricksetAPIKeyVisible = false
+    @State private var isBrickLinkCredentialsVisible = false
     @State private var showClearCacheConfirmation = false
     @State private var isClearingCache = false
     @State private var cacheCleared = false
@@ -204,6 +205,37 @@ struct SettingsView: View {
                     Text("Compte Brickset")
                 } footer: {
                     Text("Nécessaire pour gérer votre liste cadeaux. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session.")
+                }
+
+                Section {
+                    Group {
+                        if isBrickLinkCredentialsVisible {
+                            TextField("Consumer Key", text: $viewModel.bricklinkConsumerKey)
+                            TextField("Consumer Secret", text: $viewModel.bricklinkConsumerSecret)
+                            TextField("Token Value", text: $viewModel.bricklinkToken)
+                            TextField("Token Secret", text: $viewModel.bricklinkTokenSecret)
+                        } else {
+                            SecureField("Consumer Key", text: $viewModel.bricklinkConsumerKey)
+                            SecureField("Consumer Secret", text: $viewModel.bricklinkConsumerSecret)
+                            SecureField("Token Value", text: $viewModel.bricklinkToken)
+                            SecureField("Token Secret", text: $viewModel.bricklinkTokenSecret)
+                        }
+                    }
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+
+                    Button {
+                        isBrickLinkCredentialsVisible.toggle()
+                    } label: {
+                        Label(
+                            isBrickLinkCredentialsVisible ? "Masquer les identifiants" : "Afficher les identifiants",
+                            systemImage: isBrickLinkCredentialsVisible ? "eye.slash" : "eye"
+                        )
+                    }
+                } header: {
+                    Text("API BrickLink")
+                } footer: {
+                    Text("Génère ces 4 valeurs sur bricklink.com/v3/api.page (section \"Register a Consumer\", puis \"Manage a Consumer\" → génère un jeton). Utilisé pour afficher les prix neuf/occasion BrickLink officiels ; nécessaire uniquement pour cette fonctionnalité.")
                 }
 
                 Section {

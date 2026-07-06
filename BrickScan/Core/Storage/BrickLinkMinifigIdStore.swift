@@ -11,11 +11,13 @@ struct BrickLinkCatalogRef: Codable, Equatable {
 /// Caches the Rebrickable set/minifig number → resolved BrickLink catalog reference (e.g.
 /// `fig-004396` → `M`+`oct033`, or `71039-6` → `M`+`sh1027` when the CMF box's own set number
 /// has no matching BrickLink set entry), resolved by scraping the item's Rebrickable page (see
-/// `BrickLinkPriceScraper`) — the Rebrickable API doesn't expose this mapping. The mapping is
+/// `BrickLinkPriceRepository`) — the Rebrickable API doesn't expose this mapping. The mapping is
 /// permanent (BrickLink never reassigns a catalog ID), so entries never expire; this only avoids
-/// re-scraping Rebrickable on every price refresh for the same item.
+/// re-scraping Rebrickable on every price refresh for the same item. This scrape is out of scope
+/// for #111 (which replaced the BrickLink price-guide scrape specifically) — tracked separately
+/// in #117.
 ///
-/// An `actor` (not a `@MainActor` class like `LocalRepository`) since `BrickLinkPriceScraper`
+/// An `actor` (not a `@MainActor` class like `LocalRepository`) since `BrickLinkPriceRepository`
 /// itself is a plain `Sendable` struct with no main-actor affinity, and multiple items' prices
 /// can be resolved concurrently (see `PriceRepository`'s task group).
 actor BrickLinkMinifigIdStore {

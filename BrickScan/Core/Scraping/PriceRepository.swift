@@ -9,14 +9,14 @@ protocol PriceRepositoryProtocol: Sendable {
 }
 
 struct PriceRepository: PriceRepositoryProtocol {
-    private let brickLinkScraper: BrickLinkPriceScraper
+    private let brickLinkRepository: BrickLinkPriceRepository
     private let amazonScraper: AmazonPriceScraper
 
     init(
-        brickLinkScraper: BrickLinkPriceScraper = BrickLinkPriceScraper(),
+        brickLinkRepository: BrickLinkPriceRepository = BrickLinkPriceRepository(),
         amazonScraper: AmazonPriceScraper = AmazonPriceScraper()
     ) {
-        self.brickLinkScraper = brickLinkScraper
+        self.brickLinkRepository = brickLinkRepository
         self.amazonScraper = amazonScraper
     }
 
@@ -25,7 +25,7 @@ struct PriceRepository: PriceRepositoryProtocol {
 
         return await withTaskGroup(of: [PriceQuote].self) { group in
             group.addTask {
-                (try? await brickLinkScraper.fetchPrices(for: legoSet)) ?? []
+                (try? await brickLinkRepository.fetchPrices(for: legoSet)) ?? []
             }
             group.addTask {
                 if let quote = try? await amazonScraper.fetchPrice(legoSet: legoSet) {

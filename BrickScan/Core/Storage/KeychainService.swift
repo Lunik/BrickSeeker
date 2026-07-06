@@ -6,6 +6,10 @@ enum KeychainKey: String {
     case userToken = "rebrickable_user_token"
     case bricksetApiKey = "brickset_api_key"
     case bricksetUserHash = "brickset_user_hash"
+    case bricklinkConsumerKey = "bricklink_consumer_key"
+    case bricklinkConsumerSecret = "bricklink_consumer_secret"
+    case bricklinkToken = "bricklink_token"
+    case bricklinkTokenSecret = "bricklink_token_secret"
 }
 
 final class KeychainService: @unchecked Sendable {
@@ -61,10 +65,28 @@ final class KeychainService: @unchecked Sendable {
         load(key: .bricksetUserHash) != nil
     }
 
+    /// All four OAuth 1.0a values, or `nil` if any is missing/empty — BrickLink signing requires
+    /// the full set, there's no partial-credentials mode.
+    var brickLinkOAuth1Credentials: BrickLinkOAuth1Credentials? {
+        guard let consumerKey = load(key: .bricklinkConsumerKey), !consumerKey.isEmpty,
+              let consumerSecret = load(key: .bricklinkConsumerSecret), !consumerSecret.isEmpty,
+              let token = load(key: .bricklinkToken), !token.isEmpty,
+              let tokenSecret = load(key: .bricklinkTokenSecret), !tokenSecret.isEmpty else {
+            return nil
+        }
+        return BrickLinkOAuth1Credentials(
+            consumerKey: consumerKey, consumerSecret: consumerSecret, token: token, tokenSecret: tokenSecret
+        )
+    }
+
     func clearAll() {
         delete(key: .apiKey)
         delete(key: .userToken)
         delete(key: .bricksetApiKey)
         delete(key: .bricksetUserHash)
+        delete(key: .bricklinkConsumerKey)
+        delete(key: .bricklinkConsumerSecret)
+        delete(key: .bricklinkToken)
+        delete(key: .bricklinkTokenSecret)
     }
 }
