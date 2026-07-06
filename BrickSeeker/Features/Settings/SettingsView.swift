@@ -316,11 +316,20 @@ struct SettingsView: View {
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
 
-                    Button("Confidentialité & données") {
+                    Button {
                         showPrivacyDetail = true
+                    } label: {
+                        HStack {
+                            Text("Confidentialité & données")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 } footer: {
-                    Text("Données fournies par Rebrickable et Brickset.")
+                    Text("Données fournies par Rebrickable, Brickset et BrickLink.")
                 }
 
                 Section {

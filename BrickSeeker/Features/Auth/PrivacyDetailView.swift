@@ -12,7 +12,7 @@ struct PrivacyDetailView: View {
     private static let privacyPolicyURL = URL(string: "https://github.com/Lunik/BrickSeeker/blob/master/PRIVACY.md")!
     private static let bricksetRequestKeyURL = URL(string: "https://brickset.com/tools/webservices/requestkey")!
     private static let rebrickableSettingsURL = URL(string: "https://rebrickable.com/api/")!
-    private static let bricklinkAPISettingsURL = URL(string: "https://www.bricklink.com/v3/api.page")!
+    private static let bricklinkAPISettingsURL = URL(string: "https://www.bricklink.com/v2/api/register_consumer.page")!
 
     var body: some View {
         NavigationStack {
@@ -45,7 +45,7 @@ struct PrivacyDetailView: View {
                     Button("Gérer votre API Key sur Brickset") {
                         showBricksetSafari = true
                     }
-                    Button("Gérer vos identifiants API sur BrickLink") {
+                    Button("Gérer votre api key sur bricklink") {
                         showBrickLinkSafari = true
                     }
                     Button("Lire la politique de confidentialité") {
