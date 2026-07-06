@@ -92,6 +92,22 @@ func resolveCollectionPrice(
     }
 }
 
+/// Price resolution for `WishlistView` (issue #109/#121): Amazon → lego.com retail → BrickLink
+/// new → BrickLink used — Amazon before lego.com, reversed from `resolveNewPrice`'s order, per
+/// request on the wishlist specifically.
+func resolveWishlistPrice(storePriceEUR: Double?, quotes: [PriceQuote]) -> Double? {
+    if let q = quotes.first(where: { $0.source == .amazon }) {
+        return (q.amount as NSDecimalNumber).doubleValue
+    }
+    if let retail = storePriceEUR { return retail }
+    for source in [PriceSource.bricklinkNew, .bricklinkUsed] {
+        if let q = quotes.first(where: { $0.source == source }) {
+            return (q.amount as NSDecimalNumber).doubleValue
+        }
+    }
+    return nil
+}
+
 /// Price resolution used for collection **valuation** (total estimated value / coverage counter,
 /// see issue #47/#87) — unlike `resolveCollectionPrice`, it does NOT cross-fall-back between new
 /// and used sources: an occasion set with no BrickLink-used quote stays priceless rather than

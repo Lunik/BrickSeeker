@@ -6,11 +6,25 @@ import SwiftData
 struct WishlistView: View {
     @Query(filter: #Predicate<CachedSet> { $0.isInWishlist }, sort: \CachedSet.name)
     private var cachedSets: [CachedSet]
+    @Query private var allCachedPrices: [CachedSetPrice]
     @Environment(\.modelContext) private var modelContext
     @State private var showImportSheet = false
     @State private var errorMessage: String?
     var bricksetRepository: BricksetRepositoryProtocol = BricksetRepository()
     let lookupViewModel: ScannerViewModel
+
+    /// Memoized from `allCachedPrices` (see the `.onChange` in `body`), same pattern as `CollectionView`.
+    @State private var pricesBySetNum: [String: [PriceQuote]] = [:]
+
+    /// Amazon → lego.com → BrickLink new → BrickLink used (see `resolveWishlistPrice`) — Amazon
+    /// first per request, and always this fixed chain regardless of any list condition, since a
+    /// wishlist set isn't necessarily owned or tied to a `CachedSetList`.
+    private func resolvedPrice(for cached: CachedSet) -> Double? {
+        resolveWishlistPrice(
+            storePriceEUR: cached.storePriceEUR,
+            quotes: pricesBySetNum[cached.setNum] ?? []
+        )
+    }
 
     var body: some View {
         Group {
@@ -28,7 +42,8 @@ struct WishlistView: View {
                         SetRowView(
                             setNum: cached.setNum,
                             name: cached.name,
-                            setImgUrl: cached.setImgUrl
+                            setImgUrl: cached.setImgUrl,
+                            resolvedPrice: resolvedPrice(for: cached)
                         ) {
                             if cached.isInCollection {
                                 Image(systemName: "checkmark.circle.fill")
@@ -61,6 +76,9 @@ struct WishlistView: View {
         }
         .sheet(isPresented: $showImportSheet) {
             BricksetWishlistImportSheet()
+        }
+        .onChange(of: SetPriceIndex.Version(allCachedPrices), initial: true) { _, _ in
+            pricesBySetNum = SetPriceIndex.pricesBySetNum(allCachedPrices)
         }
         .alert(
             "Erreur",
