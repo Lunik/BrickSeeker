@@ -103,13 +103,7 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                         .accessibilityLabel(isAPIKeyVisible ? "Masquer la clé API" : "Afficher la clé API")
                     }
-                } header: {
-                    Text("API Key Rebrickable")
-                } footer: {
-                    Text("Génère ta clé sur rebrickable.com/profile, dans la section API Key.")
-                }
 
-                Section {
                     if viewModel.isAccountLinked {
                         Label("Compte Rebrickable lié", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
@@ -144,7 +138,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Compte Rebrickable")
                 } footer: {
-                    Text("Nécessaire pour voir et gérer votre collection. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session.")
+                    Text("Génère ta clé sur rebrickable.com/profile, dans la section API Key. Nécessaire pour voir et gérer votre collection. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session.")
                 }
 
                 Section {
