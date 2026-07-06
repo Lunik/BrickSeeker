@@ -8,9 +8,12 @@ import Foundation
 /// interactive API docs at bricklink.com/v3/api.page are a JS app with no static reference, so
 /// third-party clients' typed models are the closest thing to a spec — cross-checked against
 /// multiple independent implementations, not a single source): `{ "meta": { code, message,
-/// description }, "data": {...} }`. `meta.code` is BrickLink's own status code and normally
-/// matches the HTTP status, but only the HTTP status is checked here — same trust boundary as
-/// every other host this app calls.
+/// description }, "data": {...} }`. **`meta.code` is the real outcome, not necessarily the HTTP
+/// status** — confirmed live: an invalid-token request came back as HTTP 200 with
+/// `meta.code: 401` (`TOKEN_IP_MISMATCHED` — BrickLink's console lets you lock a token's OAuth
+/// credentials to a specific IP/subnet; set both "Allowed IP" and "Mask IP" to `0.0.0.0` there to
+/// disable that, since a mobile app's IP isn't stable). Same shape as `BricksetClient`'s
+/// always-200 envelope, for the same reason: check `meta.code`, not just the HTTP status.
 final class BrickLinkClient: @unchecked Sendable {
     static let shared = BrickLinkClient()
 
@@ -23,7 +26,14 @@ final class BrickLinkClient: @unchecked Sendable {
     private let throttler = RequestThrottler(minimumInterval: 1.0)
 
     private struct Envelope<T: Decodable>: Decodable {
+        let meta: Meta
         let data: T?
+    }
+
+    private struct Meta: Decodable {
+        let code: Int
+        let message: String
+        let description: String?
     }
 
     init(session: URLSession = .shared) {
@@ -59,22 +69,7 @@ final class BrickLinkClient: @unchecked Sendable {
             throw APIError.networkUnavailable
         }
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.unknown
-        }
-
-        switch httpResponse.statusCode {
-        case 200...299:
-            break
-        case 401, 403:
-            throw APIError.unauthorized
-        case 404:
-            throw APIError.notFound
-        case 429:
-            throw APIError.rateLimited
-        case 500...599:
-            throw APIError.serverError(httpResponse.statusCode)
-        default:
+        guard response is HTTPURLResponse else {
             throw APIError.unknown
         }
 
@@ -84,6 +79,22 @@ final class BrickLinkClient: @unchecked Sendable {
         } catch {
             throw APIError.decodingError(error)
         }
+
+        switch envelope.meta.code {
+        case 200...299:
+            break
+        case 401, 403:
+            throw APIError.unauthorized
+        case 404:
+            throw APIError.notFound
+        case 429:
+            throw APIError.rateLimited
+        case 500...599:
+            throw APIError.serverError(envelope.meta.code)
+        default:
+            throw APIError.bricklinkError(envelope.meta.description ?? envelope.meta.message)
+        }
+
         guard let value = envelope.data else { throw APIError.notFound }
         return value
     }

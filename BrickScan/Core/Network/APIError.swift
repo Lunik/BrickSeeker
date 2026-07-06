@@ -16,6 +16,12 @@ enum APIError: Error, LocalizedError {
     /// own (English) message since its error vocabulary isn't documented/stable enough to map
     /// onto fixed French strings without risking silently mislabeling a different failure.
     case bricksetError(String)
+    /// BrickLink's API replies HTTP 200 even on failure (confirmed live: a `TOKEN_IP_MISMATCHED`
+    /// auth error came back as HTTP 200) — like Brickset, the real outcome is `meta.code` in the
+    /// JSON envelope, not the HTTP status. Carries BrickLink's own `meta.description`/`message`
+    /// since, same reasoning as `bricksetError`, its error vocabulary isn't stable enough to map
+    /// onto fixed French strings without risking mislabeling a different failure.
+    case bricklinkError(String)
 
     var errorDescription: String? {
         switch self {
@@ -39,6 +45,8 @@ enum APIError: Error, LocalizedError {
             return String(localized: "Une erreur inconnue est survenue")
         case .bricksetError(let message):
             return String(localized: "Erreur Brickset : \(message)")
+        case .bricklinkError(let message):
+            return String(localized: "Erreur BrickLink : \(message)")
         }
     }
 }
