@@ -10,14 +10,13 @@ struct BrickLinkCatalogRef: Codable, Equatable {
 
 /// Caches the Rebrickable set/minifig number → resolved BrickLink catalog reference (e.g.
 /// `fig-004396` → `M`+`oct033`, or `71039-6` → `M`+`sh1027` when the CMF box's own set number
-/// has no matching BrickLink set entry), resolved by scraping the item's Rebrickable page (see
-/// `BrickLinkPriceScraper`) — the Rebrickable API doesn't expose this mapping. The mapping is
-/// permanent (BrickLink never reassigns a catalog ID), so entries never expire; this only avoids
-/// re-scraping Rebrickable on every price refresh for the same item.
-///
-/// An `actor` (not a `@MainActor` class like `LocalRepository`) since `BrickLinkPriceScraper`
-/// itself is a plain `Sendable` struct with no main-actor affinity, and multiple items' prices
-/// can be resolved concurrently (see `PriceRepository`'s task group).
+/// has no matching BrickLink set entry). Read-only since #111: entries were originally written
+/// by scraping the item's Rebrickable page (the Rebrickable API doesn't expose this mapping),
+/// but that scrape was itself a compliance violation (5.2.2, hidden `WKWebView`) no smaller in
+/// kind than the BrickLink price-guide scrape #111 removed, so it wasn't replicated — see
+/// `BrickLinkPriceRepository`'s doc comment. Existing entries (from before #111, on devices that
+/// already resolved a given minifig) keep working; a `fig-…` id never seen before this change has
+/// no BrickLink price, like any other source with no data for that item.
 actor BrickLinkMinifigIdStore {
     static let shared = BrickLinkMinifigIdStore()
 
@@ -38,11 +37,6 @@ actor BrickLinkMinifigIdStore {
 
     func lookup(setNum: String) -> BrickLinkCatalogRef? {
         refsBySetNum[setNum]
-    }
-
-    func save(setNum: String, ref: BrickLinkCatalogRef) {
-        refsBySetNum[setNum] = ref
-        try? JSONEncoder().encode(refsBySetNum).write(to: fileURL, options: .atomic)
     }
 
     func clearAll() {

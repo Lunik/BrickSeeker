@@ -15,7 +15,8 @@ look up what a set is worth across lego.com, BrickLink and Amazon.
   already in your collection and in which list, and add/remove it.
 - **Pricing** — for any set, see prices side by side:
   - the official **lego.com** price,
-  - **BrickLink** 6-month sold average, new and used (complete sets only),
+  - **BrickLink** 6-month sold average, new and used, via BrickLink's official
+    Price Guide API (requires your own free BrickLink API credentials),
   - **Amazon** (genuine listings, accessories filtered out),
   - with a discount/markup percentage versus the lego.com price.
 - **History** of scanned sets, with on-disk image caching for offline browsing.
@@ -55,14 +56,24 @@ hardcoded or committed. Generate one at
 Linking your account (optional, for collection sync) uses your credentials once
 to obtain a session token; the password is never stored.
 
+### BrickLink API credentials
+
+BrickLink prices use BrickLink's official Price Guide API (OAuth 1.0a), not
+scraping. Register a Consumer and generate a token at
+[bricklink.com/v3/api.page](https://www.bricklink.com/v3/api.page), then enter
+the 4 values (Consumer Key, Consumer Secret, Token Value, Token Secret) in-app
+under **Paramètres** — stored in the Keychain, never hardcoded or committed.
+This is optional; without it the BrickLink price rows are simply omitted.
+
 ## How pricing works
 
-lego.com, BrickLink and Amazon all sit behind Cloudflare-style JS challenges
-that a plain HTTP client can't pass, so prices are read by loading each page in
-a hidden `WKWebView` (a real WebKit engine) and extracting the values from the
-rendered DOM. Each source loads on its own web view so they run in parallel,
-sharing one process pool/cookie store so the challenge clearance persists.
-Results are cached locally; any source that fails is simply omitted.
+lego.com and Amazon sit behind Cloudflare-style JS challenges that a plain HTTP
+client can't pass, so those two prices are read by loading each page in a
+hidden `WKWebView` (a real WebKit engine) and extracting the values from the
+rendered DOM. BrickLink prices come from its official Price Guide API instead
+(signed with OAuth 1.0a, no web view involved). All sources are fetched in
+parallel; results are cached locally, and any source that fails (or has no
+credentials configured, for BrickLink) is simply omitted.
 
 ## Project layout
 

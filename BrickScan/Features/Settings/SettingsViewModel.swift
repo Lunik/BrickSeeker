@@ -19,6 +19,11 @@ final class SettingsViewModel {
     var linkBricksetAccountErrorMessage: String?
     var isBricksetAccountLinked: Bool
 
+    var bricklinkConsumerKey: String
+    var bricklinkConsumerSecret: String
+    var bricklinkToken: String
+    var bricklinkTokenSecret: String
+
     var isUpdatingOfflineCatalog = false
     var offlineCatalogDownloadProgress: Double = 0
     var offlineCatalogErrorMessage: String?
@@ -43,6 +48,10 @@ final class SettingsViewModel {
         self.isAccountLinked = KeychainService.shared.load(key: .userToken) != nil
         self.bricksetApiKey = KeychainService.shared.load(key: .bricksetApiKey) ?? ""
         self.isBricksetAccountLinked = KeychainService.shared.hasBricksetUserHash
+        self.bricklinkConsumerKey = KeychainService.shared.load(key: .bricklinkConsumerKey) ?? ""
+        self.bricklinkConsumerSecret = KeychainService.shared.load(key: .bricklinkConsumerSecret) ?? ""
+        self.bricklinkToken = KeychainService.shared.load(key: .bricklinkToken) ?? ""
+        self.bricklinkTokenSecret = KeychainService.shared.load(key: .bricklinkTokenSecret) ?? ""
         self.repository = repository
         self.bricksetRepository = bricksetRepository
         self.offlineCatalogStore = offlineCatalogStore
@@ -103,6 +112,18 @@ final class SettingsViewModel {
         KeychainService.shared.save(key: .apiKey, value: apiKey)
         if !bricksetApiKey.isEmpty {
             KeychainService.shared.save(key: .bricksetApiKey, value: bricksetApiKey)
+        }
+        if !bricklinkConsumerKey.isEmpty {
+            KeychainService.shared.save(key: .bricklinkConsumerKey, value: bricklinkConsumerKey)
+        }
+        if !bricklinkConsumerSecret.isEmpty {
+            KeychainService.shared.save(key: .bricklinkConsumerSecret, value: bricklinkConsumerSecret)
+        }
+        if !bricklinkToken.isEmpty {
+            KeychainService.shared.save(key: .bricklinkToken, value: bricklinkToken)
+        }
+        if !bricklinkTokenSecret.isEmpty {
+            KeychainService.shared.save(key: .bricklinkTokenSecret, value: bricklinkTokenSecret)
         }
     }
 

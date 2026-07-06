@@ -5,12 +5,14 @@ struct PrivacyDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showSafari = false
     @State private var showBricksetSafari = false
+    @State private var showBrickLinkSafari = false
     @State private var showPrivacyPolicy = false
     @State private var showResetConfirmation = false
 
     private static let privacyPolicyURL = URL(string: "https://github.com/Lunik/brickscan/blob/master/PRIVACY.md")!
     private static let bricksetRequestKeyURL = URL(string: "https://brickset.com/tools/webservices/requestkey")!
     private static let rebrickableSettingsURL = URL(string: "https://rebrickable.com/api/")!
+    private static let bricklinkAPISettingsURL = URL(string: "https://www.bricklink.com/v3/api.page")!
 
     var body: some View {
         NavigationStack {
@@ -18,7 +20,7 @@ struct PrivacyDetailView: View {
                 Section {
                     Label("Ce qui est stocké", systemImage: "internaldrive")
                         .font(.headline)
-                    Text("API Key Rebrickable et clé/identifiants Brickset : dans le Keychain iOS")
+                    Text("API Key Rebrickable, clé/identifiants Brickset et identifiants API BrickLink (OAuth) : dans le Keychain iOS")
                     Text("Sets scannés récemment et cache de votre collection : dans la base SwiftData locale, sur l'appareil uniquement")
                     Text("Position des scans (si activée dans les paramètres) : approximative, sur l'appareil uniquement, supprimée dès qu'un set rejoint votre collection ou que l'historique est purgé")
                     Text("Vos mots de passe Rebrickable et Brickset ne sont jamais stockés : ils servent une seule fois à obtenir un jeton de session")
@@ -29,7 +31,8 @@ struct PrivacyDetailView: View {
                         .font(.headline)
                     Text("Rebrickable : catalogue des sets, votre collection (si vous liez votre compte)")
                     Text("Brickset : votre liste cadeaux, avec vos identifiants Brickset (si vous liez votre compte)")
-                    Text("lego.com, BrickLink et amazon.fr : consultés pour afficher les prix du marché, sans identifiant transmis")
+                    Text("BrickLink (API officielle) : prix neuf/occasion, avec vos identifiants API BrickLink (si vous les renseignez)")
+                    Text("lego.com et amazon.fr : consultés pour afficher les prix du marché, sans identifiant transmis")
                     Text("Apple (service de localisation) : conversion de la position en ville approximative, si l'enregistrement de position est activé")
                 }
 
@@ -41,6 +44,9 @@ struct PrivacyDetailView: View {
                     }
                     Button("Gérer votre API Key sur Brickset") {
                         showBricksetSafari = true
+                    }
+                    Button("Gérer vos identifiants API sur BrickLink") {
+                        showBrickLinkSafari = true
                     }
                     Button("Lire la politique de confidentialité") {
                         showPrivacyPolicy = true
@@ -62,6 +68,9 @@ struct PrivacyDetailView: View {
             }
             .sheet(isPresented: $showBricksetSafari) {
                 SafariView(url: Self.bricksetRequestKeyURL)
+            }
+            .sheet(isPresented: $showBrickLinkSafari) {
+                SafariView(url: Self.bricklinkAPISettingsURL)
             }
             .sheet(isPresented: $showPrivacyPolicy) {
                 SafariView(url: Self.privacyPolicyURL)

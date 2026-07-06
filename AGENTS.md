@@ -417,41 +417,51 @@ via `evaluateJavaScript`. Notes for anyone touching this:
   US/UK/CA/DE prices — DE/EUR is the closest proxy for FR pricing) — don't silently fall back to
   scraping the bare HTML over `URLSession` again, it's been verified not to work.
 
-## BrickLink + Amazon price scraping (`Core/Scraping/`)
+## BrickLink price API + Amazon price scraping (`Core/Scraping/`, `Core/Network/`)
 
-Beyond lego.com, `SetDetail` shows BrickLink (new/used) and Amazon prices. Same root problem as
-lego.com (bot challenge → no plain HTTP client works), so the same WKWebView approach, but
-factored into `HeadlessWebScraper`: it exposes `loadAndExtract(url:readinessScript:extractScript:)`,
-which loads a page, polls the readiness JS until the real DOM is in (challenge cleared), then runs
-the extract JS and returns its `JSON.stringify(...)` result. `BrickLinkPriceScraper` and
-`AmazonPriceScraper` are thin structs that own the per-site JS; `PriceRepository.fetchPrices`
-fans them out and never throws (a source that fails is just omitted). The unified "Prix" card in
-`SetDetailView` shows lego.com + the three scraped sources as consistent rows (spinner / price /
-"Indisponible"), each with a `±%` vs the lego.com price.
+Beyond lego.com, `SetDetail` shows BrickLink (new/used) and Amazon prices, fetched by
+`PriceRepository.fetchPrices` in parallel; a source that fails (or, for BrickLink, has no
+credentials configured) is just omitted. The unified "Prix" card in `SetDetailView` shows lego.com
++ these two sources as consistent rows (spinner / price / "Indisponible"), each with a `±%` vs the
+lego.com price.
 
-Hard-won specifics — don't re-break these:
-- **Parallel, one web view per load.** `HeadlessWebScraper` creates a fresh `WKWebView` per
-  `loadAndExtract` call (all sharing one `WKProcessPool` + the default data store, so per-domain
-  `cf_clearance` cookies still persist). There is **no** single-web-view mutex anymore — that was
-  removed precisely so BrickLink and Amazon scrape concurrently. lego.com runs on its own web view
-  (`LegoStoreRepository`), so all three are genuinely parallel. Don't reintroduce a shared single
-  web view / serializing lock. `SetDetailViewModel` is `@MainActor` so the `async let` in
-  `refreshAllPrices` is Sendable-clean.
-- **BrickLink** is scraped from the legacy price guide `catalogPG.asp?S=<setNum>&viewExclude=Y`
-  (`viewExclude=Y` = "Exclude Incomplete Sets"). The page is a deeply nested table with four
-  "Last 6 Months Sales" summary quadrants then a per-month breakdown. The reliable anchor is the
-  "Times Sold:" row: the New-sold and Used-sold summaries are the first two such rows and appear
-  adjacently; for each, read the next **exact** "Avg Price:" leaf cell. Matching on the exact
-  leaf-cell label is what avoids the original bug where an adjacency walk returned the "Times
-  Sold" *count* as the price (set 75431-1 showed 111 € for both). BrickLink's price guide can't
-  filter condition via URL and the v2 item page keeps that in a cookie, so the surfaced link is
-  just the plain item page (`/v2/catalog/catalogitem.page?S=<setNum>`).
-- **Amazon** searches `amazon.fr/s?k=LEGO <digits>` and only accepts a result whose title is
+- **BrickLink** (`BrickLinkPriceRepository`) calls the official Price Guide API
+  (`GET api.bricklink.com/api/store/v1/items/{type}/{no}/price?guide_type=sold&new_or_used=N|U`),
+  signed per request with OAuth 1.0a/HMAC-SHA1 (`BrickLinkOAuth1`, built on CryptoKit — no
+  third-party OAuth library) using 4 credentials the user enters themselves in Settings (Consumer
+  Key/Secret, Token/Token Secret, from their own bricklink.com/v3/api.page account) and stores in
+  the Keychain (`KeychainService.brickLinkOAuth1Credentials`). Replaced a `WKWebView` scrape of
+  the legacy `catalogPG.asp` page (#104/#111 — App Store 5.2.2, hidden-WKWebView). `guide_type=sold`
+  (6-month sold average) matches what the old scraper read, not `guide_type=stock` (current
+  listings) — keep using `sold` if this is touched again, or `DealVerdict`/history numbers change
+  meaning silently.
+  - **Item-type resolution**: most Rebrickable set numbers are directly usable as BrickLink's own
+    `SET` number — tried first, no lookup. Minifigs (`fig-…` ids) and the rare set BrickLink files
+    under a different type (e.g. individual collectible-minifig boxes) only resolve from
+    `BrickLinkMinifigIdStore`'s existing cache (`Core/Storage/`) — **read-only since #111**. That
+    cache used to be populated by scraping the item's Rebrickable page's "External Sites" table,
+    but that scrape was itself the same class of 5.2.2/hidden-WKWebView violation as the BrickLink
+    scrape this issue removed, just lower-volume — replicating it wasn't judged an acceptable
+    trade-off for keeping BrickLink prices on every minifig. A `fig-…` id with no pre-#111 cache
+    entry simply has no BrickLink price (same as any other source with no data), rather than
+    triggering a fresh scrape. Don't add a new resolver that scrapes bricklink.com or
+    rebrickable.com to repopulate this cache — see `app-review-rules.md`'s 5.2.2 entry (in the
+    `app-store-compliance` skill) before reconsidering this.
+  - The surfaced item link (`sourceURL` on the `PriceQuote`) is still the plain catalog page
+    (`bricklink.com/v2/catalog/catalogitem.page?{S,M,…}={id}`), not an API URL — that's for the
+    user to open, unrelated to the signed API call.
+- **Amazon** (`AmazonPriceScraper`) still uses the `WKWebView` approach (bot challenge → no plain
+  HTTP client works), via `HeadlessWebScraper`'s `loadAndExtract(url:readinessScript:extractScript:)`
+  (loads a page, polls the readiness JS until the real DOM is in, then runs the extract JS and
+  returns its `JSON.stringify(...)` result) — same mechanism lego.com uses (`LegoStoreRepository`),
+  each on its own web view so both run in parallel (no shared single-web-view mutex; don't
+  reintroduce one). Searches `amazon.fr/s?k=LEGO <digits>` and only accepts a result whose title is
   **brand-first** (`^LEGO`), contains the set number, and is **not** an accessory (rejects
   `compatible`/`pour LEGO`/`éclairage`/`LED`/`lighting`/`non inclus`/known lighting-kit brands).
   Without that filter a third-party LED kit "compatible avec 10294" was matched as the set. Don't
   loosen back to "title contains lego", and don't re-add a fallback that returns any card without
-  the set number.
+  the set number. (Amazon/lego.com's own scraping-compliance remediation is tracked separately,
+  see the `app-store-compliance` skill — this issue's scope was BrickLink only.)
 
 ## Things deliberately not built (don't re-add without asking)
 
