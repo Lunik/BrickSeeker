@@ -10,6 +10,7 @@ protocol RebrickableRepositoryProtocol: Sendable {
     func addSetToList(setNum: String, listId: Int) async throws
     func moveSetToList(setNum: String, fromListId: Int, toListId: Int) async throws
     func removeSetFromCollection(setNum: String) async throws
+    func updateSetQuantity(setNum: String, quantity: Int) async throws
     func fetchUserSetLists() async throws -> [SetList]
     func createSetList(name: String) async throws -> SetList
 }
@@ -161,6 +162,21 @@ final class RebrickableRepository: RebrickableRepositoryProtocol, @unchecked Sen
             try await self.client.post(
                 path: RebrickableEndpoint.userSetListsPath(userToken: userToken),
                 formBody: ["name": name]
+            )
+        }
+    }
+
+    // Endpoint 10
+    // `PUT /users/{token}/sets/{set_num}/` sets an absolute quantity across all of the user's
+    // Set Lists (not list-scoped) — verified against the community-maintained OpenAPI spec, since
+    // Rebrickable's own swagger omits parameter/response details. Same undocumented-response-shape
+    // situation as addSetToList, so only the HTTP status is trusted; callers re-read authoritative
+    // state via fetchUserSet.
+    func updateSetQuantity(setNum: String, quantity: Int) async throws {
+        try await withUserTokenRetry { userToken in
+            try await self.client.put(
+                path: RebrickableEndpoint.userSetPath(userToken: userToken, setNum: setNum),
+                formBody: ["quantity": String(quantity)]
             )
         }
     }
