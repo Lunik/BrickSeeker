@@ -6,7 +6,7 @@ import AppIntents
 struct CheckSetPriceIntent: AppIntent {
     static let title: LocalizedStringResource = "Vérifier le prix d'un set LEGO"
     static let description = IntentDescription(
-        "Recherche le prix d'un set LEGO sur lego.com, BrickLink et Amazon sans ouvrir BrickSeeker."
+        "Recherche le prix d'un set LEGO sur lego.com, BrickLink, Amazon et Cdiscount sans ouvrir BrickSeeker."
     )
     static let openAppWhenRun: Bool = false
 

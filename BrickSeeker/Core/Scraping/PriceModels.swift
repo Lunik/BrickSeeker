@@ -23,12 +23,18 @@ enum PriceSource: String, Codable, CaseIterable {
     case bricklinkUsed
     case bricklinkNew
     case amazon
+    /// Cdiscount neuf (issue #124) — shown as its own row in `SetDetailView`, alongside `.amazon`,
+    /// but `SetRowView`'s fallback chains (History/Wishlist/Collection row/valuation) still treat
+    /// the two as one comparison point rather than two separate steps (see
+    /// `bestAmazonOrCdiscountPrice`/`mostExpensiveAmazonOrCdiscountPrice`).
+    case cdiscount
 
     var displayName: String {
         switch self {
         case .bricklinkUsed: return "BrickLink (occasion)"
         case .bricklinkNew: return "BrickLink (neuf)"
         case .amazon: return "Amazon (neuf)"
+        case .cdiscount: return "Cdiscount (neuf)"
         }
     }
 }

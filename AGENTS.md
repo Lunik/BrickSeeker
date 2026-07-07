@@ -465,6 +465,28 @@ lego.com price.
   loosen back to "title contains lego", and don't re-add a fallback that returns any card without
   the set number. (Amazon/lego.com's own scraping-compliance remediation is tracked separately,
   see the `app-store-compliance` skill — this issue's scope was BrickLink only.)
+- **Cdiscount** (`CdiscountPriceScraper`, issue #124) mirrors `AmazonPriceScraper` — same
+  `HeadlessWebScraper` mechanism, same compliance debt (see `app-store-compliance`'s hard rule #1
+  and issue #130, which will remove this pattern for Amazon/lego.com/BrickLink; Cdiscount belongs
+  in that same removal when it happens). It has no Amazon-style `data-component-type` test hook, so
+  it keys off the one stable thing a Cdiscount product page is known to share: a `/f-<id>-<sku>.html`
+  URL segment. Reads `.textContent`, not `.innerText` — verified on-device (`simulator-ui-testing`)
+  that `.innerText` comes back **empty** on this search result list's off-screen/virtualized rows,
+  a WebKit quirk `.textContent` doesn't have; the whole card (title, rating, price) already lives
+  inside the `<a>` itself, no need to walk up to a parent. A promo card's text has **two** prices
+  back to back — crossed-out original, then the "-N%" badge, then the actual current price (e.g.
+  `"239,99 €-8%219,99 €"`) — so the extractor takes the *last* price match in the card, not the
+  first, or it silently returns the pre-discount price. Don't "fix" either of these back to the
+  Amazon-style approach without re-testing on-device; both were only caught by an actual on-device
+  run, not by reading the markup.
+  `SetDetailView` shows Amazon and Cdiscount as two separate rows (per-set price *comparison* —
+  the user wants to see both), but everywhere else they collapse into one comparison point — see
+  `bestAmazonOrCdiscountPrice`/`mostExpensiveAmazonOrCdiscountPrice` in `SetRowView.swift`:
+  History/Wishlist's resolved price takes the **cheaper** of the two (best deal to buy at), while
+  collection valuation (`resolveCollectionPrice`/`effectiveValuationPrice`) takes the **pricier**
+  of the two (don't under-value the collection based on which marketplace happened to be cheaper
+  that day). Don't merge them into a single `SetDetailView` row, and don't split the History/
+  Wishlist/valuation chains back into independent fallback steps, without re-checking that intent.
 
 ## PR scope — file adjacent issues, don't fix them inline
 

@@ -62,14 +62,52 @@ struct SetRowView<Trailing: View>: View {
 
 // MARK: - Price resolution helpers
 
-/// New-price fallback chain used by HistoryView: lego.com retail → Amazon → BrickLink new.
-/// Never returns a used price.
+/// Combines Amazon and Cdiscount into a single comparison point (issue #124): both are neuf
+/// marketplace scrapes with the same reliability profile, so every fallback chain below treats
+/// them as one step rather than two, picking whichever `amount` `pick` prefers. Returns the lone
+/// quote when only one of the two is present, `nil` when neither is.
+private func amazonOrCdiscountPrice(in quotes: [PriceQuote], pick: (Double, Double) -> Double) -> Double? {
+    let amazon = quotes.first(where: { $0.source == .amazon }).map { ($0.amount as NSDecimalNumber).doubleValue }
+    let cdiscount = quotes.first(where: { $0.source == .cdiscount }).map { ($0.amount as NSDecimalNumber).doubleValue }
+    switch (amazon, cdiscount) {
+    case let (a?, c?): return pick(a, c)
+    case let (a?, nil): return a
+    case let (nil, c?): return c
+    case (nil, nil): return nil
+    }
+}
+
+/// The cheaper of Amazon/Cdiscount — used wherever the fallback chain is about finding the best
+/// deal to buy at (History, Wishlist, and `SetDetailView`'s merged "Amazon" row).
+func bestAmazonOrCdiscountPrice(in quotes: [PriceQuote]) -> Double? {
+    amazonOrCdiscountPrice(in: quotes, pick: min)
+}
+
+/// The pricier of Amazon/Cdiscount — used for collection valuation (issue #124): the total
+/// estimated value shouldn't drop just because one marketplace happened to be cheaper that day.
+func mostExpensiveAmazonOrCdiscountPrice(in quotes: [PriceQuote]) -> Double? {
+    amazonOrCdiscountPrice(in: quotes, pick: max)
+}
+
+/// New-price fallback chain used by HistoryView: lego.com retail → best(Amazon, Cdiscount) →
+/// BrickLink new. Never returns a used price.
 func resolveNewPrice(storePriceEUR: Double?, quotes: [PriceQuote]) -> Double? {
     if let retail = storePriceEUR { return retail }
-    for source in [PriceSource.amazon, .bricklinkNew] {
-        if let q = quotes.first(where: { $0.source == source }) {
-            return (q.amount as NSDecimalNumber).doubleValue
-        }
+    if let amazonOrCdiscount = bestAmazonOrCdiscountPrice(in: quotes) { return amazonOrCdiscount }
+    if let q = quotes.first(where: { $0.source == .bricklinkNew }) {
+        return (q.amount as NSDecimalNumber).doubleValue
+    }
+    return nil
+}
+
+/// Same chain as `resolveNewPrice`, but takes the pricier of Amazon/Cdiscount rather than the
+/// cheaper (issue #124) — collection valuation (`resolveCollectionPrice`/`effectiveValuationPrice`)
+/// shouldn't under-value a set based on which marketplace happened to be cheaper that day.
+private func resolveNewPriceForValuation(storePriceEUR: Double?, quotes: [PriceQuote]) -> Double? {
+    if let retail = storePriceEUR { return retail }
+    if let amazonOrCdiscount = mostExpensiveAmazonOrCdiscountPrice(in: quotes) { return amazonOrCdiscount }
+    if let q = quotes.first(where: { $0.source == .bricklinkNew }) {
+        return (q.amount as NSDecimalNumber).doubleValue
     }
     return nil
 }
@@ -86,19 +124,17 @@ func resolveCollectionPrice(
         .map { ($0.amount as NSDecimalNumber).doubleValue }
     switch condition ?? .newSet {
     case .newSet:
-        return resolveNewPrice(storePriceEUR: storePriceEUR, quotes: quotes) ?? usedPrice
+        return resolveNewPriceForValuation(storePriceEUR: storePriceEUR, quotes: quotes) ?? usedPrice
     case .used:
-        return usedPrice ?? resolveNewPrice(storePriceEUR: storePriceEUR, quotes: quotes)
+        return usedPrice ?? resolveNewPriceForValuation(storePriceEUR: storePriceEUR, quotes: quotes)
     }
 }
 
-/// Price resolution for `WishlistView` (issue #109/#121): Amazon → lego.com retail → BrickLink
-/// new → BrickLink used — Amazon before lego.com, reversed from `resolveNewPrice`'s order, per
-/// request on the wishlist specifically.
+/// Price resolution for `WishlistView` (issue #109/#121): best(Amazon, Cdiscount) → lego.com
+/// retail → BrickLink new → BrickLink used — Amazon/Cdiscount before lego.com, reversed from
+/// `resolveNewPrice`'s order, per request on the wishlist specifically.
 func resolveWishlistPrice(storePriceEUR: Double?, quotes: [PriceQuote]) -> Double? {
-    if let q = quotes.first(where: { $0.source == .amazon }) {
-        return (q.amount as NSDecimalNumber).doubleValue
-    }
+    if let amazonOrCdiscount = bestAmazonOrCdiscountPrice(in: quotes) { return amazonOrCdiscount }
     if let retail = storePriceEUR { return retail }
     for source in [PriceSource.bricklinkNew, .bricklinkUsed] {
         if let q = quotes.first(where: { $0.source == source }) {
@@ -121,7 +157,7 @@ func effectiveValuationPrice(
 ) -> Double? {
     switch condition ?? .newSet {
     case .newSet:
-        return resolveNewPrice(storePriceEUR: storePriceEUR, quotes: quotes)
+        return resolveNewPriceForValuation(storePriceEUR: storePriceEUR, quotes: quotes)
     case .used:
         return quotes.first(where: { $0.source == .bricklinkUsed })
             .map { ($0.amount as NSDecimalNumber).doubleValue }

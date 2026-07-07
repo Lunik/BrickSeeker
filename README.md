@@ -1,11 +1,11 @@
 # BrickSeeker
 
 A SwiftUI iOS app to scan LEGO® sets, manage your Rebrickable collection, and
-look up what a set is worth across lego.com, BrickLink and Amazon.
+look up what a set is worth across lego.com, BrickLink, Amazon and Cdiscount.
 
 > Personal hobby project, open-sourced under the [MIT license](LICENSE).
-> Not affiliated with or endorsed by the LEGO Group, Rebrickable, BrickLink or
-> Amazon. "LEGO" is a trademark of the LEGO Group.
+> Not affiliated with or endorsed by the LEGO Group, Rebrickable, BrickLink,
+> Amazon or Cdiscount. "LEGO" is a trademark of the LEGO Group.
 
 ## Features
 
@@ -17,7 +17,11 @@ look up what a set is worth across lego.com, BrickLink and Amazon.
   - the official **lego.com** price,
   - **BrickLink** 6-month sold average, new and used, via BrickLink's official
     Price Guide API (requires your own free BrickLink API credentials),
-  - **Amazon** (genuine listings, accessories filtered out),
+  - **Amazon** and **Cdiscount** (genuine listings, accessories filtered out),
+    each its own row — elsewhere (History, Wishlist, Collection) the two are
+    treated as one comparison point: the cheaper of the two for buying, the
+    pricier of the two for collection valuation, so the total estimated value
+    doesn't dip based on which marketplace was cheaper that day,
   - with a discount/markup percentage versus the lego.com price.
 - **History** of scanned sets, with on-disk image caching for offline browsing.
 
@@ -67,10 +71,10 @@ This is optional; without it the BrickLink price rows are simply omitted.
 
 ## How pricing works
 
-lego.com and Amazon sit behind Cloudflare-style JS challenges that a plain HTTP
-client can't pass, so those two prices are read by loading each page in a
-hidden `WKWebView` (a real WebKit engine) and extracting the values from the
-rendered DOM. BrickLink prices come from its official Price Guide API instead
+lego.com, Amazon and Cdiscount all sit behind Cloudflare-style JS challenges
+that a plain HTTP client can't pass, so those prices are read by loading each
+page in a hidden `WKWebView` (a real WebKit engine) and extracting the values
+from the rendered DOM. BrickLink prices come from its official Price Guide API instead
 (signed with OAuth 1.0a, no web view involved). All sources are fetched in
 parallel; results are cached locally, and any source that fails (or has no
 credentials configured, for BrickLink) is simply omitted.

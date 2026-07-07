@@ -1,6 +1,6 @@
 # Politique de confidentialité — BrickSeeker
 
-Dernière mise à jour : 2026-07-06
+Dernière mise à jour : 2026-07-07
 
 BrickSeeker est une application iOS qui vous aide à scanner des boîtes de sets de briques, gérer votre collection Rebrickable et comparer des prix. Cette page décrit quelles données sont traitées, où elles sont stockées, et avec quels services elles transitent.
 
@@ -26,6 +26,7 @@ BrickSeeker communique directement avec les services suivants, depuis votre appa
 | **BrickLink** | Affichage des prix officiels du marché (neuf/occasion), via l'API officielle | Vos identifiants API BrickLink (OAuth 1.0a), si vous les renseignez dans les réglages |
 | **lego.com** | Affichage du prix officiel d'un set | Aucun identifiant — simple consultation de page publique |
 | **amazon.fr** | Affichage du prix marché | Aucun identifiant — simple consultation de page publique |
+| **cdiscount.com** | Affichage du prix marché | Aucun identifiant — simple consultation de page publique |
 | **Service de localisation d'Apple** (`CLGeocoder`) | Conversion d'une position en ville approximative, si l'enregistrement de position est activé | Coordonnées GPS, traitées par les services Apple |
 
 BrickSeeker n'utilise aucun service de suivi publicitaire ni d'analytics, et ne transmet aucune donnée à un tiers autre que ceux listés ci-dessus.
