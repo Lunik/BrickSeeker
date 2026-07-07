@@ -425,7 +425,7 @@
     "Le type détermine la source de prix utilisée pour estimer la valeur de votre collection. Choisissez « Neuf » pour les sets encore scellés (lego.com en priorité) et « Occasion » pour les sets ouverts ou d'occasion (BrickLink occasion)." : {
 
     },
-    "lego.com et amazon.fr : consultés pour afficher les prix du marché, sans identifiant transmis" : {
+    "lego.com, amazon.fr et cdiscount.com : consultés pour afficher les prix du marché, sans identifiant transmis" : {
 
     },
     "Les prix de %lld set de votre collection ont été actualisés." : {
@@ -602,7 +602,7 @@
     "Rebrickable : catalogue des sets, votre collection (si vous liez votre compte)" : {
 
     },
-    "Recherche le prix d'un set LEGO sur lego.com, BrickLink et Amazon sans ouvrir BrickSeeker." : {
+    "Recherche le prix d'un set LEGO sur lego.com, BrickLink, Amazon et Cdiscount sans ouvrir BrickSeeker." : {
 
     },
     "Rechercher" : {

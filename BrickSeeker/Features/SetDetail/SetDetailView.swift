@@ -450,7 +450,7 @@ struct SetDetailView: View {
 
             pricePerPartRow
 
-            ForEach([PriceSource.amazon, .bricklinkNew, .bricklinkUsed], id: \.self) { source in
+            ForEach([PriceSource.amazon, .cdiscount, .bricklinkNew, .bricklinkUsed], id: \.self) { source in
                 sourceRow(source)
             }
         }

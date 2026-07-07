@@ -32,7 +32,7 @@ struct PrivacyDetailView: View {
                     Text("Rebrickable : catalogue des sets, votre collection (si vous liez votre compte)")
                     Text("Brickset : votre liste cadeaux, avec vos identifiants Brickset (si vous liez votre compte)")
                     Text("BrickLink (API officielle) : prix neuf/occasion, avec vos identifiants API BrickLink (si vous les renseignez)")
-                    Text("lego.com et amazon.fr : consultés pour afficher les prix du marché, sans identifiant transmis")
+                    Text("lego.com, amazon.fr et cdiscount.com : consultés pour afficher les prix du marché, sans identifiant transmis")
                     Text("Apple (service de localisation) : conversion de la position en ville approximative, si l'enregistrement de position est activé")
                 }
 

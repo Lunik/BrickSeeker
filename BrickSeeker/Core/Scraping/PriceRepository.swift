@@ -11,13 +11,16 @@ protocol PriceRepositoryProtocol: Sendable {
 struct PriceRepository: PriceRepositoryProtocol {
     private let brickLinkRepository: BrickLinkPriceRepository
     private let amazonScraper: AmazonPriceScraper
+    private let cdiscountScraper: CdiscountPriceScraper
 
     init(
         brickLinkRepository: BrickLinkPriceRepository = BrickLinkPriceRepository(),
-        amazonScraper: AmazonPriceScraper = AmazonPriceScraper()
+        amazonScraper: AmazonPriceScraper = AmazonPriceScraper(),
+        cdiscountScraper: CdiscountPriceScraper = CdiscountPriceScraper()
     ) {
         self.brickLinkRepository = brickLinkRepository
         self.amazonScraper = amazonScraper
+        self.cdiscountScraper = cdiscountScraper
     }
 
     func fetchPrices(for legoSet: LegoSet) async -> [PriceQuote] {
@@ -29,6 +32,12 @@ struct PriceRepository: PriceRepositoryProtocol {
             }
             group.addTask {
                 if let quote = try? await amazonScraper.fetchPrice(legoSet: legoSet) {
+                    return [quote]
+                }
+                return []
+            }
+            group.addTask {
+                if let quote = try? await cdiscountScraper.fetchPrice(legoSet: legoSet) {
                     return [quote]
                 }
                 return []
