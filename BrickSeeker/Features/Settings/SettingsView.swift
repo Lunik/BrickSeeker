@@ -313,8 +313,6 @@ struct SettingsView: View {
 
                 Section {
                     PrivacyNoticeView()
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
 
                     Button {
                         showPrivacyDetail = true

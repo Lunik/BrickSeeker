@@ -26,9 +26,6 @@ struct PrivacyNoticeView: View {
         }
         .font(.footnote)
         .foregroundStyle(.secondary)
-        .padding(14)
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
         .sheet(isPresented: $showDetail) {
             PrivacyDetailView()
         }
