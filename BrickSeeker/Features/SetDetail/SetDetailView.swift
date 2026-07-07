@@ -625,11 +625,17 @@ struct SetDetailView: View {
             quantity = nil
         }
         let repository = LocalRepository(modelContext: modelContext)
+        // Reconciling collection status/name here must not mark the set "scanned" — this runs
+        // every time the detail view's collection status resolves, including reopens from
+        // History/Collection/Wishlist/Statistics, not just fresh scans. `cacheFoundState` (called
+        // once, right when the resolve flow itself completes) already owns that decision — see
+        // its doc and issue #133.
         repository.cacheSet(
             viewModel.legoSet,
             isInCollection: viewModel.isInCollection,
             listId: listId,
-            listName: viewModel.collectionListName
+            listName: viewModel.collectionListName,
+            markAsScanned: false
         )
         // `cacheSet` never touches `quantity` (see its doc) — propagated separately here so a
         // quantity edit (or a fresh `fetchUserSet` after one) reaches the SwiftData cache that

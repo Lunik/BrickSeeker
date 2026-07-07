@@ -40,7 +40,7 @@ struct CollectionView: View {
                 } else {
                     List(filteredSets, id: \.setNum) { cached in
                         Button {
-                            lookupViewModel.lookupSetNumber(cached.setNum)
+                            lookupViewModel.lookupSetNumber(cached.setNum, source: .listReopen)
                         } label: {
                             SetRowView(
                                 setNum: cached.setNum,

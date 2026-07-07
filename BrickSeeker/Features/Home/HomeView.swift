@@ -84,12 +84,12 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showHistory) {
                 HistoryView(lookupViewModel: lookupViewModel) { setNum in
-                    lookupViewModel.lookupSetNumber(setNum)
+                    lookupViewModel.lookupSetNumber(setNum, source: .listReopen)
                 }
             }
             .sheet(isPresented: $showManualEntry) {
                 ManualSetEntryView(lookupViewModel: lookupViewModel) { setNum in
-                    lookupViewModel.lookupSetNumber(setNum)
+                    lookupViewModel.lookupSetNumber(setNum, source: .manualEntry)
                 }
             }
             .sheet(isPresented: $showSettings, onDismiss: {
@@ -114,7 +114,10 @@ struct HomeView: View {
                 }
             }
             .onChange(of: lookupViewModel.state) { _, newState in
-                LocalRepository(modelContext: modelContext).cacheFoundState(newState)
+                LocalRepository(modelContext: modelContext).cacheFoundState(
+                    newState,
+                    markAsScanned: lookupViewModel.lastLookupSource.shouldRecordScanEvent
+                )
             }
         }
         .onAppear {

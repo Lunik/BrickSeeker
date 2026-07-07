@@ -37,6 +37,28 @@ enum ScannerState: Equatable {
     }
 }
 
+/// Why a set is being looked up — drives whether `recordScanEventIfNeeded` creates a
+/// `ScanEvent`, independent of `playsFeedbackSounds` (which is only about haptics/sounds and is
+/// forced off wholesale on `HomeView`'s shared instance, see its doc comment). Only `.listReopen`
+/// (History/Collection/Wishlist/Statistics row taps, and re-viewing a batch entry) skips
+/// recording — a genuine camera detection, manual entry, or photo import is "I found this set"
+/// and should always get a history entry (issue #133).
+enum LookupSource {
+    case camera
+    case manualEntry
+    case photoImport
+    case listReopen
+
+    var shouldRecordScanEvent: Bool {
+        switch self {
+        case .camera, .manualEntry, .photoImport:
+            return true
+        case .listReopen:
+            return false
+        }
+    }
+}
+
 @Observable
 @MainActor
 final class ScannerViewModel {
@@ -76,8 +98,18 @@ final class ScannerViewModel {
     /// HomeView reuses this class for its non-camera lookup flows (History tap, manual entry,
     /// photo import) via a second instance that never starts the camera. The detection sound only
     /// makes sense as live feedback while actually looking at the camera screen — Home sets this
-    /// false on its instance so picking a result there doesn't unexpectedly play it.
+    /// false on its instance so picking a result there doesn't unexpectedly play it. Purely a
+    /// sound/haptics switch — whether a `ScanEvent` gets recorded is driven separately by
+    /// `LookupSource` (see `recordScanEventIfNeeded`), since manual entry and photo import go
+    /// through this same false-sound instance but must still record.
     var playsFeedbackSounds = true
+    /// The source of the most recent (or in-flight) resolution — stashed here (rather than
+    /// threaded through `state`) for two readers: `selectAmbiguousSet`, which needs to know, once
+    /// the user later disambiguates, whether the original candidate came from the camera, manual
+    /// entry, or a photo import; and the presenting view's `.onChange(of: state)`, which uses it
+    /// to decide whether caching the `.found` result should also mark the set "scanned" in
+    /// History (see `LocalRepository.cacheSet`'s `markAsScanned`, issue #133).
+    private(set) var lastLookupSource: LookupSource = .camera
 
     let cameraController = CameraController()
     private let ocrScanner = OCRScanner()
@@ -141,32 +173,34 @@ final class ScannerViewModel {
         pendingPriceScanEvent = nil
     }
 
-    func lookupSetNumber(_ setNum: String) {
+    func lookupSetNumber(_ setNum: String, source: LookupSource) {
         cancelAllDebounceTasks()
         isPaused = true
         Task {
-            await resolveSet(setNum)
+            await resolveSet(setNum, source: source)
         }
     }
 
     /// Same as `lookupSetNumber`, but always opens the detail sheet even if batch mode is on —
     /// used by the batch summary screen, where tapping a row should show the usual detail view
-    /// rather than re-add the set to the session.
+    /// rather than re-add the set to the session. Always `.listReopen`: the set was already
+    /// recorded when it first entered the batch session, so this is a re-view, not a new scan.
     func lookupSetForDetail(_ setNum: String) {
         forceDetailNextResolution = true
-        lookupSetNumber(setNum)
+        lookupSetNumber(setNum, source: .listReopen)
     }
 
     func selectAmbiguousSet(_ legoSet: LegoSet) {
         let bypassBatch = forceDetailNextResolution
         forceDetailNextResolution = false
+        let source = lastLookupSource
         state = .processing
         Task {
             presentFound(legoSet, await fetchCollectionStatus(for: legoSet.setNum), bypassBatch: bypassBatch)
             // The set number scanned off the box was ambiguous (e.g. missing its "-1" suffix) —
             // only now, once the user has picked the concrete set, do we know what to attach the
             // scan history entry to.
-            recordScanEventIfNeeded(setNum: legoSet.setNum, bypassBatch: bypassBatch)
+            recordScanEventIfNeeded(setNum: legoSet.setNum, bypassBatch: bypassBatch, source: source)
         }
     }
 
@@ -199,7 +233,7 @@ final class ScannerViewModel {
         // Cache it exactly like a normal `.found` resolution would (via `ScannerView`'s
         // `onChange(of: state)`) — batch mode never transitions `state` to `.found`, so without
         // this call these sets would never reach `CachedSet`/History (issue #98).
-        localRepository?.cacheFoundState(.found(legoSet, collectionStatus))
+        localRepository?.cacheFoundState(.found(legoSet, collectionStatus), markAsScanned: lastLookupSource.shouldRecordScanEvent)
         batchSession.add(legoSet, collectionStatus: collectionStatus)
         resumeScanning()
     }
@@ -213,7 +247,7 @@ final class ScannerViewModel {
             Task { @MainActor in
                 let candidates = SetNumberExtractor.extractFromOCR(texts)
                 if let first = candidates.first {
-                    await self?.resolveSet(first)
+                    await self?.resolveSet(first, source: .photoImport)
                 } else {
                     self?.state = .notFound
                     self?.isPaused = false
@@ -271,14 +305,14 @@ final class ScannerViewModel {
         // the offline catalogue/cache.
         guard NetworkMonitor.shared.isConnected else {
             debounceTasks[setNum] = nil
-            Task { [weak self] in await self?.resolveSet(setNum) }
+            Task { [weak self] in await self?.resolveSet(setNum, source: .camera) }
             return
         }
         debounceTasks[setNum] = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             guard !Task.isCancelled else { return }
             self?.debounceTasks[setNum] = nil
-            await self?.resolveSet(setNum)
+            await self?.resolveSet(setNum, source: .camera)
         }
     }
 
@@ -295,9 +329,10 @@ final class ScannerViewModel {
     }
 
     @MainActor
-    private func resolveSet(_ setNum: String) async {
+    private func resolveSet(_ setNum: String, source: LookupSource) async {
         let bypassBatch = forceDetailNextResolution
         forceDetailNextResolution = false
+        lastLookupSource = source
         // While batch-capturing, identification of one box must not hold up the next: don't pause
         // frame processing for it, so several boxes can resolve concurrently in the background.
         // Outside batch mode (or when explicitly opening a detail sheet) the camera still pauses
@@ -319,7 +354,7 @@ final class ScannerViewModel {
         if let cached = localRepository?.cachedSet(setNum: setNum) {
             foundWasFromCache = true
             presentFound(cached.asLegoSet(), cached.asCollectionStatus(), bypassBatch: bypassBatch, wasFromCache: true)
-            recordScanEventIfNeeded(setNum: cached.setNum, bypassBatch: bypassBatch)
+            recordScanEventIfNeeded(setNum: cached.setNum, bypassBatch: bypassBatch, source: source)
         } else if !isBatchCapturing {
             state = .processing
         }
@@ -340,7 +375,7 @@ final class ScannerViewModel {
                         bypassBatch: bypassBatch,
                         wasOffline: true
                     )
-                    recordScanEventIfNeeded(setNum: offlineSet.setNum, bypassBatch: bypassBatch)
+                    recordScanEventIfNeeded(setNum: offlineSet.setNum, bypassBatch: bypassBatch, source: source)
                     if playsFeedbackSounds { ScanFeedback.playResolutionSucceeded() }
                 } else if !isBatchCapturing {
                     state = .error(APIError.networkUnavailable.errorDescription ?? UserMessage.unknownError)
@@ -368,7 +403,7 @@ final class ScannerViewModel {
                 // Not for a live reconcile of an already cache-shown result — that one already
                 // got its scan event recorded from the cache-hit branch above.
                 if !foundWasFromCache {
-                    recordScanEventIfNeeded(setNum: legoSet.setNum, bypassBatch: bypassBatch)
+                    recordScanEventIfNeeded(setNum: legoSet.setNum, bypassBatch: bypassBatch, source: source)
                 }
                 // No haptic when this is just the live reconcile of a cache-instant result —
                 // the user already got the detection feedback for this candidate.
@@ -399,7 +434,7 @@ final class ScannerViewModel {
                         bypassBatch: bypassBatch,
                         wasOffline: true
                     )
-                    recordScanEventIfNeeded(setNum: offlineSet.setNum, bypassBatch: bypassBatch)
+                    recordScanEventIfNeeded(setNum: offlineSet.setNum, bypassBatch: bypassBatch, source: source)
                     if playsFeedbackSounds { ScanFeedback.playResolutionSucceeded() }
                 } else if !isBatchCapturing {
                     state = .error((error as? APIError)?.errorDescription ?? UserMessage.unknownError)
@@ -417,16 +452,16 @@ final class ScannerViewModel {
     /// off the one-shot location capture in the background — the scan flow never waits on GPS
     /// or geocoding; the fix is attached to the already-saved event whenever it arrives.
     ///
-    /// Called once per genuinely new camera-driven presentation of a resolved set (`setNum` here
-    /// is always the final, concrete set number — never the raw, possibly-ambiguous OCR string).
-    /// Guarded against: non-camera lookups (`playsFeedbackSounds`, History tap / manual entry /
-    /// photo import aren't "I'm standing in front of the box" moments), the silent live-reconcile
-    /// of an already cache-shown result (callers only invoke this on the branch that first showed
-    /// the set), and re-opening a set already captured earlier in the same batch session
-    /// (`bypassBatch`, set only by `lookupSetForDetail` from the batch summary — a re-view, not a
-    /// new physical scan).
-    private func recordScanEventIfNeeded(setNum: String, bypassBatch: Bool) {
-        guard playsFeedbackSounds, !bypassBatch, let localRepository else { return }
+    /// Called once per genuinely new presentation of a resolved set (`setNum` here is always the
+    /// final, concrete set number — never the raw, possibly-ambiguous OCR string). Guarded
+    /// against: reopening a set from a list (`source == .listReopen` — History/Collection/
+    /// Wishlist/Statistics row taps aren't "I found this set" moments, see `LookupSource`), the
+    /// silent live-reconcile of an already cache-shown result (callers only invoke this on the
+    /// branch that first showed the set), and re-opening a set already captured earlier in the
+    /// same batch session (`bypassBatch`, set only by `lookupSetForDetail` from the batch summary
+    /// — a re-view, not a new physical scan).
+    private func recordScanEventIfNeeded(setNum: String, bypassBatch: Bool, source: LookupSource) {
+        guard source.shouldRecordScanEvent, !bypassBatch, let localRepository else { return }
         let cached = localRepository.cachedSet(setNum: setNum)
         // The event is recorded with no price: `priceSeenEUR` means "the in-store price the user
         // actually entered", nothing more. It stays nil unless the user types a value and taps
