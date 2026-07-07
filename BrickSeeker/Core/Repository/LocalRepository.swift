@@ -13,7 +13,14 @@ final class LocalRepository {
         self.modelContext = modelContext
     }
 
-    func cacheSet(_ legoSet: LegoSet, isInCollection: Bool, listId: Int?, listName: String?) {
+    /// `markAsScanned` gates `wasScanned`/`lastScannedAt` specifically — those two drive whether
+    /// (and where, in History's sort order) this set shows up as "scanned" (issue #133), separate
+    /// from the rest of this metadata (name/collection status/etc.), which is always worth
+    /// refreshing regardless of why the set was looked up. Pass `false` for a reconcile of an
+    /// already-open detail view (`SetDetailView.syncCache`, reached by History/Collection/
+    /// Wishlist/Statistics reopens just as often as by a fresh scan) so simply looking at a set
+    /// again doesn't silently mark it "scanned" or bump it to the top of History.
+    func cacheSet(_ legoSet: LegoSet, isInCollection: Bool, listId: Int?, listName: String?, markAsScanned: Bool) {
         let existing = try? modelContext.fetch(
             FetchDescriptor<CachedSet>(predicate: #Predicate { $0.setNum == legoSet.setNum })
         ).first
@@ -24,13 +31,18 @@ final class LocalRepository {
             existing.numParts = legoSet.numParts
             existing.setImgUrl = legoSet.setImgUrl
             existing.setUrl = legoSet.setUrl
-            existing.wasScanned = true
-            existing.lastScannedAt = Date()
+            if markAsScanned {
+                existing.wasScanned = true
+                existing.lastScannedAt = Date()
+            }
             existing.isInCollection = isInCollection
             existing.currentListId = listId
             existing.currentListName = listName
         } else {
             let cached = CachedSet(from: legoSet, isInCollection: isInCollection, currentListId: listId, currentListName: listName)
+            if !markAsScanned {
+                cached.wasScanned = false
+            }
             modelContext.insert(cached)
         }
         if isInCollection {
@@ -42,7 +54,7 @@ final class LocalRepository {
     /// Mirrors ScannerViewModel.state/HomeView's lookupViewModel.state into the cache after a
     /// resolution completes. Both Scanner and Home drive the same resolve flow, so this is the
     /// single place that keeps History/Collection in sync — see AGENTS.md "Local SwiftData cache".
-    func cacheFoundState(_ state: ScannerState) {
+    func cacheFoundState(_ state: ScannerState, markAsScanned: Bool) {
         guard case .found(let legoSet, let collectionStatus) = state else { return }
         let isInCollection: Bool
         let listId: Int?
@@ -54,7 +66,7 @@ final class LocalRepository {
             isInCollection = false
             listId = nil
         }
-        cacheSet(legoSet, isInCollection: isInCollection, listId: listId, listName: nil)
+        cacheSet(legoSet, isInCollection: isInCollection, listId: listId, listName: nil, markAsScanned: markAsScanned)
     }
 
     func scannedSetsCount() -> Int {

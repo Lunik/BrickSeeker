@@ -37,7 +37,7 @@ struct WishlistView: View {
             } else {
                 List(cachedSets, id: \.setNum) { cached in
                     Button {
-                        lookupViewModel.lookupSetNumber(cached.setNum)
+                        lookupViewModel.lookupSetNumber(cached.setNum, source: .listReopen)
                     } label: {
                         SetRowView(
                             setNum: cached.setNum,

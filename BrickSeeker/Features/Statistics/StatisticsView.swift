@@ -137,7 +137,7 @@ struct StatisticsView: View {
 
     private func superlativeLink(set: CachedSet, label: String) -> some View {
         Button {
-            lookupViewModel.lookupSetNumber(set.setNum)
+            lookupViewModel.lookupSetNumber(set.setNum, source: .listReopen)
         } label: {
             HStack {
                 Text(label).font(.subheadline)

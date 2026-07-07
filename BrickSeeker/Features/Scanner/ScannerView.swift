@@ -89,7 +89,10 @@ struct ScannerView: View {
             }
         }
         .onChange(of: viewModel.state) { _, newState in
-            LocalRepository(modelContext: modelContext).cacheFoundState(newState)
+            LocalRepository(modelContext: modelContext).cacheFoundState(
+                newState,
+                markAsScanned: viewModel.lastLookupSource.shouldRecordScanEvent
+            )
         }
     }
 
