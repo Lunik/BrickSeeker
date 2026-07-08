@@ -224,7 +224,7 @@ struct CollectionView: View {
                         if editMode.isEditing {
                             Text("Terminé")
                         } else {
-                            Image(systemName: "pencil.circle")
+                            Image(systemName: "square.and.pencil")
                         }
                     }
                     .accessibilityLabel(editMode.isEditing ? "Terminé" : "Actions")
