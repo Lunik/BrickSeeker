@@ -10,6 +10,7 @@ struct HistoryView: View {
     @State private var showFilters = false
     @State private var showScanMap = false
     @State private var setPendingDeletion: CachedSet?
+    var rebrickableRepository: RebrickableRepositoryProtocol = RebrickableRepository()
     let lookupViewModel: ScannerViewModel
     let onSelect: (String) -> Void
 
@@ -22,6 +23,7 @@ struct HistoryView: View {
     @State private var isPerformingBulkAction = false
     @State private var selectionActionError: String?
     @State private var showRemoveScansConfirmation = false
+    @State private var showAddToListPicker = false
 
     private var filteredSets: [CachedSet] { cachedSets.filteredAndSorted(by: filter, resolvedPrice: resolvedPrice) }
     private var availableThemeIds: [Int] { Set(cachedSets.map(\.themeId)).sorted() }
@@ -56,6 +58,34 @@ struct HistoryView: View {
             )
         case .cancelled:
             break
+        }
+    }
+
+    /// Adds every selected set to `listId` on Rebrickable — same as `WishlistView`'s bulk action
+    /// (#141): a scanned set isn't necessarily owned, so this just adds it to the chosen list.
+    private func addSelectedToCollection(listId: Int, listName: String) async {
+        selectionActionError = nil
+        let selected = filteredSets.filter { selectedSetNums.contains($0.setNum) }
+        guard !selected.isEmpty else { return }
+
+        isPerformingBulkAction = true
+        defer { isPerformingBulkAction = false }
+
+        let localRepository = LocalRepository(modelContext: modelContext)
+        var failureCount = 0
+        for cached in selected {
+            do {
+                try await rebrickableRepository.addSetToList(setNum: cached.setNum, listId: listId)
+                localRepository.setCollectionStatus(setNum: cached.setNum, isInCollection: true, listId: listId, listName: listName)
+            } catch {
+                failureCount += 1
+            }
+        }
+
+        if failureCount > 0 {
+            selectionActionError = String(localized: "\(failureCount) set(s) n'ont pas pu être ajoutés à la collection. Vérifiez votre connexion.")
+        } else {
+            editMode = .inactive
         }
     }
 
@@ -150,6 +180,11 @@ struct HistoryView: View {
                         } label: {
                             Label("Actualiser les prix", systemImage: "arrow.clockwise")
                         }
+                        Button {
+                            showAddToListPicker = true
+                        } label: {
+                            Label("Ajouter à la collection", systemImage: "shippingbox")
+                        }
                         // Not `role: .destructive` — SwiftUI previews a destructive Menu item
                         // across the List's selected rows the instant the Menu opens (a red
                         // flash on the selection background), not just on tap. The icon still
@@ -184,6 +219,11 @@ struct HistoryView: View {
         .onChange(of: editMode) { _, newValue in
             if !newValue.isEditing {
                 selectedSetNums.removeAll()
+            }
+        }
+        .sheet(isPresented: $showAddToListPicker) {
+            ListPickerView(repository: rebrickableRepository) { listId, listName in
+                Task { await addSelectedToCollection(listId: listId, listName: listName) }
             }
         }
         .alert("Retirer ces sets de l'Historique ?", isPresented: $showRemoveScansConfirmation) {
