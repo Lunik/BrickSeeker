@@ -14,6 +14,11 @@ struct CollectionView: View {
     /// dictionary was previously a computed property re-run on every keystroke in the search bar.
     @State private var pricesBySetNum: [String: [PriceQuote]] = [:]
 
+    @State private var editMode: EditMode = .inactive
+    @State private var selectedSetNums: Set<String> = []
+    @State private var isRefreshingSelection = false
+    @State private var selectionRefreshError: String?
+
     private var conditionByListId: [Int: ListCondition] {
         Dictionary(allCachedSetLists.map { ($0.listId, $0.condition) }, uniquingKeysWith: { first, _ in first })
     }
@@ -27,6 +32,45 @@ struct CollectionView: View {
         )
     }
 
+    /// Batch "refresh prices" action on the selected sets, reusing `CollectionPriceUpdater
+    /// .shared` — the same singleton driven by `CollectionPriceUpdateSection` from Réglages —
+    /// rather than a parallel pipeline (see #141). That singleton is a single global run: if
+    /// one is already in progress, or a previous full-collection pass was paused mid-way (its
+    /// queue file still on disk), `start(allSets:)` would silently ignore our selection and
+    /// resume/observe that other queue instead. Guard against both up front so the button never
+    /// quietly refreshes the wrong sets.
+    private func refreshSelectedPrices() async {
+        selectionRefreshError = nil
+        guard let viewModel else { return }
+        let selected = viewModel.cachedSets.filter { selectedSetNums.contains($0.setNum) }
+        guard !selected.isEmpty else { return }
+
+        let updater = CollectionPriceUpdater.shared
+        guard !updater.isRunning, !updater.hasResumableUpdate else {
+            selectionRefreshError = String(
+                localized: "Une actualisation des prix de la collection est déjà en cours ou en attente de reprise. Terminez-la avant d'actualiser une sélection."
+            )
+            return
+        }
+
+        isRefreshingSelection = true
+        defer { isRefreshingSelection = false }
+
+        await PriceUpdateNotifier.requestAuthorizationIfNeeded()
+
+        let result = await updater.start(
+            allSets: selected.map { $0.asLegoSet() },
+            priceRepository: PriceRepository(),
+            legoStoreRepository: LegoStoreRepository(),
+            persist: CollectionPriceUpdater.persistClosure(modelContext: modelContext)
+        )
+
+        if result.completed {
+            PriceUpdateNotifier.notifyCompleted(total: result.total)
+            editMode = .inactive
+        }
+    }
+
     var body: some View {
         Group {
             if let viewModel, !viewModel.cachedSets.isEmpty {
@@ -38,7 +82,7 @@ struct CollectionView: View {
                         description: Text("Essayez de modifier la recherche ou les filtres.")
                     )
                 } else {
-                    List(filteredSets, id: \.setNum) { cached in
+                    List(filteredSets, id: \.setNum, selection: $selectedSetNums) { cached in
                         Button {
                             lookupViewModel.lookupSetNumber(cached.setNum, source: .listReopen)
                         } label: {
@@ -68,6 +112,11 @@ struct CollectionView: View {
         .searchable(text: $filter.searchText, prompt: "Nom ou numéro de set")
         .navigationTitle("Ma collection")
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                if !(viewModel?.cachedSets.isEmpty ?? true) {
+                    EditButton()
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showFilters = true
@@ -77,6 +126,38 @@ struct CollectionView: View {
                 .accessibilityLabel("Filtres")
                 .accessibilityValue(filter.isFilterActive ? "Actifs" : "Inactifs")
             }
+            if editMode.isEditing {
+                ToolbarItemGroup(placement: .bottomBar) {
+                    Spacer()
+                    Button {
+                        Task { await refreshSelectedPrices() }
+                    } label: {
+                        if isRefreshingSelection {
+                            ProgressView()
+                        } else {
+                            Text("Actualiser les prix (\(selectedSetNums.count))")
+                        }
+                    }
+                    .disabled(selectedSetNums.isEmpty || isRefreshingSelection)
+                }
+            }
+        }
+        .environment(\.editMode, $editMode)
+        .onChange(of: editMode) { _, newValue in
+            if !newValue.isEditing {
+                selectedSetNums.removeAll()
+            }
+        }
+        .alert(
+            "Actualisation impossible",
+            isPresented: Binding(
+                get: { selectionRefreshError != nil },
+                set: { isPresented in if !isPresented { selectionRefreshError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(selectionRefreshError ?? "")
         }
         .sheet(isPresented: $showFilters) {
             SetFilterSheet(
