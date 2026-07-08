@@ -446,10 +446,16 @@ lego.com price.
     the printed/discriminant parts only) → *subsets* composition check. This replaced the previous
     hidden-`WKWebView` scrape of the item's Rebrickable "External Sites" table (App Store 5.2.2 /
     2.3.1(a), **#117**). It favours **precision over recall** (validated on a real collection:
-    ~100% precision, ~53% recall — see #117): it accepts only a *unique*, composition-verified
-    candidate and otherwise abstains (no quote) rather than risk a wrong price. Unresolved items are
-    where a future visible link-out + manual-entry fallback (Option 1) would slot in. If you touch
-    this, keep the abstain-on-ambiguity behaviour — a wrong minifig id surfaces a wrong price.
+    ~100% precision, ~53% recall — see #117): it accepts only a composition-verified candidate and
+    otherwise abstains (no quote) rather than risk a wrong price. A tie among printed-parts
+    candidates isn't an automatic abstain (**#134**) — every surviving candidate gets composition-
+    verified, and the tie only resolves if exactly one clears `verifyThreshold`; still abstains if
+    zero or more than one does. Every abstain records which step aborted
+    (`BrickLinkMinifigIdStore.MissReason`) alongside the miss cache (`BrickLinkMinifigMisses.json`)
+    for diagnosing recurring unresolved items (e.g. `fig-002333`) from real data instead of
+    guessing. Unresolved items are where a future visible link-out + manual-entry fallback
+    (Option 1) would slot in. If you touch this, keep the abstain-on-ambiguity behaviour — a wrong
+    minifig id surfaces a wrong price.
   - The surfaced item link (`sourceURL` on the `PriceQuote`) is still the plain catalog page
     (`bricklink.com/v2/catalog/catalogitem.page?{S,M,…}={id}`), not an API URL — that's for the
     user to open, unrelated to the signed API call.

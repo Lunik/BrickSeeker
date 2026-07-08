@@ -22,6 +22,37 @@ struct BrickLinkCatalogRef: Codable, Equatable, Hashable {
 /// itself is a plain `Sendable` struct with no main-actor affinity, and multiple items' prices
 /// can be resolved concurrently (see `PriceRepository`'s task group).
 actor BrickLinkMinifigIdStore {
+    /// Which step of `BrickLinkPriceRepository.resolveViaCatalogCrossReference` aborted for a given
+    /// item. Conforms to `Error` so the repository can throw a specific case directly at the point
+    /// it gives up, and `recordMiss(setNum:reason:)` persists exactly what was thrown alongside the
+    /// miss timestamp — #134's ask to "cache *why* a given fig-… didn't resolve … so failures can
+    /// be diagnosed from real user data instead of guessing", inspectable from
+    /// `BrickLinkMinifigMisses.json` without re-deriving it.
+    enum MissReason: String, Codable, Error {
+        /// Rebrickable's inventory for the item returned no parts carrying a BrickLink part id at all.
+        case noParts
+        /// Every part had a BrickLink id, but none was classified as printed/discriminant.
+        case noDiscriminant
+        /// Intersecting BrickLink's supersets of the discriminant parts left zero surviving candidates.
+        case noCandidates
+        /// More than one BrickLink catalog item passed composition verification — a genuine tie,
+        /// not just a shared-printed-parts collision (those get broken by verification; see
+        /// `resolveViaCatalogCrossReference`).
+        case ambiguousCandidates
+        /// No surviving candidate's own BrickLink inventory covered enough of the item's parts to
+        /// pass `verifyThreshold`.
+        case compositionMismatch
+        /// Miss recorded before this diagnostic reason existed, or migrated from the legacy
+        /// `[String: Date]` on-disk format — no specific step is known.
+        case unknown
+    }
+
+    /// A recorded miss: when, and (best-effort) which step aborted.
+    private struct MissRecord: Codable {
+        let at: Date
+        let reason: MissReason
+    }
+
     static let shared = BrickLinkMinifigIdStore()
 
     /// How long a *failed* resolution is remembered before we retry it. The cross-reference is
@@ -35,9 +66,10 @@ actor BrickLinkMinifigIdStore {
     private let fileURL: URL
     private let missesFileURL: URL
     private var refsBySetNum: [String: BrickLinkCatalogRef]
-    /// setNum → when we last failed to resolve it (see `missRetryInterval`). Kept in a separate file
-    /// so the resolved-id format (`BrickLinkMinifigIds.json`) stays untouched/backward-compatible.
-    private var missAtBySetNum: [String: Date]
+    /// setNum → when (and why) we last failed to resolve it (see `missRetryInterval`). Kept in a
+    /// separate file so the resolved-id format (`BrickLinkMinifigIds.json`) stays
+    /// untouched/backward-compatible.
+    private var missBySetNum: [String: MissRecord]
 
     init() {
         let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -51,10 +83,15 @@ actor BrickLinkMinifigIdStore {
             self.refsBySetNum = [:]
         }
         if let data = try? Data(contentsOf: missesFileURL),
-           let misses = try? JSONDecoder().decode([String: Date].self, from: data) {
-            self.missAtBySetNum = misses
+           let misses = try? JSONDecoder().decode([String: MissRecord].self, from: data) {
+            self.missBySetNum = misses
+        } else if let data = try? Data(contentsOf: missesFileURL),
+                  let legacyMisses = try? JSONDecoder().decode([String: Date].self, from: data) {
+            // Pre-#134 format: bare timestamps, no reason. Migrate in place so existing misses
+            // keep their retry TTL instead of every one of them re-resolving on the next refresh.
+            self.missBySetNum = legacyMisses.mapValues { MissRecord(at: $0, reason: .unknown) }
         } else {
-            self.missAtBySetNum = [:]
+            self.missBySetNum = [:]
         }
     }
 
@@ -65,7 +102,7 @@ actor BrickLinkMinifigIdStore {
     /// Whether we failed to resolve this item within `missRetryInterval` — callers should skip the
     /// (expensive) re-resolution and treat it as unresolved for now.
     func hasRecentMiss(setNum: String) -> Bool {
-        guard let missedAt = missAtBySetNum[setNum] else { return false }
+        guard let missedAt = missBySetNum[setNum]?.at else { return false }
         return Date().timeIntervalSince(missedAt) < Self.missRetryInterval
     }
 
@@ -73,30 +110,31 @@ actor BrickLinkMinifigIdStore {
         refsBySetNum[setNum] = ref
         try? JSONEncoder().encode(refsBySetNum).write(to: fileURL, options: .atomic)
         // A now-resolved item shouldn't keep a stale miss around.
-        if missAtBySetNum.removeValue(forKey: setNum) != nil {
+        if missBySetNum.removeValue(forKey: setNum) != nil {
             persistMisses()
         }
     }
 
-    /// Records that resolving `setNum` failed, so we skip retrying it until `missRetryInterval`
-    /// passes. Only genuine "can't resolve" outcomes should call this — never transient
-    /// network/throttle errors, or we'd suppress a resolvable item for 30 days over a blip.
-    func recordMiss(setNum: String) {
+    /// Records that resolving `setNum` failed (and, per `reason`, at which step), so we skip
+    /// retrying it until `missRetryInterval` passes. Only genuine "can't resolve" outcomes should
+    /// call this — never transient network/throttle errors, or we'd suppress a resolvable item for
+    /// 30 days over a blip.
+    func recordMiss(setNum: String, reason: MissReason) {
         let now = Date()
-        missAtBySetNum[setNum] = now
+        missBySetNum[setNum] = MissRecord(at: now, reason: reason)
         // Drop expired entries so the file stays bounded.
-        missAtBySetNum = missAtBySetNum.filter { now.timeIntervalSince($0.value) < Self.missRetryInterval }
+        missBySetNum = missBySetNum.filter { now.timeIntervalSince($0.value.at) < Self.missRetryInterval }
         persistMisses()
     }
 
     func clearAll() {
         refsBySetNum = [:]
-        missAtBySetNum = [:]
+        missBySetNum = [:]
         try? FileManager.default.removeItem(at: fileURL)
         try? FileManager.default.removeItem(at: missesFileURL)
     }
 
     private func persistMisses() {
-        try? JSONEncoder().encode(missAtBySetNum).write(to: missesFileURL, options: .atomic)
+        try? JSONEncoder().encode(missBySetNum).write(to: missesFileURL, options: .atomic)
     }
 }
