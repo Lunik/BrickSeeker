@@ -23,6 +23,18 @@ struct WishlistView: View {
     @State private var selectionActionError: String?
     @State private var showAddToListPicker = false
     @State private var showRemoveConfirmation = false
+    @State private var searchText = ""
+
+    /// Wishlist has no full `SetFilterState` like Collection/History — just a name/number search,
+    /// matched the same way as the shared `filteredAndSorted` (case-insensitive, name or set number).
+    private var filteredSets: [CachedSet] {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return cachedSets }
+        return cachedSets.filter {
+            $0.name.localizedCaseInsensitiveContains(trimmed) ||
+                $0.setNum.localizedCaseInsensitiveContains(trimmed)
+        }
+    }
 
     /// Amazon → lego.com → BrickLink new → BrickLink used (see `resolveWishlistPrice`) — Amazon
     /// first per request, and always this fixed chain regardless of any list condition, since a
@@ -134,8 +146,14 @@ struct WishlistView: View {
                     systemImage: "heart",
                     description: Text("Ajoute un set à ta liste cadeaux depuis sa fiche, ou importe une liste Rebrickable publique.")
                 )
+            } else if filteredSets.isEmpty {
+                ContentUnavailableView(
+                    "Aucun résultat",
+                    systemImage: "magnifyingglass",
+                    description: Text("Essayez de modifier la recherche.")
+                )
             } else {
-                List(cachedSets, id: \.setNum, selection: $selectedSetNums) { cached in
+                List(filteredSets, id: \.setNum, selection: $selectedSetNums) { cached in
                     Button {
                         lookupViewModel.lookupSetNumber(cached.setNum, source: .listReopen)
                     } label: {
@@ -161,8 +179,10 @@ struct WishlistView: View {
                         }
                     }
                 }
+                .contentMargins(.top, 0, for: .scrollContent)
             }
         }
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Nom ou numéro de set")
         .navigationTitle("Liste cadeaux")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
