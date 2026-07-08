@@ -173,39 +173,41 @@ struct WishlistView: View {
                 }
                 .accessibilityLabel("Importer depuis Rebrickable")
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                if !cachedSets.isEmpty {
+            // Pinned to the bottom bar rather than the top-trailing spot, matching Collection/
+            // History (#141) — kept consistent across all three even though Wishlist has no
+            // search bar of its own to fight with.
+            if !cachedSets.isEmpty {
+                ToolbarItemGroup(placement: .bottomBar) {
+                    Spacer()
+                    if editMode.isEditing {
+                        Menu {
+                            Button {
+                                Task { await refreshSelectedPrices() }
+                            } label: {
+                                Label("Actualiser les prix", systemImage: "arrow.clockwise")
+                            }
+                            Button {
+                                showAddToListPicker = true
+                            } label: {
+                                Label("Ajouter à la collection", systemImage: "shippingbox")
+                            }
+                            Button(role: .destructive) {
+                                showRemoveConfirmation = true
+                            } label: {
+                                Label("Retirer de la liste cadeaux", systemImage: "trash")
+                            }
+                        } label: {
+                            if isPerformingBulkAction {
+                                ProgressView()
+                            } else {
+                                Label("Actions (\(selectedSetNums.count))", systemImage: "ellipsis.circle")
+                            }
+                        }
+                        .disabled(selectedSetNums.isEmpty || isPerformingBulkAction)
+                    }
                     Button(editMode.isEditing ? "Terminé" : "Actions") {
                         withAnimation { editMode = editMode.isEditing ? .inactive : .active }
                     }
-                }
-            }
-            if editMode.isEditing {
-                ToolbarItemGroup(placement: .bottomBar) {
-                    Menu {
-                        Button {
-                            Task { await refreshSelectedPrices() }
-                        } label: {
-                            Label("Actualiser les prix", systemImage: "arrow.clockwise")
-                        }
-                        Button {
-                            showAddToListPicker = true
-                        } label: {
-                            Label("Ajouter à la collection", systemImage: "shippingbox")
-                        }
-                        Button(role: .destructive) {
-                            showRemoveConfirmation = true
-                        } label: {
-                            Label("Retirer de la liste cadeaux", systemImage: "trash")
-                        }
-                    } label: {
-                        if isPerformingBulkAction {
-                            ProgressView()
-                        } else {
-                            Label("Actions (\(selectedSetNums.count))", systemImage: "ellipsis.circle")
-                        }
-                    }
-                    .disabled(selectedSetNums.isEmpty || isPerformingBulkAction)
                 }
             }
         }

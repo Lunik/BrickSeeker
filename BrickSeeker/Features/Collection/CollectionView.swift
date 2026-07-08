@@ -168,7 +168,7 @@ struct CollectionView: View {
                 )
             }
         }
-        .searchable(text: $filter.searchText, prompt: "Nom ou numéro de set")
+        .searchable(text: $filter.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Nom ou numéro de set")
         .navigationTitle("Ma collection")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -180,39 +180,42 @@ struct CollectionView: View {
                 .accessibilityLabel("Filtres")
                 .accessibilityValue(filter.isFilterActive ? "Actifs" : "Inactifs")
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                if !(viewModel?.cachedSets.isEmpty ?? true) {
+            // Pinned to the bottom bar (not the nav bar) rather than the top-trailing spot used
+            // before #141's search bar: iOS hides the top nav bar's own toolbar items while the
+            // search field is focused, which used to make this button unreachable mid-search —
+            // the bottom bar isn't affected by that collapse.
+            if !(viewModel?.cachedSets.isEmpty ?? true) {
+                ToolbarItemGroup(placement: .bottomBar) {
+                    Spacer()
+                    if editMode.isEditing {
+                        Menu {
+                            Button {
+                                Task { await refreshSelectedPrices() }
+                            } label: {
+                                Label("Actualiser les prix", systemImage: "arrow.clockwise")
+                            }
+                            Button {
+                                showMoveListPicker = true
+                            } label: {
+                                Label("Déplacer vers une liste", systemImage: "folder")
+                            }
+                            Button(role: .destructive) {
+                                showRemoveConfirmation = true
+                            } label: {
+                                Label("Retirer de la collection", systemImage: "trash")
+                            }
+                        } label: {
+                            if isPerformingBulkAction {
+                                ProgressView()
+                            } else {
+                                Label("Actions (\(selectedSetNums.count))", systemImage: "ellipsis.circle")
+                            }
+                        }
+                        .disabled(selectedSetNums.isEmpty || isPerformingBulkAction)
+                    }
                     Button(editMode.isEditing ? "Terminé" : "Actions") {
                         withAnimation { editMode = editMode.isEditing ? .inactive : .active }
                     }
-                }
-            }
-            if editMode.isEditing {
-                ToolbarItemGroup(placement: .bottomBar) {
-                    Menu {
-                        Button {
-                            Task { await refreshSelectedPrices() }
-                        } label: {
-                            Label("Actualiser les prix", systemImage: "arrow.clockwise")
-                        }
-                        Button {
-                            showMoveListPicker = true
-                        } label: {
-                            Label("Déplacer vers une liste", systemImage: "folder")
-                        }
-                        Button(role: .destructive) {
-                            showRemoveConfirmation = true
-                        } label: {
-                            Label("Retirer de la collection", systemImage: "trash")
-                        }
-                    } label: {
-                        if isPerformingBulkAction {
-                            ProgressView()
-                        } else {
-                            Label("Actions (\(selectedSetNums.count))", systemImage: "ellipsis.circle")
-                        }
-                    }
-                    .disabled(selectedSetNums.isEmpty || isPerformingBulkAction)
                 }
             }
         }

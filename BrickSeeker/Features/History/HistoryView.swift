@@ -117,7 +117,7 @@ struct HistoryView: View {
                 }
             }
         }
-        .searchable(text: $filter.searchText, prompt: "Nom ou numéro de set")
+        .searchable(text: $filter.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Nom ou numéro de set")
         .navigationTitle("Historique")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -130,11 +130,6 @@ struct HistoryView: View {
                 .accessibilityValue(filter.isFilterActive ? "Actifs" : "Inactifs")
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button(editMode.isEditing ? "Terminé" : "Actions") {
-                    withAnimation { editMode = editMode.isEditing ? .inactive : .active }
-                }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showScanMap = true
                 } label: {
@@ -142,8 +137,12 @@ struct HistoryView: View {
                 }
                 .accessibilityLabel("Carte des scans")
             }
-            if editMode.isEditing {
-                ToolbarItemGroup(placement: .bottomBar) {
+            // Pinned to the bottom bar (not the nav bar) — see the matching comment in
+            // CollectionView (#141): iOS hides the top nav bar's toolbar items while the search
+            // field is focused, which used to make this button unreachable mid-search.
+            ToolbarItemGroup(placement: .bottomBar) {
+                Spacer()
+                if editMode.isEditing {
                     Menu {
                         Button {
                             Task { await refreshSelectedPrices() }
@@ -163,6 +162,9 @@ struct HistoryView: View {
                         }
                     }
                     .disabled(selectedSetNums.isEmpty || isPerformingBulkAction)
+                }
+                Button(editMode.isEditing ? "Terminé" : "Actions") {
+                    withAnimation { editMode = editMode.isEditing ? .inactive : .active }
                 }
             }
         }
