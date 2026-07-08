@@ -1,6 +1,19 @@
 import Foundation
 import SwiftData
 
+/// Result of `CollectionPriceUpdater.refreshPrices(for:...)` — the selection-scoped "actions
+/// menu" entry point used by Collection/History/Wishlist (#141).
+enum SelectionPriceRefreshOutcome {
+    /// The queue fully drained (or there was nothing to refresh).
+    case completed
+    /// Another run (global or a different selection) was already in flight, or a paused
+    /// full-collection queue is waiting to be resumed — starting now would have silently
+    /// hijacked or resumed that other job instead of refreshing this selection.
+    case busy
+    /// The run was paused mid-way (e.g. the app backgrounded) before finishing this selection.
+    case cancelled
+}
+
 /// Drives a one-set-at-a-time price refresh across the user's whole collection, started
 /// explicitly from Settings — never automatically. A singleton (like
 /// `OfflineCatalogStore.shared`/`HeadlessWebScraper.shared`) so the run's state survives
@@ -146,6 +159,37 @@ final class CollectionPriceUpdater {
                 repo.cacheStorePrice(setNum: legoSet.setNum, price: storePrice)
             }
         }
+    }
+
+    /// Shared "refresh prices" bulk action for a user-picked selection — Collection, History
+    /// and Wishlist (#141) all funnel their "actions" menu refresh through here instead of each
+    /// hand-rolling the same authorize/start/notify sequence. Still routes through this single
+    /// global updater (not a parallel pipeline), so `.busy` is returned rather than silently
+    /// resuming/racing an unrelated in-flight or paused full-collection run.
+    @discardableResult
+    func refreshPrices(
+        for sets: [LegoSet],
+        priceRepository: PriceRepositoryProtocol = PriceRepository(),
+        legoStoreRepository: LegoStoreRepositoryProtocol = LegoStoreRepository(),
+        persist: @escaping @MainActor (LegoSet, [PriceQuote], StorePrice?) async -> Void
+    ) async -> SelectionPriceRefreshOutcome {
+        guard !sets.isEmpty else { return .completed }
+        guard !isRunning, !hasResumableUpdate else { return .busy }
+
+        await PriceUpdateNotifier.requestAuthorizationIfNeeded()
+
+        let result = await start(
+            allSets: sets,
+            priceRepository: priceRepository,
+            legoStoreRepository: legoStoreRepository,
+            persist: persist
+        )
+
+        if result.completed {
+            PriceUpdateNotifier.notifyCompleted(total: result.total)
+            return .completed
+        }
+        return .cancelled
     }
 
     private func saveQueue(_ queue: Queue) {

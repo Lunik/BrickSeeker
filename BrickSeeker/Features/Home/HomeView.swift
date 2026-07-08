@@ -8,7 +8,6 @@ struct HomeView: View {
     @State private var lookupViewModel = ScannerViewModel()
 
     @State private var hasAPIKey = KeychainService.shared.hasAPIKey
-    @State private var showHistory = false
     @State private var showSettings = false
     @State private var showManualEntry = false
     @State private var showPhotoPicker = false
@@ -24,6 +23,7 @@ struct HomeView: View {
         case collection
         case statistics
         case wishlist
+        case history
 
         var id: Self { self }
     }
@@ -80,11 +80,10 @@ struct HomeView: View {
                     StatisticsView(lookupViewModel: lookupViewModel)
                 case .wishlist:
                     WishlistView(lookupViewModel: lookupViewModel)
-                }
-            }
-            .sheet(isPresented: $showHistory) {
-                HistoryView(lookupViewModel: lookupViewModel) { setNum in
-                    lookupViewModel.lookupSetNumber(setNum, source: .listReopen)
+                case .history:
+                    HistoryView(lookupViewModel: lookupViewModel) { setNum in
+                        lookupViewModel.lookupSetNumber(setNum, source: .listReopen)
+                    }
                 }
             }
             .sheet(isPresented: $showManualEntry) {
@@ -98,10 +97,12 @@ struct HomeView: View {
             }) {
                 SettingsView()
             }
-            // Gated while History/ManualEntry are up: those present their own nested result
-            // sheets, so closing a result returns there instead of Home — see
-            // LookupResultSheetsModifier's doc for the full story.
-            .lookupResultSheets(for: lookupViewModel, isGated: showHistory || showManualEntry)
+            // Gated while ManualEntry is up: it presents its own nested result sheet, so closing
+            // a result returns there instead of Home — see LookupResultSheetsModifier's doc for
+            // the full story. History/Collection/Wishlist/Statistics are pushed onto this same
+            // NavigationStack (not a nested presenter), so this ungated copy already handles them:
+            // dismissing SetDetail reveals whichever of those is on top of the stack.
+            .lookupResultSheets(for: lookupViewModel, isGated: showManualEntry)
             .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItem, matching: .images)
             .onChange(of: selectedPhotoItem) { _, newItem in
                 guard let newItem else { return }
@@ -169,7 +170,7 @@ struct HomeView: View {
                 .font(.headline)
             HStack(spacing: 12) {
                 Button {
-                    showHistory = true
+                    destination = .history
                 } label: {
                     StatCard(title: "Sets scannés", value: "\(viewModel.scannedSetsCount)", icon: "number.square")
                 }
