@@ -11,10 +11,18 @@ struct WishlistView: View {
     @State private var showImportSheet = false
     @State private var errorMessage: String?
     var bricksetRepository: BricksetRepositoryProtocol = BricksetRepository()
+    var rebrickableRepository: RebrickableRepositoryProtocol = RebrickableRepository()
     let lookupViewModel: ScannerViewModel
 
     /// Memoized from `allCachedPrices` (see the `.onChange` in `body`), same pattern as `CollectionView`.
     @State private var pricesBySetNum: [String: [PriceQuote]] = [:]
+
+    @State private var editMode: EditMode = .inactive
+    @State private var selectedSetNums: Set<String> = []
+    @State private var isPerformingBulkAction = false
+    @State private var selectionActionError: String?
+    @State private var showAddToListPicker = false
+    @State private var showRemoveConfirmation = false
 
     /// Amazon → lego.com → BrickLink new → BrickLink used (see `resolveWishlistPrice`) — Amazon
     /// first per request, and always this fixed chain regardless of any list condition, since a
@@ -26,6 +34,98 @@ struct WishlistView: View {
         )
     }
 
+    private var selectedCachedSets: [CachedSet] {
+        cachedSets.filter { selectedSetNums.contains($0.setNum) }
+    }
+
+    /// Reuses `CollectionPriceUpdater.shared`, same as `CollectionView`/`HistoryView`'s bulk
+    /// refresh (#141) — a single global run, so a concurrent/paused unrelated job means `.busy`,
+    /// not silently hijacking that other queue.
+    private func refreshSelectedPrices() async {
+        selectionActionError = nil
+        let selected = selectedCachedSets
+        guard !selected.isEmpty else { return }
+
+        isPerformingBulkAction = true
+        defer { isPerformingBulkAction = false }
+
+        let outcome = await CollectionPriceUpdater.shared.refreshPrices(
+            for: selected.map { $0.asLegoSet() },
+            persist: CollectionPriceUpdater.persistClosure(modelContext: modelContext)
+        )
+
+        switch outcome {
+        case .completed:
+            editMode = .inactive
+        case .busy:
+            selectionActionError = String(
+                localized: "Une actualisation des prix de la collection est déjà en cours ou en attente de reprise. Terminez-la avant d'actualiser une sélection."
+            )
+        case .cancelled:
+            break
+        }
+    }
+
+    /// Bulk counterpart to `remove(_:)` — same Brickset-first-then-local-cache order, so a
+    /// failed removal (offline, expired session) doesn't desync a set that Brickset still lists.
+    private func removeSelectedFromWishlist() async {
+        selectionActionError = nil
+        guard NetworkMonitor.shared.isConnected else {
+            selectionActionError = UserMessage.offlineStatus
+            return
+        }
+        let selected = selectedCachedSets
+        guard !selected.isEmpty else { return }
+
+        isPerformingBulkAction = true
+        defer { isPerformingBulkAction = false }
+
+        let localRepository = LocalRepository(modelContext: modelContext)
+        var failureCount = 0
+        for cached in selected {
+            do {
+                try await bricksetRepository.removeFromWishlist(setNum: cached.setNum)
+                localRepository.setWishlistStatus(setNum: cached.setNum, isInWishlist: false)
+            } catch {
+                failureCount += 1
+            }
+        }
+
+        if failureCount > 0 {
+            selectionActionError = String(localized: "\(failureCount) set(s) n'ont pas pu être retirés de la liste cadeaux.")
+        } else {
+            editMode = .inactive
+        }
+    }
+
+    /// Adds every selected set to `listId` on Rebrickable — doesn't touch wishlist status, same
+    /// as `SetDetailViewModel.addToList` (a set can be both owned and still wanted).
+    private func addSelectedToCollection(listId: Int, listName: String) async {
+        selectionActionError = nil
+        let selected = selectedCachedSets
+        guard !selected.isEmpty else { return }
+
+        isPerformingBulkAction = true
+        defer { isPerformingBulkAction = false }
+
+        let localRepository = LocalRepository(modelContext: modelContext)
+        var failureCount = 0
+        for cached in selected {
+            do {
+                try await rebrickableRepository.addSetToList(setNum: cached.setNum, listId: listId)
+                localRepository.setCollectionStatus(setNum: cached.setNum, isInCollection: true, listId: listId, listName: listName)
+            } catch {
+                failureCount += 1
+            }
+        }
+
+        if failureCount > 0 {
+            selectionActionError = String(localized: "\(failureCount) set(s) n'ont pas pu être ajoutés à la collection. Vérifiez votre connexion.")
+        } else {
+            editMode = .inactive
+        }
+    }
+
     var body: some View {
         Group {
             if cachedSets.isEmpty {
@@ -35,7 +135,7 @@ struct WishlistView: View {
                     description: Text("Ajoute un set à ta liste cadeaux depuis sa fiche, ou importe une liste Rebrickable publique.")
                 )
             } else {
-                List(cachedSets, id: \.setNum) { cached in
+                List(cachedSets, id: \.setNum, selection: $selectedSetNums) { cached in
                     Button {
                         lookupViewModel.lookupSetNumber(cached.setNum, source: .listReopen)
                     } label: {
@@ -73,9 +173,67 @@ struct WishlistView: View {
                 }
                 .accessibilityLabel("Importer depuis Rebrickable")
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                if !cachedSets.isEmpty {
+                    Button(editMode.isEditing ? "Terminé" : "Actions") {
+                        withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+                    }
+                }
+            }
+            if editMode.isEditing {
+                ToolbarItemGroup(placement: .bottomBar) {
+                    Text(selectedSetNums.isEmpty ? "Aucune sélection" : "\(selectedSetNums.count) sélectionné(s)")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Menu {
+                        Button {
+                            Task { await refreshSelectedPrices() }
+                        } label: {
+                            Label("Actualiser les prix", systemImage: "arrow.clockwise")
+                        }
+                        Button {
+                            showAddToListPicker = true
+                        } label: {
+                            Label("Ajouter à la collection", systemImage: "shippingbox")
+                        }
+                        Button(role: .destructive) {
+                            showRemoveConfirmation = true
+                        } label: {
+                            Label("Retirer de la liste cadeaux", systemImage: "trash")
+                        }
+                    } label: {
+                        if isPerformingBulkAction {
+                            ProgressView()
+                        } else {
+                            Label("Actions (\(selectedSetNums.count))", systemImage: "ellipsis.circle")
+                        }
+                    }
+                    .disabled(selectedSetNums.isEmpty || isPerformingBulkAction)
+                }
+            }
+        }
+        .environment(\.editMode, $editMode)
+        .onChange(of: editMode) { _, newValue in
+            if !newValue.isEditing {
+                selectedSetNums.removeAll()
+            }
         }
         .sheet(isPresented: $showImportSheet) {
             BricksetWishlistImportSheet()
+        }
+        .sheet(isPresented: $showAddToListPicker) {
+            ListPickerView(repository: rebrickableRepository) { listId, listName in
+                Task { await addSelectedToCollection(listId: listId, listName: listName) }
+            }
+        }
+        .alert("Retirer de la liste cadeaux ?", isPresented: $showRemoveConfirmation) {
+            Button("Retirer", role: .destructive) {
+                Task { await removeSelectedFromWishlist() }
+            }
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            Text("\(selectedSetNums.count) set(s) seront retirés de votre liste cadeaux.")
         }
         .onChange(of: SetPriceIndex.Version(allCachedPrices), initial: true) { _, _ in
             pricesBySetNum = SetPriceIndex.pricesBySetNum(allCachedPrices)
@@ -88,6 +246,17 @@ struct WishlistView: View {
             Button("OK", role: .cancel) {}
         } message: { message in
             Text(message)
+        }
+        .alert(
+            "Action impossible",
+            isPresented: Binding(
+                get: { selectionActionError != nil },
+                set: { isPresented in if !isPresented { selectionActionError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(selectionActionError ?? "")
         }
     }
 

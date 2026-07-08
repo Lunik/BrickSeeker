@@ -103,6 +103,18 @@ final class LocalRepository {
         try? modelContext.save()
     }
 
+    /// Local-cache mirror of the collection-status half of `cacheSet`, for the Collection/
+    /// Wishlist bulk "actions" menu (#141) — those callers already hold the `CachedSet` for each
+    /// selected row and only need to reflect a remote move/add/remove that already succeeded via
+    /// `RebrickableRepository`, not `cacheSet`'s full `LegoSet` upsert. No-ops if no row exists.
+    func setCollectionStatus(setNum: String, isInCollection: Bool, listId: Int?, listName: String?) {
+        guard let existing = cachedSet(setNum: setNum) else { return }
+        existing.isInCollection = isInCollection
+        existing.currentListId = listId
+        existing.currentListName = listName
+        try? modelContext.save()
+    }
+
     /// No-ops if no CachedSet row exists yet, mirroring `setWishlistStatus` — `cacheSet` never
     /// touches `quantity` (only `syncCollection`'s full reconcile does), so a quantity edit needs
     /// this dedicated setter rather than being folded into `cacheSet`.

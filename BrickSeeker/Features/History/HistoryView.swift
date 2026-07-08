@@ -18,12 +18,56 @@ struct HistoryView: View {
     /// dictionary was previously a computed property re-run on every keystroke in the search bar.
     @State private var pricesBySetNum: [String: [PriceQuote]] = [:]
 
+    @State private var editMode: EditMode = .inactive
+    @State private var selectedSetNums: Set<String> = []
+    @State private var isPerformingBulkAction = false
+    @State private var selectionActionError: String?
+    @State private var showRemoveScansConfirmation = false
+
     private var filteredSets: [CachedSet] { cachedSets.filteredAndSorted(by: filter, resolvedPrice: resolvedPrice) }
     private var availableThemeIds: [Int] { Set(cachedSets.map(\.themeId)).sorted() }
     private var availableYears: [Int] { Set(cachedSets.map(\.year)).sorted(by: >) }
 
     private func resolvedPrice(for cached: CachedSet) -> Double? {
         resolveNewPrice(storePriceEUR: cached.storePriceEUR, quotes: pricesBySetNum[cached.setNum] ?? [])
+    }
+
+    /// Reuses `CollectionPriceUpdater.shared`, same as `CollectionView`'s bulk refresh (#141) —
+    /// a single global run, so a concurrent/paused unrelated job means `.busy`, not silently
+    /// hijacking that other queue.
+    private func refreshSelectedPrices() async {
+        selectionActionError = nil
+        let selected = filteredSets.filter { selectedSetNums.contains($0.setNum) }
+        guard !selected.isEmpty else { return }
+
+        isPerformingBulkAction = true
+        defer { isPerformingBulkAction = false }
+
+        let outcome = await CollectionPriceUpdater.shared.refreshPrices(
+            for: selected.map { $0.asLegoSet() },
+            persist: CollectionPriceUpdater.persistClosure(modelContext: modelContext)
+        )
+
+        switch outcome {
+        case .completed:
+            editMode = .inactive
+        case .busy:
+            selectionActionError = String(
+                localized: "Une actualisation des prix de la collection est déjà en cours ou en attente de reprise. Terminez-la avant d'actualiser une sélection."
+            )
+        case .cancelled:
+            break
+        }
+    }
+
+    /// Reuses `deleteFromHistory` — the same per-item logic already wired to the row's swipe
+    /// action, just looped over the selection instead of one `CachedSet`.
+    private func removeSelectedScans() {
+        let repository = LocalRepository(modelContext: modelContext)
+        for setNum in selectedSetNums {
+            repository.deleteFromHistory(setNum: setNum)
+        }
+        editMode = .inactive
     }
 
     var body: some View {
@@ -42,7 +86,7 @@ struct HistoryView: View {
                         description: Text("Essayez de modifier la recherche ou les filtres.")
                     )
                 } else {
-                    List(filteredSets) { cached in
+                    List(filteredSets, id: \.setNum, selection: $selectedSetNums) { cached in
                         Button {
                             // Deliberately no dismiss() here: closing the SetDetail sheet we
                             // present below should reveal History again, not Home — see
@@ -87,6 +131,11 @@ struct HistoryView: View {
                     .accessibilityValue(filter.isFilterActive ? "Actifs" : "Inactifs")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    Button(editMode.isEditing ? "Terminé" : "Actions") {
+                        withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showScanMap = true
                     } label: {
@@ -97,6 +146,58 @@ struct HistoryView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Fermer") { dismiss() }
                 }
+                if editMode.isEditing {
+                    ToolbarItemGroup(placement: .bottomBar) {
+                        Text(selectedSetNums.isEmpty ? "Aucune sélection" : "\(selectedSetNums.count) sélectionné(s)")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Menu {
+                            Button {
+                                Task { await refreshSelectedPrices() }
+                            } label: {
+                                Label("Actualiser les prix", systemImage: "arrow.clockwise")
+                            }
+                            Button(role: .destructive) {
+                                showRemoveScansConfirmation = true
+                            } label: {
+                                Label("Retirer tous les scans", systemImage: "trash")
+                            }
+                        } label: {
+                            if isPerformingBulkAction {
+                                ProgressView()
+                            } else {
+                                Label("Actions (\(selectedSetNums.count))", systemImage: "ellipsis.circle")
+                            }
+                        }
+                        .disabled(selectedSetNums.isEmpty || isPerformingBulkAction)
+                    }
+                }
+            }
+            .environment(\.editMode, $editMode)
+            .onChange(of: editMode) { _, newValue in
+                if !newValue.isEditing {
+                    selectedSetNums.removeAll()
+                }
+            }
+            .alert("Retirer ces sets de l'Historique ?", isPresented: $showRemoveScansConfirmation) {
+                Button("Retirer", role: .destructive) {
+                    removeSelectedScans()
+                }
+                Button("Annuler", role: .cancel) {}
+            } message: {
+                Text("Les sets encore dans votre Collection y resteront, mais disparaîtront de l'Historique.")
+            }
+            .alert(
+                "Action impossible",
+                isPresented: Binding(
+                    get: { selectionActionError != nil },
+                    set: { isPresented in if !isPresented { selectionActionError = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(selectionActionError ?? "")
             }
             .sheet(isPresented: $showScanMap) {
                 ScanMapView { setNum in

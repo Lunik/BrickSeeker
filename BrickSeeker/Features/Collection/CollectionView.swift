@@ -9,6 +9,7 @@ struct CollectionView: View {
     @State private var showFilters = false
     @Bindable private var filter = CollectionFilterState.shared
     let lookupViewModel: ScannerViewModel
+    var rebrickableRepository: RebrickableRepositoryProtocol = RebrickableRepository()
 
     /// Memoized from `allCachedPrices` (see the `.onChange` in `body`) — rebuilding this
     /// dictionary was previously a computed property re-run on every keystroke in the search bar.
@@ -16,8 +17,10 @@ struct CollectionView: View {
 
     @State private var editMode: EditMode = .inactive
     @State private var selectedSetNums: Set<String> = []
-    @State private var isRefreshingSelection = false
-    @State private var selectionRefreshError: String?
+    @State private var isPerformingBulkAction = false
+    @State private var selectionActionError: String?
+    @State private var showMoveListPicker = false
+    @State private var showRemoveConfirmation = false
 
     private var conditionByListId: [Int: ListCondition] {
         Dictionary(allCachedSetLists.map { ($0.listId, $0.condition) }, uniquingKeysWith: { first, _ in first })
@@ -32,41 +35,97 @@ struct CollectionView: View {
         )
     }
 
+    private var selectedCachedSets: [CachedSet] {
+        guard let viewModel else { return [] }
+        return viewModel.cachedSets.filter { selectedSetNums.contains($0.setNum) }
+    }
+
     /// Batch "refresh prices" action on the selected sets, reusing `CollectionPriceUpdater
     /// .shared` — the same singleton driven by `CollectionPriceUpdateSection` from Réglages —
-    /// rather than a parallel pipeline (see #141). That singleton is a single global run: if
-    /// one is already in progress, or a previous full-collection pass was paused mid-way (its
-    /// queue file still on disk), `start(allSets:)` would silently ignore our selection and
-    /// resume/observe that other queue instead. Guard against both up front so the button never
-    /// quietly refreshes the wrong sets.
+    /// rather than a parallel pipeline (see #141).
     private func refreshSelectedPrices() async {
-        selectionRefreshError = nil
-        guard let viewModel else { return }
-        let selected = viewModel.cachedSets.filter { selectedSetNums.contains($0.setNum) }
+        selectionActionError = nil
+        let selected = selectedCachedSets
         guard !selected.isEmpty else { return }
 
-        let updater = CollectionPriceUpdater.shared
-        guard !updater.isRunning, !updater.hasResumableUpdate else {
-            selectionRefreshError = String(
-                localized: "Une actualisation des prix de la collection est déjà en cours ou en attente de reprise. Terminez-la avant d'actualiser une sélection."
-            )
-            return
-        }
+        isPerformingBulkAction = true
+        defer { isPerformingBulkAction = false }
 
-        isRefreshingSelection = true
-        defer { isRefreshingSelection = false }
-
-        await PriceUpdateNotifier.requestAuthorizationIfNeeded()
-
-        let result = await updater.start(
-            allSets: selected.map { $0.asLegoSet() },
-            priceRepository: PriceRepository(),
-            legoStoreRepository: LegoStoreRepository(),
+        let outcome = await CollectionPriceUpdater.shared.refreshPrices(
+            for: selected.map { $0.asLegoSet() },
             persist: CollectionPriceUpdater.persistClosure(modelContext: modelContext)
         )
 
-        if result.completed {
-            PriceUpdateNotifier.notifyCompleted(total: result.total)
+        switch outcome {
+        case .completed:
+            editMode = .inactive
+        case .busy:
+            selectionActionError = String(
+                localized: "Une actualisation des prix de la collection est déjà en cours ou en attente de reprise. Terminez-la avant d'actualiser une sélection."
+            )
+        case .cancelled:
+            break
+        }
+    }
+
+    /// Moves every selected set into `listId` on Rebrickable — a set with no known current list
+    /// is added rather than moved (there's nothing to remove it from).
+    private func moveSelectedToList(listId: Int, listName: String) async {
+        selectionActionError = nil
+        let selected = selectedCachedSets
+        guard !selected.isEmpty else { return }
+
+        isPerformingBulkAction = true
+        defer { isPerformingBulkAction = false }
+
+        let localRepository = LocalRepository(modelContext: modelContext)
+        var failureCount = 0
+        for cached in selected {
+            do {
+                if let fromListId = cached.currentListId, fromListId != listId {
+                    try await rebrickableRepository.moveSetToList(setNum: cached.setNum, fromListId: fromListId, toListId: listId)
+                } else if cached.currentListId == nil {
+                    try await rebrickableRepository.addSetToList(setNum: cached.setNum, listId: listId)
+                }
+                localRepository.setCollectionStatus(setNum: cached.setNum, isInCollection: true, listId: listId, listName: listName)
+            } catch {
+                failureCount += 1
+            }
+        }
+
+        if failureCount > 0 {
+            selectionActionError = String(localized: "\(failureCount) set(s) n'ont pas pu être déplacés. Vérifiez votre connexion.")
+        } else {
+            editMode = .inactive
+        }
+    }
+
+    private func removeSelectedFromCollection() async {
+        selectionActionError = nil
+        let selected = selectedCachedSets
+        guard !selected.isEmpty else { return }
+
+        isPerformingBulkAction = true
+        defer { isPerformingBulkAction = false }
+
+        let localRepository = LocalRepository(modelContext: modelContext)
+        var failureCount = 0
+        for cached in selected {
+            do {
+                try await rebrickableRepository.removeSetFromCollection(setNum: cached.setNum)
+                localRepository.setCollectionStatus(setNum: cached.setNum, isInCollection: false, listId: nil, listName: nil)
+            } catch {
+                failureCount += 1
+            }
+        }
+
+        // Removed sets drop out of `ownedSets()` — the view model's `cachedSets` is a plain
+        // snapshot (not a live query), so it needs an explicit reload to stop showing them.
+        viewModel?.load()
+
+        if failureCount > 0 {
+            selectionActionError = String(localized: "\(failureCount) set(s) n'ont pas pu être retirés. Vérifiez votre connexion.")
+        } else {
             editMode = .inactive
         }
     }
@@ -112,11 +171,6 @@ struct CollectionView: View {
         .searchable(text: $filter.searchText, prompt: "Nom ou numéro de set")
         .navigationTitle("Ma collection")
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                if !(viewModel?.cachedSets.isEmpty ?? true) {
-                    EditButton()
-                }
-            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showFilters = true
@@ -126,19 +180,43 @@ struct CollectionView: View {
                 .accessibilityLabel("Filtres")
                 .accessibilityValue(filter.isFilterActive ? "Actifs" : "Inactifs")
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                if !(viewModel?.cachedSets.isEmpty ?? true) {
+                    Button(editMode.isEditing ? "Terminé" : "Actions") {
+                        withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+                    }
+                }
+            }
             if editMode.isEditing {
                 ToolbarItemGroup(placement: .bottomBar) {
+                    Text(selectedSetNums.isEmpty ? "Aucune sélection" : "\(selectedSetNums.count) sélectionné(s)")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                     Spacer()
-                    Button {
-                        Task { await refreshSelectedPrices() }
+                    Menu {
+                        Button {
+                            Task { await refreshSelectedPrices() }
+                        } label: {
+                            Label("Actualiser les prix", systemImage: "arrow.clockwise")
+                        }
+                        Button {
+                            showMoveListPicker = true
+                        } label: {
+                            Label("Déplacer vers une liste", systemImage: "folder")
+                        }
+                        Button(role: .destructive) {
+                            showRemoveConfirmation = true
+                        } label: {
+                            Label("Retirer de la collection", systemImage: "trash")
+                        }
                     } label: {
-                        if isRefreshingSelection {
+                        if isPerformingBulkAction {
                             ProgressView()
                         } else {
-                            Text("Actualiser les prix (\(selectedSetNums.count))")
+                            Label("Actions (\(selectedSetNums.count))", systemImage: "ellipsis.circle")
                         }
                     }
-                    .disabled(selectedSetNums.isEmpty || isRefreshingSelection)
+                    .disabled(selectedSetNums.isEmpty || isPerformingBulkAction)
                 }
             }
         }
@@ -148,16 +226,29 @@ struct CollectionView: View {
                 selectedSetNums.removeAll()
             }
         }
+        .sheet(isPresented: $showMoveListPicker) {
+            ListPickerView(repository: rebrickableRepository) { listId, listName in
+                Task { await moveSelectedToList(listId: listId, listName: listName) }
+            }
+        }
+        .alert("Retirer de la collection ?", isPresented: $showRemoveConfirmation) {
+            Button("Retirer", role: .destructive) {
+                Task { await removeSelectedFromCollection() }
+            }
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            Text("\(selectedSetNums.count) set(s) seront retirés de votre collection Rebrickable.")
+        }
         .alert(
-            "Actualisation impossible",
+            "Action impossible",
             isPresented: Binding(
-                get: { selectionRefreshError != nil },
-                set: { isPresented in if !isPresented { selectionRefreshError = nil } }
+                get: { selectionActionError != nil },
+                set: { isPresented in if !isPresented { selectionActionError = nil } }
             )
         ) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(selectionRefreshError ?? "")
+            Text(selectionActionError ?? "")
         }
         .sheet(isPresented: $showFilters) {
             SetFilterSheet(
