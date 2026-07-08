@@ -205,9 +205,16 @@ struct WishlistView: View {
                         }
                         .disabled(selectedSetNums.isEmpty || isPerformingBulkAction)
                     }
-                    Button(editMode.isEditing ? "Terminé" : "Actions") {
+                    Button {
                         withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+                    } label: {
+                        if editMode.isEditing {
+                            Text("Terminé")
+                        } else {
+                            Image(systemName: "pencil.circle")
+                        }
                     }
+                    .accessibilityLabel(editMode.isEditing ? "Terminé" : "Actions")
                 }
             }
         }
