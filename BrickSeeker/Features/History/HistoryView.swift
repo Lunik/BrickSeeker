@@ -150,7 +150,11 @@ struct HistoryView: View {
                         } label: {
                             Label("Actualiser les prix", systemImage: "arrow.clockwise")
                         }
-                        Button(role: .destructive) {
+                        // Not `role: .destructive` — SwiftUI previews a destructive Menu item
+                        // across the List's selected rows the instant the Menu opens (a red
+                        // flash on the selection background), not just on tap. The icon still
+                        // renders in the app's red accent color either way.
+                        Button {
                             showRemoveScansConfirmation = true
                         } label: {
                             Label("Retirer tous les scans", systemImage: "trash")

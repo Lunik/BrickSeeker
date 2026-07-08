@@ -200,7 +200,11 @@ struct CollectionView: View {
                             } label: {
                                 Label("Déplacer vers une liste", systemImage: "folder")
                             }
-                            Button(role: .destructive) {
+                            // Not `role: .destructive` — SwiftUI previews a destructive Menu item
+                            // across the List's selected rows the instant the Menu opens (a red
+                            // flash on the selection background), not just on tap. The icon still
+                            // renders in the app's red accent color either way.
+                            Button {
                                 showRemoveConfirmation = true
                             } label: {
                                 Label("Retirer de la collection", systemImage: "trash")
