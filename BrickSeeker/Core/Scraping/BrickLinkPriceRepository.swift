@@ -21,12 +21,16 @@ import Foundation
 /// The cross-reference favours **precision over recall** (validated empirically on a real
 /// collection, #117: ~100% precision, ~53% recall): it only accepts a candidate backed by
 /// discriminant (printed) parts and confirmed by composition, and otherwise abstains (no quote)
-/// rather than risk a wrong price. A printed-parts tie (step 2) isn't an automatic abstain — each
-/// surviving candidate is still composition-verified (step 3), and the tie is accepted as resolved
-/// only if that narrows it to exactly one (#134). Every abstain records *why* it aborted
-/// (`BrickLinkMinifigIdStore.MissReason`) alongside the miss cache, for diagnosing recurring
-/// unresolved items from real data. Unresolved items are the natural home for a future visible
-/// link-out + manual-entry fallback.
+/// rather than risk a wrong price. A printed-parts tie (step 2) isn't an automatic abstain — every
+/// surviving candidate is composition-verified (step 3), and the highest-overlap candidate wins,
+/// with ties (equal overlap) broken deterministically by lowest catalog id rather than abstaining
+/// (#134) — there's no further part-level signal to distinguish two compositionally-identical
+/// BrickLink listings (e.g. a same-design reissue), so the closest match is preferred over no price
+/// at all. Only abstains, precision first, if zero candidates clear the composition threshold, or
+/// an earlier step (no parts/no discriminant/no candidates) can't even produce one. Every abstain
+/// records *why* it aborted (`BrickLinkMinifigIdStore.MissReason`) alongside the miss cache, for
+/// diagnosing recurring unresolved items from real data. Unresolved items are the natural home for
+/// a future visible link-out + manual-entry fallback.
 struct BrickLinkPriceRepository: Sendable {
     private struct PriceGuideData: Decodable {
         let currencyCode: String
@@ -165,11 +169,14 @@ struct BrickLinkPriceRepository: Sendable {
     ///     parts only; generic torso/legs are shared across thousands of figs and produce false
     ///     positives.
     ///  3. BrickLink — verify every surviving candidate by composition: its own inventory (subsets)
-    ///     must cover `verifyThreshold` of the item's parts. Accept only if **exactly one** candidate
-    ///     clears that bar (#134: a printed-parts tie — e.g. a recolor/reissue sharing the same
-    ///     discriminant combination — often resolves once each side's *full* inventory is compared,
-    ///     instead of always abstaining on step 2's tie alone). Still abstains, precision first, if
-    ///     zero or more than one candidate clears it.
+    ///     must cover `verifyThreshold` of the item's parts. Among the candidates that clear that
+    ///     bar, take the one with the **highest** composition overlap — a recolor/reissue sharing
+    ///     the same discriminant combination usually resolves once each side's *full* inventory is
+    ///     compared (#134), and even a remaining tie (two candidates equally, fully compositionally
+    ///     identical — e.g. the same design reissued under a second BrickLink catalog entry) is
+    ///     broken deterministically by lowest catalog id rather than abstaining: no more part-level
+    ///     signal exists to distinguish them, so the closest match is preferred over no price at all.
+    ///     Only abstains, precision first, if zero candidates clear `verifyThreshold`.
     private func resolveViaCatalogCrossReference(setNum: String, isMinifig: Bool) async throws -> BrickLinkCatalogRef {
         let parts = try await rebrickableBrickLinkParts(setNum: setNum, isMinifig: isMinifig)
         guard !parts.isEmpty else { throw BrickLinkMinifigIdStore.MissReason.noParts }
@@ -205,7 +212,7 @@ struct BrickLinkPriceRepository: Sendable {
         }
 
         let itemParts = Set(parts.map { $0.blPartId })
-        var verified: [BrickLinkCatalogRef] = []
+        var verified: [(ref: BrickLinkCatalogRef, overlap: Double)] = []
         for candidate in survivors {
             let candidateParts: Set<String>
             do {
@@ -215,15 +222,15 @@ struct BrickLinkPriceRepository: Sendable {
             }
             let overlap = Double(itemParts.intersection(candidateParts).count) / Double(itemParts.count)
             if overlap >= Self.verifyThreshold {
-                verified.append(candidate)
+                verified.append((candidate, overlap))
             }
         }
-        guard verified.count == 1, let candidate = verified.first else {
-            throw verified.isEmpty
-                ? BrickLinkMinifigIdStore.MissReason.compositionMismatch
-                : BrickLinkMinifigIdStore.MissReason.ambiguousCandidates
+        // Highest overlap wins; a genuine tie (equal overlap — no more part-level signal to break
+        // it with) resolves to the lowest catalog id, deterministically, rather than abstaining.
+        guard let best = verified.sorted(by: { $0.overlap != $1.overlap ? $0.overlap > $1.overlap : $0.ref.id < $1.ref.id }).first else {
+            throw BrickLinkMinifigIdStore.MissReason.compositionMismatch
         }
-        return candidate
+        return best.ref
     }
 
     // MARK: - Catalog cross-reference primitives

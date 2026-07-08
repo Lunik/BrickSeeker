@@ -449,13 +449,15 @@ lego.com price.
     ~100% precision, ~53% recall — see #117): it accepts only a composition-verified candidate and
     otherwise abstains (no quote) rather than risk a wrong price. A tie among printed-parts
     candidates isn't an automatic abstain (**#134**) — every surviving candidate gets composition-
-    verified, and the tie only resolves if exactly one clears `verifyThreshold`; still abstains if
-    zero or more than one does. Every abstain records which step aborted
-    (`BrickLinkMinifigIdStore.MissReason`) alongside the miss cache (`BrickLinkMinifigMisses.json`)
-    for diagnosing recurring unresolved items (e.g. `fig-002333`) from real data instead of
-    guessing. Unresolved items are where a future visible link-out + manual-entry fallback
-    (Option 1) would slot in. If you touch this, keep the abstain-on-ambiguity behaviour — a wrong
-    minifig id surfaces a wrong price.
+    verified, and the highest-overlap one wins; a remaining tie (equal overlap — e.g. a same-design
+    reissue listed as a second BrickLink catalog entry, genuinely indistinguishable by parts alone)
+    resolves to the lowest catalog id rather than abstaining, on the reasoning that a deterministic
+    closest match beats no price at all once composition verification has already ruled out
+    everything but near-identical candidates. Still abstains if zero candidates clear
+    `verifyThreshold`. Every abstain records which step aborted (`BrickLinkMinifigIdStore.MissReason`)
+    alongside the miss cache (`BrickLinkMinifigMisses.json`) for diagnosing recurring unresolved
+    items (e.g. `fig-002333`) from real data instead of guessing. Unresolved items are where a
+    future visible link-out + manual-entry fallback (Option 1) would slot in.
   - The surfaced item link (`sourceURL` on the `PriceQuote`) is still the plain catalog page
     (`bricklink.com/v2/catalog/catalogitem.page?{S,M,…}={id}`), not an API URL — that's for the
     user to open, unrelated to the signed API call.

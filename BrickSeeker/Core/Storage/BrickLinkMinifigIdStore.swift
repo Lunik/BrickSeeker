@@ -35,9 +35,9 @@ actor BrickLinkMinifigIdStore {
         case noDiscriminant
         /// Intersecting BrickLink's supersets of the discriminant parts left zero surviving candidates.
         case noCandidates
-        /// More than one BrickLink catalog item passed composition verification — a genuine tie,
-        /// not just a shared-printed-parts collision (those get broken by verification; see
-        /// `resolveViaCatalogCrossReference`).
+        /// No longer thrown (as of #134: ties are now broken by highest composition overlap,
+        /// falling back to lowest catalog id) — kept so misses recorded by older app versions still
+        /// decode instead of falling back to `unknown`.
         case ambiguousCandidates
         /// No surviving candidate's own BrickLink inventory covered enough of the item's parts to
         /// pass `verifyThreshold`.
