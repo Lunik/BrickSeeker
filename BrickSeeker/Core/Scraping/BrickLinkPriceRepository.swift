@@ -19,10 +19,18 @@ import Foundation
 /// minifig→BrickLink mapping directly — only the physical part composition, cross-referenced, does.
 ///
 /// The cross-reference favours **precision over recall** (validated empirically on a real
-/// collection, #117: ~100% precision, ~53% recall): it only accepts a *unique* candidate backed by
+/// collection, #117: ~100% precision, ~53% recall): it only accepts a candidate backed by
 /// discriminant (printed) parts and confirmed by composition, and otherwise abstains (no quote)
-/// rather than risk a wrong price. Unresolved items are the natural home for a future visible
-/// link-out + manual-entry fallback.
+/// rather than risk a wrong price. A printed-parts tie (step 2) isn't an automatic abstain — every
+/// surviving candidate is composition-verified (step 3), and the highest-overlap candidate wins,
+/// with ties (equal overlap) broken deterministically by lowest catalog id rather than abstaining
+/// (#134) — there's no further part-level signal to distinguish two compositionally-identical
+/// BrickLink listings (e.g. a same-design reissue), so the closest match is preferred over no price
+/// at all. Only abstains, precision first, if zero candidates clear the composition threshold, or
+/// an earlier step (no parts/no discriminant/no candidates) can't even produce one. Every abstain
+/// records *why* it aborted (`BrickLinkMinifigIdStore.MissReason`) alongside the miss cache, for
+/// diagnosing recurring unresolved items from real data. Unresolved items are the natural home for
+/// a future visible link-out + manual-entry fallback.
 struct BrickLinkPriceRepository: Sendable {
     private struct PriceGuideData: Decodable {
         let currencyCode: String
@@ -56,6 +64,17 @@ struct BrickLinkPriceRepository: Sendable {
     /// Minimum fraction of the item's BrickLink parts that must appear in the candidate's own
     /// inventory for the composition check to accept it (see `resolveViaCatalogCrossReference`).
     private static let verifyThreshold = 0.5
+    /// Cap on how many step-2 survivors get a composition-verification API call. A "printed" part
+    /// that's actually a near-universal print (e.g. the classic smiley face, `3626ap01`, shared by
+    /// hundreds of minifigs across every theme) produces a huge, low-signal candidate pool — seen
+    /// live on `fig-000342` (1981 "Fireman, Plain Black"): 407 survivors from that single
+    /// discriminant part. `subsetPartNumbers` is one throttled BrickLink call per candidate
+    /// (`BrickLinkClient`'s `RequestThrottler`, ≥1s apart), so verifying all of them serially would
+    /// take minutes per item and stall a collection-wide refresh. A pool this large also means the
+    /// "discriminant" part isn't discriminant at all, so exhaustive verification wouldn't be
+    /// trustworthy even if it finished — abstain instead, same precision-first reasoning as
+    /// excluding non-printed parts from step 2 in the first place.
+    private static let maxCandidatesToVerify = 20
 
     private let client: BrickLinkClient
     private let networkClient: NetworkClient
@@ -142,12 +161,14 @@ struct BrickLinkPriceRepository: Sendable {
             let ref = try await resolveViaCatalogCrossReference(setNum: setNum, isMinifig: isMinifig)
             await minifigIdStore.save(setNum: setNum, ref: ref)
             return ref
-        } catch ScrapeError.notFound {
-            // Genuine "can't resolve" (no parts / no discriminant / ambiguous / verify failed) —
-            // remember it so we don't retry until the TTL. Transient errors (network, throttle,
-            // decode) are a different error type and fall through to propagate *without* being
-            // cached as a miss, so they retry on the next refresh.
-            await minifigIdStore.recordMiss(setNum: setNum)
+        } catch let reason as BrickLinkMinifigIdStore.MissReason {
+            // Genuine "can't resolve" (no parts / no discriminant / no candidates / still ambiguous
+            // after verification / composition mismatch) — remember it, and *why*, so we don't
+            // retry until the TTL and so a persistent miss can be diagnosed from real data (#134)
+            // instead of guessed at. Transient errors (network, throttle, decode) are a different
+            // error type and fall through to propagate *without* being cached as a miss, so they
+            // retry on the next refresh.
+            await minifigIdStore.recordMiss(setNum: setNum, reason: reason)
             throw ScrapeError.notFound
         }
     }
@@ -157,19 +178,28 @@ struct BrickLinkPriceRepository: Sendable {
     ///  1. Rebrickable — the item's parts, each carrying its BrickLink part id (`external_ids`).
     ///  2. BrickLink — intersect the *supersets* (containing items) of the **printed/discriminant**
     ///     parts only; generic torso/legs are shared across thousands of figs and produce false
-    ///     positives. Accept only a single surviving candidate (abstain on ties — precision first).
-    ///  3. BrickLink — verify by composition: the candidate's own inventory (subsets) must cover
-    ///     the item's parts, else reject. This catches the residual variant/false-positive cases.
+    ///     positives. Abstains if this still leaves more than `maxCandidatesToVerify` survivors — a
+    ///     print that common isn't actually discriminant, and verifying hundreds of candidates would
+    ///     mean hundreds of serial, throttled BrickLink calls for one item.
+    ///  3. BrickLink — verify every surviving candidate by composition: its own inventory (subsets)
+    ///     must cover `verifyThreshold` of the item's parts. Among the candidates that clear that
+    ///     bar, take the one with the **highest** composition overlap — a recolor/reissue sharing
+    ///     the same discriminant combination usually resolves once each side's *full* inventory is
+    ///     compared (#134), and even a remaining tie (two candidates equally, fully compositionally
+    ///     identical — e.g. the same design reissued under a second BrickLink catalog entry) is
+    ///     broken deterministically by lowest catalog id rather than abstaining: no more part-level
+    ///     signal exists to distinguish them, so the closest match is preferred over no price at all.
+    ///     Only abstains, precision first, if zero candidates clear `verifyThreshold`.
     private func resolveViaCatalogCrossReference(setNum: String, isMinifig: Bool) async throws -> BrickLinkCatalogRef {
         let parts = try await rebrickableBrickLinkParts(setNum: setNum, isMinifig: isMinifig)
-        guard !parts.isEmpty else { throw ScrapeError.notFound }
+        guard !parts.isEmpty else { throw BrickLinkMinifigIdStore.MissReason.noParts }
 
         var discriminant: [String] = []
         var seen = Set<String>()
         for part in parts where part.isPrinted && seen.insert(part.blPartId).inserted {
             discriminant.append(part.blPartId)
         }
-        guard !discriminant.isEmpty else { throw ScrapeError.notFound }
+        guard !discriminant.isEmpty else { throw BrickLinkMinifigIdStore.MissReason.noDiscriminant }
 
         // A Rebrickable *set* number can resolve to a BrickLink minifig (CMF singles) or a set;
         // a Rebrickable minifig always resolves to a BrickLink minifig.
@@ -190,20 +220,33 @@ struct BrickLinkPriceRepository: Sendable {
             intersection = intersection.map { $0.intersection(supersets) } ?? supersets
             if intersection?.isEmpty == true { break }
         }
-        guard let survivors = intersection, survivors.count == 1, let candidate = survivors.first else {
-            throw ScrapeError.notFound
+        guard let survivors = intersection, !survivors.isEmpty else {
+            throw BrickLinkMinifigIdStore.MissReason.noCandidates
+        }
+        guard survivors.count <= Self.maxCandidatesToVerify else {
+            throw BrickLinkMinifigIdStore.MissReason.tooManyCandidates
         }
 
-        let candidateParts: Set<String>
-        do {
-            candidateParts = try await subsetPartNumbers(of: candidate)
-        } catch APIError.notFound {
-            candidateParts = []
-        }
         let itemParts = Set(parts.map { $0.blPartId })
-        let overlap = Double(itemParts.intersection(candidateParts).count) / Double(itemParts.count)
-        guard overlap >= Self.verifyThreshold else { throw ScrapeError.notFound }
-        return candidate
+        var verified: [(ref: BrickLinkCatalogRef, overlap: Double)] = []
+        for candidate in survivors {
+            let candidateParts: Set<String>
+            do {
+                candidateParts = try await subsetPartNumbers(of: candidate)
+            } catch APIError.notFound {
+                candidateParts = []
+            }
+            let overlap = Double(itemParts.intersection(candidateParts).count) / Double(itemParts.count)
+            if overlap >= Self.verifyThreshold {
+                verified.append((candidate, overlap))
+            }
+        }
+        // Highest overlap wins; a genuine tie (equal overlap — no more part-level signal to break
+        // it with) resolves to the lowest catalog id, deterministically, rather than abstaining.
+        guard let best = verified.sorted(by: { $0.overlap != $1.overlap ? $0.overlap > $1.overlap : $0.ref.id < $1.ref.id }).first else {
+            throw BrickLinkMinifigIdStore.MissReason.compositionMismatch
+        }
+        return best.ref
     }
 
     // MARK: - Catalog cross-reference primitives

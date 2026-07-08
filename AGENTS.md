@@ -446,10 +446,23 @@ lego.com price.
     the printed/discriminant parts only) → *subsets* composition check. This replaced the previous
     hidden-`WKWebView` scrape of the item's Rebrickable "External Sites" table (App Store 5.2.2 /
     2.3.1(a), **#117**). It favours **precision over recall** (validated on a real collection:
-    ~100% precision, ~53% recall — see #117): it accepts only a *unique*, composition-verified
-    candidate and otherwise abstains (no quote) rather than risk a wrong price. Unresolved items are
-    where a future visible link-out + manual-entry fallback (Option 1) would slot in. If you touch
-    this, keep the abstain-on-ambiguity behaviour — a wrong minifig id surfaces a wrong price.
+    ~100% precision, ~53% recall — see #117): it accepts only a composition-verified candidate and
+    otherwise abstains (no quote) rather than risk a wrong price. A tie among printed-parts
+    candidates isn't an automatic abstain (**#134**) — every surviving candidate gets composition-
+    verified, and the highest-overlap one wins; a remaining tie (equal overlap — e.g. a same-design
+    reissue listed as a second BrickLink catalog entry, genuinely indistinguishable by parts alone)
+    resolves to the lowest catalog id rather than abstaining, on the reasoning that a deterministic
+    closest match beats no price at all once composition verification has already ruled out
+    everything but near-identical candidates. Still abstains if zero candidates clear
+    `verifyThreshold`, or if the supersets intersection alone leaves more than
+    `maxCandidatesToVerify` (20) survivors — a "printed" part that common (e.g. the classic smiley
+    face, shared by hundreds of minifigs across every theme, seen live on `fig-000342`) isn't
+    actually discriminant, and composition-verifying each one is a separate throttled BrickLink call
+    (≥1s apart), so hundreds of survivors would stall a refresh for minutes on one item. Every
+    abstain records which step aborted (`BrickLinkMinifigIdStore.MissReason`)
+    alongside the miss cache (`BrickLinkMinifigMisses.json`) for diagnosing recurring unresolved
+    items (e.g. `fig-002333`) from real data instead of guessing. Unresolved items are where a
+    future visible link-out + manual-entry fallback (Option 1) would slot in.
   - The surfaced item link (`sourceURL` on the `PriceQuote`) is still the plain catalog page
     (`bricklink.com/v2/catalog/catalogitem.page?{S,M,…}={id}`), not an API URL — that's for the
     user to open, unrelated to the signed API call.
