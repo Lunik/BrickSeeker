@@ -189,10 +189,6 @@ struct CollectionView: View {
             }
             if editMode.isEditing {
                 ToolbarItemGroup(placement: .bottomBar) {
-                    Text(selectedSetNums.isEmpty ? "Aucune sélection" : "\(selectedSetNums.count) sélectionné(s)")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    Spacer()
                     Menu {
                         Button {
                             Task { await refreshSelectedPrices() }
