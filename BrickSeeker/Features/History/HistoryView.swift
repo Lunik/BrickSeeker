@@ -151,15 +151,6 @@ struct HistoryView: View {
         .searchable(text: $filter.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Nom ou numéro de set")
         .navigationTitle("Historique")
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    showFilters = true
-                } label: {
-                    Image(systemName: filter.isFilterActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                }
-                .accessibilityLabel("Filtres")
-                .accessibilityValue(filter.isFilterActive ? "Actifs" : "Inactifs")
-            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showScanMap = true
@@ -167,6 +158,15 @@ struct HistoryView: View {
                     Image(systemName: "map")
                 }
                 .accessibilityLabel("Carte des scans")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showFilters = true
+                } label: {
+                    Image(systemName: filter.isFilterActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                }
+                .accessibilityLabel("Filtres")
+                .accessibilityValue(filter.isFilterActive ? "Actifs" : "Inactifs")
             }
             // Pinned to the bottom bar (not the nav bar) — see the matching comment in
             // CollectionView (#141): iOS hides the top nav bar's toolbar items while the search
