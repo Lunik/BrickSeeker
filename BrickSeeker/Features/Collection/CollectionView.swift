@@ -159,6 +159,7 @@ struct CollectionView: View {
                         }
                         .buttonStyle(.plain)
                     }
+                    .contentMargins(.top, 0, for: .scrollContent)
                 }
             } else {
                 ContentUnavailableView(

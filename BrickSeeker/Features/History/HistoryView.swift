@@ -115,6 +115,7 @@ struct HistoryView: View {
                         }
                     }
                 }
+                .contentMargins(.top, 0, for: .scrollContent)
             }
         }
         .searchable(text: $filter.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Nom ou numéro de set")
