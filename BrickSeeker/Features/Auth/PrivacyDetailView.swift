@@ -45,7 +45,7 @@ struct PrivacyDetailView: View {
                     Button("Gérer votre API Key sur Brickset") {
                         showBricksetSafari = true
                     }
-                    Button("Gérer votre api key sur bricklink") {
+                    Button("Gérer votre API Key sur BrickLink") {
                         showBrickLinkSafari = true
                     }
                     Button("Lire la politique de confidentialité") {
