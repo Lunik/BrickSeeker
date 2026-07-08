@@ -35,6 +35,11 @@ actor BrickLinkMinifigIdStore {
         case noDiscriminant
         /// Intersecting BrickLink's supersets of the discriminant parts left zero surviving candidates.
         case noCandidates
+        /// Intersecting the discriminant parts' supersets left more candidates than
+        /// `maxCandidatesToVerify` — the "printed" part matched wasn't actually discriminant (e.g.
+        /// a near-universal print shared by hundreds of minifigs), so composition-verifying every
+        /// survivor wasn't attempted.
+        case tooManyCandidates
         /// No longer thrown (as of #134: ties are now broken by highest composition overlap,
         /// falling back to lowest catalog id) — kept so misses recorded by older app versions still
         /// decode instead of falling back to `unknown`.

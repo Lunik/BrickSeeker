@@ -454,7 +454,12 @@ lego.com price.
     resolves to the lowest catalog id rather than abstaining, on the reasoning that a deterministic
     closest match beats no price at all once composition verification has already ruled out
     everything but near-identical candidates. Still abstains if zero candidates clear
-    `verifyThreshold`. Every abstain records which step aborted (`BrickLinkMinifigIdStore.MissReason`)
+    `verifyThreshold`, or if the supersets intersection alone leaves more than
+    `maxCandidatesToVerify` (20) survivors — a "printed" part that common (e.g. the classic smiley
+    face, shared by hundreds of minifigs across every theme, seen live on `fig-000342`) isn't
+    actually discriminant, and composition-verifying each one is a separate throttled BrickLink call
+    (≥1s apart), so hundreds of survivors would stall a refresh for minutes on one item. Every
+    abstain records which step aborted (`BrickLinkMinifigIdStore.MissReason`)
     alongside the miss cache (`BrickLinkMinifigMisses.json`) for diagnosing recurring unresolved
     items (e.g. `fig-002333`) from real data instead of guessing. Unresolved items are where a
     future visible link-out + manual-entry fallback (Option 1) would slot in.

@@ -64,6 +64,17 @@ struct BrickLinkPriceRepository: Sendable {
     /// Minimum fraction of the item's BrickLink parts that must appear in the candidate's own
     /// inventory for the composition check to accept it (see `resolveViaCatalogCrossReference`).
     private static let verifyThreshold = 0.5
+    /// Cap on how many step-2 survivors get a composition-verification API call. A "printed" part
+    /// that's actually a near-universal print (e.g. the classic smiley face, `3626ap01`, shared by
+    /// hundreds of minifigs across every theme) produces a huge, low-signal candidate pool — seen
+    /// live on `fig-000342` (1981 "Fireman, Plain Black"): 407 survivors from that single
+    /// discriminant part. `subsetPartNumbers` is one throttled BrickLink call per candidate
+    /// (`BrickLinkClient`'s `RequestThrottler`, ≥1s apart), so verifying all of them serially would
+    /// take minutes per item and stall a collection-wide refresh. A pool this large also means the
+    /// "discriminant" part isn't discriminant at all, so exhaustive verification wouldn't be
+    /// trustworthy even if it finished — abstain instead, same precision-first reasoning as
+    /// excluding non-printed parts from step 2 in the first place.
+    private static let maxCandidatesToVerify = 20
 
     private let client: BrickLinkClient
     private let networkClient: NetworkClient
@@ -167,7 +178,9 @@ struct BrickLinkPriceRepository: Sendable {
     ///  1. Rebrickable — the item's parts, each carrying its BrickLink part id (`external_ids`).
     ///  2. BrickLink — intersect the *supersets* (containing items) of the **printed/discriminant**
     ///     parts only; generic torso/legs are shared across thousands of figs and produce false
-    ///     positives.
+    ///     positives. Abstains if this still leaves more than `maxCandidatesToVerify` survivors — a
+    ///     print that common isn't actually discriminant, and verifying hundreds of candidates would
+    ///     mean hundreds of serial, throttled BrickLink calls for one item.
     ///  3. BrickLink — verify every surviving candidate by composition: its own inventory (subsets)
     ///     must cover `verifyThreshold` of the item's parts. Among the candidates that clear that
     ///     bar, take the one with the **highest** composition overlap — a recolor/reissue sharing
@@ -209,6 +222,9 @@ struct BrickLinkPriceRepository: Sendable {
         }
         guard let survivors = intersection, !survivors.isEmpty else {
             throw BrickLinkMinifigIdStore.MissReason.noCandidates
+        }
+        guard survivors.count <= Self.maxCandidatesToVerify else {
+            throw BrickLinkMinifigIdStore.MissReason.tooManyCandidates
         }
 
         let itemParts = Set(parts.map { $0.blPartId })
