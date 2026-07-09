@@ -122,17 +122,21 @@ struct SettingsView: View {
                                 .font(.footnote)
                         }
 
-                        if !viewModel.username.isEmpty && !viewModel.password.isEmpty {
-                            Button {
-                                Task { _ = await viewModel.linkAccount() }
-                            } label: {
-                                if viewModel.isLinkingAccount {
-                                    ProgressView()
-                                } else {
-                                    Text("Lier mon compte")
-                                }
+                        Button {
+                            Task { _ = await viewModel.linkAccount() }
+                        } label: {
+                            if viewModel.isLinkingAccount {
+                                ProgressView()
+                            } else {
+                                Text("Lier mon compte")
                             }
-                            .disabled(viewModel.apiKey.isEmpty || viewModel.isLinkingAccount)
+                        }
+                        .disabled(!viewModel.canLinkAccount || viewModel.isLinkingAccount)
+
+                        if !viewModel.canLinkAccount {
+                            Text("Renseignez la clé API, l'identifiant et le mot de passe pour lier le compte.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 } header: {
@@ -181,17 +185,21 @@ struct SettingsView: View {
                                 .font(.footnote)
                         }
 
-                        if !viewModel.bricksetUsername.isEmpty && !viewModel.bricksetPassword.isEmpty {
-                            Button {
-                                Task { _ = await viewModel.linkBricksetAccount() }
-                            } label: {
-                                if viewModel.isLinkingBricksetAccount {
-                                    ProgressView()
-                                } else {
-                                    Text("Lier mon compte")
-                                }
+                        Button {
+                            Task { _ = await viewModel.linkBricksetAccount() }
+                        } label: {
+                            if viewModel.isLinkingBricksetAccount {
+                                ProgressView()
+                            } else {
+                                Text("Lier mon compte")
                             }
-                            .disabled(viewModel.bricksetApiKey.isEmpty || viewModel.isLinkingBricksetAccount)
+                        }
+                        .disabled(!viewModel.canLinkBricksetAccount || viewModel.isLinkingBricksetAccount)
+
+                        if !viewModel.canLinkBricksetAccount {
+                            Text("Renseignez la clé API, l'identifiant et le mot de passe pour lier le compte.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
                         }
                     }
 
@@ -225,6 +233,15 @@ struct SettingsView: View {
                             isBrickLinkCredentialsVisible ? "Masquer les identifiants" : "Afficher les identifiants",
                             systemImage: isBrickLinkCredentialsVisible ? "eye.slash" : "eye"
                         )
+                    }
+
+                    if viewModel.isBrickLinkConfigured {
+                        Label("API BrickLink configurée", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    } else if viewModel.hasAnyBrickLinkCredential {
+                        Text("Renseignez les 4 valeurs pour activer les prix BrickLink.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                     }
                 } header: {
                     Text("API BrickLink")
@@ -360,7 +377,7 @@ struct SettingsView: View {
                         viewModel.save()
                         dismiss()
                     }
-                    .disabled(viewModel.apiKey.isEmpty)
+                    .disabled(!viewModel.canSave)
                 }
             }
             .sheet(isPresented: $showPrivacyDetail) {

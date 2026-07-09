@@ -22,4 +22,11 @@ enum UserMessage {
     static var unknownError: String {
         String(localized: "Erreur inconnue")
     }
+
+    /// Shown when a lookup can't be resolved because there's no Rebrickable API key configured
+    /// and the offline catalogue doesn't have this set either (ScannerViewModel.resolveSet
+    /// treats "no API key" like "no network" — see its own doc comment).
+    static var missingAPIKey: String {
+        String(localized: "Clé API Rebrickable manquante. Ajoutez-la dans les réglages pour identifier ce set.")
+    }
 }

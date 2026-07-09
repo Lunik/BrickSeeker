@@ -9,9 +9,17 @@ struct StatisticsView: View {
     @State private var pdfFile: ShareableFile?
     let lookupViewModel: ScannerViewModel
 
+    /// True while the initial launch sync (#148) is still unresolved and there's nothing to show
+    /// yet — mirrors `CollectionView.isInitialCollectionLoad`, keyed on `setCount` since
+    /// `StatisticsViewModel` has no empty-collection collection to check directly.
+    private var isInitialStatsLoad: Bool {
+        (viewModel?.stats.setCount ?? 0) == 0
+            && (SyncStatusStore.shared.isSyncing || !SyncStatusStore.shared.didAttemptInitialSync)
+    }
+
     var body: some View {
         ScrollView {
-            if let viewModel {
+            if let viewModel, viewModel.stats.setCount > 0 {
                 VStack(alignment: .leading, spacing: 24) {
                     totalsSection(viewModel.stats)
                     if !viewModel.stats.yearBreakdown.isEmpty {
@@ -26,6 +34,16 @@ struct StatisticsView: View {
                     exportSection(viewModel)
                 }
                 .padding()
+            } else if isInitialStatsLoad {
+                ProgressView("Synchronisation…")
+                    .frame(maxWidth: .infinity, minHeight: 400)
+            } else {
+                ContentUnavailableView(
+                    "Aucune statistique",
+                    systemImage: "chart.bar",
+                    description: Text("Liez votre compte Rebrickable et synchronisez depuis l'accueil.")
+                )
+                .frame(maxWidth: .infinity, minHeight: 400)
             }
         }
         .navigationTitle("Statistiques")
@@ -48,6 +66,11 @@ struct StatisticsView: View {
             if CollectionPriceUpdater.shared.isRunning {
                 viewModel?.recomputeStats()
             }
+        }
+        // Reloads once the initial (or a pull-to-refresh) sync finishes — this view can be on
+        // screen before the launch sync started/completed (#148).
+        .onChange(of: SyncStatusStore.shared.isSyncing) { _, syncing in
+            if !syncing { viewModel?.load() }
         }
         .sheet(item: $csvFile) { file in ShareSheet(items: [file.url]) }
         .sheet(item: $pdfFile) { file in ShareSheet(items: [file.url]) }

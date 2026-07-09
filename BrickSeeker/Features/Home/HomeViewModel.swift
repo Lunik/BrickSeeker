@@ -41,11 +41,22 @@ final class HomeViewModel {
 
     func syncCollection() async {
         loadFromCache()
-        guard isAccountLinked, NetworkMonitor.shared.isConnected else { return }
+        guard isAccountLinked, NetworkMonitor.shared.isConnected else {
+            // Not linked / offline is a resolved attempt too (#148) — without this, screens
+            // gating their loading spinner on `didAttemptInitialSync` would spin forever when
+            // there's nothing to sync.
+            SyncStatusStore.shared.didAttemptInitialSync = true
+            return
+        }
 
         isSyncing = true
+        SyncStatusStore.shared.isSyncing = true
         syncErrorMessage = nil
-        defer { isSyncing = false }
+        defer {
+            isSyncing = false
+            SyncStatusStore.shared.isSyncing = false
+            SyncStatusStore.shared.didAttemptInitialSync = true
+        }
         do {
             async let sets = repository.fetchAllUserSets()
             async let lists = repository.fetchUserSetLists()

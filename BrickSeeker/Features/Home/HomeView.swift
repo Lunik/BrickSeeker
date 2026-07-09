@@ -132,6 +132,7 @@ struct HomeView: View {
         .onChange(of: pendingAction) { _, _ in consumePendingAction() }
     }
 
+
     private func consumePendingAction() {
         guard let pendingAction else { return }
         self.pendingAction = nil
@@ -335,51 +336,5 @@ struct HomeView: View {
                 .shadow(radius: 4)
         }
         .accessibilityLabel(accessibilityLabel)
-    }
-}
-
-private struct ManualSetEntryView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-    @State private var setNum = ""
-    @FocusState private var isInputFocused: Bool
-    let lookupViewModel: ScannerViewModel
-    let onSubmit: (String) -> Void
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                TextField("Numéro de set, ex. 42143", text: $setNum)
-                    .keyboardType(.asciiCapable)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .focused($isInputFocused)
-                    .onSubmit(submit)
-            }
-            .navigationTitle("Ajouter un set")
-            .onAppear { isInputFocused = true }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Annuler") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Rechercher", action: submit)
-                        .disabled(setNum.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            }
-            // Nested rather than a sibling sheet on HomeView — when a typed set resolves
-            // straight from cache, the result is ready in the same frame this view dismisses,
-            // and SwiftUI can't cleanly close one sheet while opening another from the same
-            // parent at once (see HomeView's gated lookupResultSheets). Nesting here, like
-            // HistoryView already does, avoids that race entirely. Closing the result reveals
-            // this view again, not Home.
-            .lookupResultSheets(for: lookupViewModel)
-        }
-    }
-
-    private func submit() {
-        let trimmed = setNum.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-        onSubmit(trimmed)
     }
 }

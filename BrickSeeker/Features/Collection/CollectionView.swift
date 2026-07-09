@@ -130,6 +130,14 @@ struct CollectionView: View {
         }
     }
 
+    /// True while the initial launch sync (#148) is still unresolved and the collection cache is
+    /// empty — used to show a spinner instead of jumping straight to "Aucun set possédé", which
+    /// would otherwise be indistinguishable from a genuinely empty collection during that window.
+    private var isInitialCollectionLoad: Bool {
+        (viewModel?.cachedSets.isEmpty ?? true)
+            && (SyncStatusStore.shared.isSyncing || !SyncStatusStore.shared.didAttemptInitialSync)
+    }
+
     var body: some View {
         Group {
             if let viewModel, !viewModel.cachedSets.isEmpty {
@@ -161,6 +169,9 @@ struct CollectionView: View {
                     }
                     .contentMargins(.top, 0, for: .scrollContent)
                 }
+            } else if isInitialCollectionLoad {
+                ProgressView("Synchronisation…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ContentUnavailableView(
                     "Aucun set possédé",
@@ -282,6 +293,12 @@ struct CollectionView: View {
         }
         .onDisappear {
             CollectionFilterState.shared.resetSort()
+        }
+        // Reloads once the initial (or a pull-to-refresh) sync finishes — this view can be on
+        // screen before the launch sync started/completed (#148), so it needs to pick up the
+        // freshly-synced sets rather than staying on whatever `onAppear` saw.
+        .onChange(of: SyncStatusStore.shared.isSyncing) { _, syncing in
+            if !syncing { viewModel?.load() }
         }
     }
 }
