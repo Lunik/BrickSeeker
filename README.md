@@ -1,18 +1,31 @@
 # BrickSeeker
 
-A SwiftUI iOS app to scan LEGO® sets, manage your Rebrickable collection, and
-look up what a set is worth across lego.com, BrickLink, Amazon and Cdiscount.
+A SwiftUI iOS app to scan LEGO® sets, manage your Rebrickable collection and
+Brickset gift list, and look up what a set is worth across lego.com,
+BrickLink, Amazon and Cdiscount — with offline scanning, collection
+statistics and opt-in scan-location history.
 
 > Personal hobby project, open-sourced under the [MIT license](LICENSE).
 > Not affiliated with or endorsed by the LEGO Group, Rebrickable, BrickLink,
-> Amazon or Cdiscount. "LEGO" is a trademark of the LEGO Group.
+> Brickset, Amazon or Cdiscount. "LEGO" is a trademark of the LEGO Group.
 
 ## Features
 
-- **Scan sets** — point the camera at the set number on the box or type it in
-  to identify a LEGO set.
+- **Scan sets** — point the camera at the set number on the box, type it in,
+  or import a photo, to identify a LEGO set. A short onboarding walkthrough
+  guides first launch, and the Scanner offers a real way out (manual entry,
+  photo import, Settings deep link) whenever the camera or an API key isn't
+  available.
+- **Offline catalogue** — download an in-app snapshot of ~25,000 sets from
+  Rebrickable (Settings → "Catalogue hors-ligne") so basic set identification
+  keeps working with zero network — the typical in-store, poor-signal case.
 - **Collection sync** — link your Rebrickable account to see whether a set is
-  already in your collection and in which list, and add/remove it.
+  already in your collection and in which list, add/remove it, and browse the
+  whole collection with search, filters and multi-select bulk actions (batch
+  price refresh, move between lists).
+- **Wishlist / gift list** — link your Brickset account to browse, search and
+  bulk-refresh prices for sets marked "wanted" on Brickset, or mass-import
+  sets into it from a Rebrickable custom-list CSV export.
 - **Pricing** — for any set, see prices side by side:
   - the official **lego.com** price,
   - **BrickLink** 6-month sold average, new and used, via BrickLink's official
@@ -22,8 +35,19 @@ look up what a set is worth across lego.com, BrickLink, Amazon and Cdiscount.
     treated as one comparison point: the cheaper of the two for buying, the
     pricier of the two for collection valuation, so the total estimated value
     doesn't dip based on which marketplace was cheaper that day,
-  - with a discount/markup percentage versus the lego.com price.
-- **History** of scanned sets, with on-disk image caching for offline browsing.
+  - with a discount/markup percentage versus the lego.com price, and a
+    configurable €/part target that colors the lego.com price green or red
+    as a quick value signal.
+- **History** of scanned sets, with on-disk image caching for offline
+  browsing, search/filter, multi-select bulk actions, and — if you opt in to
+  scan-location capture in Settings — a map of where each set was scanned.
+- **Statistics** — charts of your collection by year and theme, total
+  estimated value, superlatives (most expensive, oldest, most parts), and
+  CSV/PDF export of the full inventory.
+- **Price update notifications** — a local notification confirms when a
+  background price refresh of the whole collection finishes.
+- **Theming** — pick a brand accent color and light/dark/system appearance in
+  Settings.
 
 ## Requirements
 
@@ -69,6 +93,14 @@ the 4 values (Consumer Key, Consumer Secret, Token Value, Token Secret) in-app
 under **Paramètres** — stored in the Keychain, never hardcoded or committed.
 This is optional; without it the BrickLink price rows are simply omitted.
 
+### Brickset account
+
+The wishlist/gift-list feature needs a free [Brickset](https://brickset.com)
+API key plus your Brickset account linked in-app under **Paramètres**, the
+same way as Rebrickable (your password is used once to obtain a session
+token and is never stored). This is optional; without it the "Liste cadeaux"
+screen is simply empty.
+
 ## How pricing works
 
 lego.com, Amazon and Cdiscount all sit behind Cloudflare-style JS challenges
@@ -83,9 +115,9 @@ credentials configured, for BrickLink) is simply omitted.
 
 - `BrickSeeker/App` — app entry point and root scene.
 - `BrickSeeker/Core` — networking, repositories, scrapers, storage (SwiftData,
-  Keychain, image cache).
+  Keychain, offline catalogue, image cache), scan location, notifications.
 - `BrickSeeker/Features` — one folder per screen (Scanner, Home, Collection,
-  History, SetDetail, Settings, …).
+  History, Wishlist, Statistics, SetDetail, Settings, Onboarding, Auth, …).
 - `AGENTS.md` — architecture notes and conventions.
 
 ## Contributing
