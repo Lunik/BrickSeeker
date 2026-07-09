@@ -59,6 +59,24 @@
         }
       }
     },
+    "%lld set(s) n'ont pas pu être ajoutés à la collection. Vérifiez votre connexion." : {
+
+    },
+    "%lld set(s) n'ont pas pu être déplacés. Vérifiez votre connexion." : {
+
+    },
+    "%lld set(s) n'ont pas pu être retirés de la liste cadeaux." : {
+
+    },
+    "%lld set(s) n'ont pas pu être retirés. Vérifiez votre connexion." : {
+
+    },
+    "%lld set(s) seront retirés de votre collection Rebrickable." : {
+
+    },
+    "%lld set(s) seront retirés de votre liste cadeaux." : {
+
+    },
     "%lld sets" : {
 
     },
@@ -80,7 +98,19 @@
     "0,12" : {
 
     },
+    "Accès caméra refusé" : {
+
+    },
     "Actifs" : {
+
+    },
+    "Action impossible" : {
+
+    },
+    "Actions" : {
+
+    },
+    "Actions (%lld)" : {
 
     },
     "Activé" : {
@@ -113,6 +143,9 @@
     "Ajoute un set à ta liste cadeaux depuis sa fiche, ou importe une liste Rebrickable publique." : {
 
     },
+    "Ajouter à la collection" : {
+
+    },
     "Ajouter à la liste cadeaux" : {
 
     },
@@ -132,6 +165,9 @@
 
     },
     "API BrickLink" : {
+
+    },
+    "API BrickLink configurée" : {
 
     },
     "API Key" : {
@@ -182,7 +218,16 @@
     "Aucune liste" : {
 
     },
+    "Aucune statistique" : {
+
+    },
+    "Autorise la caméra dans les réglages iOS, ou saisis un numéro / choisis une photo." : {
+
+    },
     "Basée sur %lld / %lld sets dont le prix est connu" : {
+
+    },
+    "Bienvenue dans BrickSeeker" : {
 
     },
     "BrickLink (API officielle) : prix neuf/occasion, avec vos identifiants API BrickLink (si vous les renseignez)" : {
@@ -206,6 +251,9 @@
     "Catalogue hors-ligne" : {
 
     },
+    "Catalogue téléchargé (%lld sets)" : {
+
+    },
     "Ce qui est stocké" : {
 
     },
@@ -224,10 +272,19 @@
     "Choisir une liste" : {
 
     },
+    "Choisir une photo" : {
+
+    },
     "Choisissez la couleur de marque et l'apparence claire/sombre de l'application." : {
 
     },
     "Cible €/pièce" : {
+
+    },
+    "Clé API Rebrickable manquante. Ajoutez-la dans les réglages pour identifier ce set." : {
+
+    },
+    "Clé API Rebrickable non configurée — recherche limitée au catalogue hors-ligne" : {
 
     },
     "Collection" : {
@@ -287,7 +344,13 @@
     "Date" : {
 
     },
+    "Déjà un compte ?" : {
+
+    },
     "Délier mon compte" : {
+
+    },
+    "Déplacer vers une liste" : {
 
     },
     "Dernière actualisation : %@" : {
@@ -335,6 +398,9 @@
     "Essayez de modifier la recherche ou les filtres." : {
 
     },
+    "Essayez de modifier la recherche." : {
+
+    },
     "et %lld scans plus anciens" : {
 
     },
@@ -365,7 +431,7 @@
     "Génère ta clé sur rebrickable.com/profile, dans la section API Key. Nécessaire pour voir et gérer votre collection. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session." : {
 
     },
-    "Gérer votre api key sur bricklink" : {
+    "Gérer votre API Key sur BrickLink" : {
 
     },
     "Gérer votre API Key sur Brickset" : {
@@ -434,6 +500,9 @@
     "Les prix de %lld sets de votre collection ont été actualisés." : {
 
     },
+    "Les sets encore dans votre Collection y resteront, mais disparaîtront de l'Historique." : {
+
+    },
     "Les sets que tu scannes apparaîtront ici." : {
 
     },
@@ -447,6 +516,9 @@
 
     },
     "Liez votre compte Rebrickable et synchronisez depuis l'accueil." : {
+
+    },
+    "Liez votre compte Rebrickable, Brickset ou BrickLink pour voir votre collection et des prix personnalisés." : {
 
     },
     "Lire la politique de confidentialité" : {
@@ -602,6 +674,9 @@
     "Rebrickable : catalogue des sets, votre collection (si vous liez votre compte)" : {
 
     },
+    "Recherche de sets sans compte ni clé API." : {
+
+    },
     "Recherche le prix d'un set LEGO sur lego.com, BrickLink, Amazon et Cdiscount sans ouvrir BrickSeeker." : {
 
     },
@@ -635,6 +710,12 @@
     "Renseigne le prix affiché en magasin pour ce scan — il sert à repérer le meilleur prix vu, et sur quel lieu." : {
 
     },
+    "Renseignez la clé API, l'identifiant et le mot de passe pour lier le compte." : {
+
+    },
+    "Renseignez les 4 valeurs pour activer les prix BrickLink." : {
+
+    },
     "Répartition par année" : {
 
     },
@@ -659,6 +740,9 @@
     "Retirer" : {
 
     },
+    "Retirer ces sets de l'Historique ?" : {
+
+    },
     "Retirer de l'Historique ?" : {
 
     },
@@ -671,13 +755,25 @@
     "Retirer de la liste cadeaux" : {
 
     },
+    "Retirer de la liste cadeaux ?" : {
+
+    },
+    "Retirer tous les scans" : {
+
+    },
     "Rupture de stock" : {
+
+    },
+    "Saisir un numéro" : {
 
     },
     "Scanne plusieurs sets en mode lot pour les comparer ici." : {
 
     },
     "Scanner un set" : {
+
+    },
+    "Scannez la boîte d'un set pour l'identifier, puis comparez les prix neuf/occasion en un instant." : {
 
     },
     "Sélectionner le type de liste" : {
@@ -740,7 +836,16 @@
     "Téléchargement impossible. Vérifiez votre réseau." : {
 
     },
+    "Téléchargement impossible. Vous pourrez réessayer plus tard depuis Réglages." : {
+
+    },
     "Téléchargement interrompu — il reprendra où il s'est arrêté à la prochaine ouverture." : {
+
+    },
+    "Télécharger le catalogue hors-ligne" : {
+
+    },
+    "Terminé" : {
 
     },
     "Tes scans" : {
@@ -780,6 +885,9 @@
 
     },
     "Trop de requêtes, veuillez réessayer plus tard" : {
+
+    },
+    "Une actualisation des prix de la collection est déjà en cours ou en attente de reprise. Terminez-la avant d'actualiser une sélection." : {
 
     },
     "Une erreur est survenue" : {
