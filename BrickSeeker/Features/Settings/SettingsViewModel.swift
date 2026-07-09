@@ -62,6 +62,26 @@ final class SettingsViewModel {
         offlineCatalogStore.hasResumableDownload
     }
 
+    /// At least one BrickLink field filled in — partial entry is allowed to save (#146), the
+    /// full-4-values requirement is `isBrickLinkConfigured` below.
+    var hasAnyBrickLinkCredential: Bool {
+        !bricklinkConsumerKey.isEmpty || !bricklinkConsumerSecret.isEmpty
+            || !bricklinkToken.isEmpty || !bricklinkTokenSecret.isEmpty
+    }
+    /// All 4 BrickLink values present — the section is fully configured and prices can be
+    /// fetched from BrickLink.
+    var isBrickLinkConfigured: Bool {
+        !bricklinkConsumerKey.isEmpty && !bricklinkConsumerSecret.isEmpty
+            && !bricklinkToken.isEmpty && !bricklinkTokenSecret.isEmpty
+    }
+    /// Save as soon as any section actually has something to persist (#146) — previously gated
+    /// on `apiKey` alone, which made a BrickLink-only or Brickset-only entry impossible to save.
+    var canSave: Bool {
+        !apiKey.isEmpty || !bricksetApiKey.isEmpty || hasAnyBrickLinkCredential
+    }
+    var canLinkAccount: Bool { !apiKey.isEmpty && !username.isEmpty && !password.isEmpty }
+    var canLinkBricksetAccount: Bool { !bricksetApiKey.isEmpty && !bricksetUsername.isEmpty && !bricksetPassword.isEmpty }
+
     func downloadOfflineCatalog() async {
         isUpdatingOfflineCatalog = true
         offlineCatalogDownloadProgress = 0
@@ -108,21 +128,40 @@ final class SettingsViewModel {
         offlineCatalogMetadata = nil
     }
 
+    /// Delete-on-empty for every key, not just a conditional save: with `canSave` no longer
+    /// requiring `apiKey` (#146), leaving a field blank and tapping "Enregistrer" must actually
+    /// clear that credential from the Keychain — persisting an empty string instead would make
+    /// `hasAPIKey`/`isBrickLinkConfigured` wrongly report "configured" (empty-string API key
+    /// still sends an `Authorization: key ` header, dismissed banners would never come back).
     func save() {
-        KeychainService.shared.save(key: .apiKey, value: apiKey)
-        if !bricksetApiKey.isEmpty {
+        if apiKey.isEmpty {
+            KeychainService.shared.delete(key: .apiKey)
+        } else {
+            KeychainService.shared.save(key: .apiKey, value: apiKey)
+        }
+        if bricksetApiKey.isEmpty {
+            KeychainService.shared.delete(key: .bricksetApiKey)
+        } else {
             KeychainService.shared.save(key: .bricksetApiKey, value: bricksetApiKey)
         }
-        if !bricklinkConsumerKey.isEmpty {
+        if bricklinkConsumerKey.isEmpty {
+            KeychainService.shared.delete(key: .bricklinkConsumerKey)
+        } else {
             KeychainService.shared.save(key: .bricklinkConsumerKey, value: bricklinkConsumerKey)
         }
-        if !bricklinkConsumerSecret.isEmpty {
+        if bricklinkConsumerSecret.isEmpty {
+            KeychainService.shared.delete(key: .bricklinkConsumerSecret)
+        } else {
             KeychainService.shared.save(key: .bricklinkConsumerSecret, value: bricklinkConsumerSecret)
         }
-        if !bricklinkToken.isEmpty {
+        if bricklinkToken.isEmpty {
+            KeychainService.shared.delete(key: .bricklinkToken)
+        } else {
             KeychainService.shared.save(key: .bricklinkToken, value: bricklinkToken)
         }
-        if !bricklinkTokenSecret.isEmpty {
+        if bricklinkTokenSecret.isEmpty {
+            KeychainService.shared.delete(key: .bricklinkTokenSecret)
+        } else {
             KeychainService.shared.save(key: .bricklinkTokenSecret, value: bricklinkTokenSecret)
         }
     }
