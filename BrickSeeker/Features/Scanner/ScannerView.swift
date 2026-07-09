@@ -19,21 +19,26 @@ struct ScannerView: View {
                 CameraPreviewView(controller: viewModel.cameraController)
                     .ignoresSafeArea()
 
-                // Camera-refused and missing-API-key are both dead ends the camera view alone
-                // can't recover from — each replaces the live overlay with a full-screen
-                // `ContentUnavailableView` offering a real way out (open Settings/iOS Settings,
-                // or fall back to manual entry / a photo) instead of leaving the user stuck
-                // staring at a passive banner or a silently-failing scan (#145).
+                // Camera-refused is the one dead end the camera view alone can't recover from —
+                // it replaces the live overlay with a full-screen `ContentUnavailableView`
+                // offering a real way out (open iOS Settings, or fall back to manual entry / a
+                // photo) instead of leaving the user stuck staring at a passive banner (#145).
+                // A missing API key is no longer a dead end: `ScannerViewModel.resolveSet`
+                // treats it exactly like being offline and falls back to the offline catalogue,
+                // so scanning/manual entry/photo import still work — this only gets a heads-up
+                // banner, not a block (#145 follow-up).
                 if viewModel.state == .permissionDenied {
                     permissionDeniedView
-                } else if !hasAPIKey {
-                    missingAPIKeyView
                 } else {
                     ScanOverlayView(
                         state: viewModel.state,
                         candidateDetected: viewModel.candidateDetected,
                         candidateThumbnail: viewModel.candidateThumbnail
                     )
+
+                    if !hasAPIKey {
+                        missingAPIKeyBanner
+                    }
 
                     if isRecoverableFailure {
                         recoveryActionCluster
@@ -148,7 +153,7 @@ struct ScannerView: View {
     }
 
     private var isCameraBlocked: Bool {
-        viewModel.state == .permissionDenied || !hasAPIKey
+        viewModel.state == .permissionDenied
     }
 
     private var isRecoverableFailure: Bool {
@@ -199,19 +204,31 @@ struct ScannerView: View {
         }
     }
 
-    /// Escalated from the old passive "API Key non configurée" banner: with no key, every lookup
-    /// (camera, manual, or photo — all three call the same Rebrickable API) is guaranteed to
-    /// fail, so this blocks scanning outright with a single clear way out rather than let the
-    /// user keep hitting silent/confusing errors (#145). Not a whole-app lock — Guideline 2.1 is
-    /// about not gating the *app* behind an account; this only gates the one feature that
-    /// genuinely needs the key, and points straight at fixing it.
-    private var missingAPIKeyView: some View {
-        ContentUnavailableView {
-            Label("Clé API Rebrickable manquante", systemImage: "key.slash")
-        } description: {
-            Text("Ajoutez votre clé API Rebrickable dans les réglages pour identifier des sets.")
-        } actions: {
-            Button("Ouvrir les réglages") { showSettings = true }
+    /// Non-blocking heads-up, not a dead end: `ScannerViewModel.resolveSet` treats a missing API
+    /// key exactly like being offline and falls back to the offline catalogue, so camera/manual
+    /// entry/photo import all still work as long as that catalogue has the set. Mirrors
+    /// `HomeView`'s own `apiKeyWarningBanner` styling; tapping opens Settings in-app (via the
+    /// scanner's own sheet, not `onStopScanning`) rather than exiting the scanner.
+    private var missingAPIKeyBanner: some View {
+        VStack {
+            Button {
+                showSettings = true
+            } label: {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                    Text("Clé API Rebrickable non configurée — recherche limitée au catalogue hors-ligne")
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                }
+                .font(.footnote.bold())
+                .padding(12)
+                .background(Color.brickStud)
+                .foregroundStyle(.black)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            Spacer()
         }
     }
 

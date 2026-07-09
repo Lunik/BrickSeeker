@@ -363,9 +363,14 @@ final class ScannerViewModel {
         }
 
         // Skip the network round-trip (and its timeout) entirely when the device is known
-        // offline — fall straight to the same offline-catalogue path the `catch` block below uses
-        // for an actual `APIError.networkUnavailable`, instead of waiting to fail first.
-        guard NetworkMonitor.shared.isConnected else {
+        // offline, or when there's no Rebrickable API key configured at all — an unauthenticated
+        // request would just come back `.unauthorized` instead of the `.networkUnavailable` the
+        // `catch` block below is looking for, so without this the offline catalogue would never
+        // get a chance. Treating "no API key" exactly like "no network" here is what lets manual
+        // entry / photo import keep working against the offline catalogue before the user has
+        // linked any account (#158's onboarding offers downloading it with no account needed).
+        let hasAPIKey = KeychainService.shared.hasAPIKey
+        guard NetworkMonitor.shared.isConnected, hasAPIKey else {
             if !foundWasFromCache {
                 if let offlineSet = await OfflineCatalogStore.shared.lookup(setNum: setNum) {
                     foundWasOffline = true
@@ -378,7 +383,10 @@ final class ScannerViewModel {
                     recordScanEventIfNeeded(setNum: offlineSet.setNum, bypassBatch: bypassBatch, source: source)
                     if playsFeedbackSounds { ScanFeedback.playResolutionSucceeded() }
                 } else if !isBatchCapturing {
-                    state = .error(APIError.networkUnavailable.errorDescription ?? UserMessage.unknownError)
+                    let fallbackError: String = hasAPIKey
+                        ? (APIError.networkUnavailable.errorDescription ?? UserMessage.unknownError)
+                        : UserMessage.missingAPIKey
+                    state = .error(fallbackError)
                     clearIdentificationLock(for: setNum)
                     if playsFeedbackSounds { ScanFeedback.playResolutionFailed() }
                 }
