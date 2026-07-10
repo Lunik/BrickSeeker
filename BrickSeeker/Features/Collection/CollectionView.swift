@@ -15,7 +15,7 @@ struct CollectionView: View {
     /// dictionary was previously a computed property re-run on every keystroke in the search bar.
     @State private var pricesBySetNum: [String: [PriceQuote]] = [:]
 
-    @State private var editMode: EditMode = .inactive
+    @State private var isSelecting = false
     @State private var selectedSetNums: Set<String> = []
     @State private var isPerformingBulkAction = false
     @State private var selectionActionError: String?
@@ -24,6 +24,35 @@ struct CollectionView: View {
 
     private var conditionByListId: [Int: ListCondition] {
         Dictionary(allCachedSetLists.map { ($0.listId, $0.condition) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// Hoisted out of `body` (unlike before #161/#164) so the bottom toolbar's "Tout
+    /// sélectionner" can read the same filtered/searched set the list is currently showing.
+    private var filteredSets: [CachedSet] {
+        guard let viewModel else { return [] }
+        return viewModel.cachedSets.filteredAndSorted(by: filter, resolvedPrice: resolvedPrice)
+    }
+
+    private var areAllFilteredSelected: Bool {
+        !filteredSets.isEmpty && filteredSets.allSatisfy { selectedSetNums.contains($0.setNum) }
+    }
+
+    private func toggleSelection(_ setNum: String) {
+        if selectedSetNums.contains(setNum) {
+            selectedSetNums.remove(setNum)
+        } else {
+            selectedSetNums.insert(setNum)
+        }
+    }
+
+    /// Selects/deselects only the sets currently visible under the active filters/search (#164)
+    /// — never the whole underlying collection.
+    private func toggleSelectAll() {
+        if areAllFilteredSelected {
+            selectedSetNums.subtract(filteredSets.map(\.setNum))
+        } else {
+            selectedSetNums.formUnion(filteredSets.map(\.setNum))
+        }
     }
 
     private func resolvedPrice(for cached: CachedSet) -> Double? {
@@ -58,7 +87,7 @@ struct CollectionView: View {
 
         switch outcome {
         case .completed:
-            editMode = .inactive
+            isSelecting = false
         case .busy:
             selectionActionError = String(
                 localized: "Une actualisation des prix de la collection est déjà en cours ou en attente de reprise. Terminez-la avant d'actualiser une sélection."
@@ -96,7 +125,7 @@ struct CollectionView: View {
         if failureCount > 0 {
             selectionActionError = String(localized: "\(failureCount) set(s) n'ont pas pu être déplacés. Vérifiez votre connexion.")
         } else {
-            editMode = .inactive
+            isSelecting = false
         }
     }
 
@@ -126,7 +155,7 @@ struct CollectionView: View {
         if failureCount > 0 {
             selectionActionError = String(localized: "\(failureCount) set(s) n'ont pas pu être retirés. Vérifiez votre connexion.")
         } else {
-            editMode = .inactive
+            isSelecting = false
         }
     }
 
@@ -141,7 +170,6 @@ struct CollectionView: View {
     var body: some View {
         Group {
             if let viewModel, !viewModel.cachedSets.isEmpty {
-                let filteredSets = viewModel.cachedSets.filteredAndSorted(by: filter, resolvedPrice: resolvedPrice)
                 if filteredSets.isEmpty {
                     ContentUnavailableView(
                         "Aucun résultat",
@@ -149,20 +177,32 @@ struct CollectionView: View {
                         description: Text("Essayez de modifier la recherche ou les filtres.")
                     )
                 } else {
-                    List(filteredSets, id: \.setNum, selection: $selectedSetNums) { cached in
+                    List(filteredSets, id: \.setNum) { cached in
+                        // No `List(selection:)` binding — its native circle can't be moved off
+                        // the leading edge (#161), so selection is homemade: the row's own tap
+                        // either toggles it or navigates, never both (#165).
                         Button {
-                            lookupViewModel.lookupSetNumber(cached.setNum, source: .listReopen)
+                            if isSelecting {
+                                toggleSelection(cached.setNum)
+                            } else {
+                                lookupViewModel.lookupSetNumber(cached.setNum, source: .listReopen)
+                            }
                         } label: {
-                            SetRowView(
-                                setNum: cached.setNum,
-                                name: cached.name,
-                                setImgUrl: cached.setImgUrl,
-                                subtitle: cached.currentListName,
-                                resolvedPrice: resolvedPrice(for: cached),
-                                isInWishlist: cached.isInWishlist,
-                                quantity: cached.quantity
-                            ) {
-                                EmptyView()
+                            HStack(spacing: 12) {
+                                SetRowView(
+                                    setNum: cached.setNum,
+                                    name: cached.name,
+                                    setImgUrl: cached.setImgUrl,
+                                    subtitle: cached.currentListName,
+                                    resolvedPrice: resolvedPrice(for: cached),
+                                    isInWishlist: cached.isInWishlist,
+                                    quantity: cached.quantity
+                                ) {
+                                    EmptyView()
+                                }
+                                if isSelecting {
+                                    RowSelectionIndicator(isSelected: selectedSetNums.contains(cached.setNum))
+                                }
                             }
                         }
                         .buttonStyle(.plain)
@@ -198,8 +238,14 @@ struct CollectionView: View {
             // the bottom bar isn't affected by that collapse.
             if !(viewModel?.cachedSets.isEmpty ?? true) {
                 ToolbarItemGroup(placement: .bottomBar) {
+                    if isSelecting {
+                        Button(areAllFilteredSelected ? "Tout désélectionner" : "Tout sélectionner") {
+                            toggleSelectAll()
+                        }
+                        .disabled(filteredSets.isEmpty)
+                    }
                     Spacer()
-                    if editMode.isEditing {
+                    if isSelecting {
                         Menu {
                             Button {
                                 Task { await refreshSelectedPrices() }
@@ -230,21 +276,20 @@ struct CollectionView: View {
                         .disabled(selectedSetNums.isEmpty || isPerformingBulkAction)
                     }
                     Button {
-                        withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+                        withAnimation { isSelecting.toggle() }
                     } label: {
-                        if editMode.isEditing {
+                        if isSelecting {
                             Text("Terminé")
                         } else {
                             Image(systemName: "square.and.pencil")
                         }
                     }
-                    .accessibilityLabel(editMode.isEditing ? "Terminé" : "Actions")
+                    .accessibilityLabel(isSelecting ? "Terminé" : "Actions")
                 }
             }
         }
-        .environment(\.editMode, $editMode)
-        .onChange(of: editMode) { _, newValue in
-            if !newValue.isEditing {
+        .onChange(of: isSelecting) { _, newValue in
+            if !newValue {
                 selectedSetNums.removeAll()
             }
         }

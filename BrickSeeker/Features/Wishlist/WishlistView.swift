@@ -17,7 +17,7 @@ struct WishlistView: View {
     /// Memoized from `allCachedPrices` (see the `.onChange` in `body`), same pattern as `CollectionView`.
     @State private var pricesBySetNum: [String: [PriceQuote]] = [:]
 
-    @State private var editMode: EditMode = .inactive
+    @State private var isSelecting = false
     @State private var selectedSetNums: Set<String> = []
     @State private var isPerformingBulkAction = false
     @State private var selectionActionError: String?
@@ -33,6 +33,28 @@ struct WishlistView: View {
         return cachedSets.filter {
             $0.name.localizedCaseInsensitiveContains(trimmed) ||
                 $0.setNum.localizedCaseInsensitiveContains(trimmed)
+        }
+    }
+
+    private var areAllFilteredSelected: Bool {
+        !filteredSets.isEmpty && filteredSets.allSatisfy { selectedSetNums.contains($0.setNum) }
+    }
+
+    private func toggleSelection(_ setNum: String) {
+        if selectedSetNums.contains(setNum) {
+            selectedSetNums.remove(setNum)
+        } else {
+            selectedSetNums.insert(setNum)
+        }
+    }
+
+    /// Selects/deselects only the sets currently visible under the active search (#164) — never
+    /// the whole wishlist.
+    private func toggleSelectAll() {
+        if areAllFilteredSelected {
+            selectedSetNums.subtract(filteredSets.map(\.setNum))
+        } else {
+            selectedSetNums.formUnion(filteredSets.map(\.setNum))
         }
     }
 
@@ -68,7 +90,7 @@ struct WishlistView: View {
 
         switch outcome {
         case .completed:
-            editMode = .inactive
+            isSelecting = false
         case .busy:
             selectionActionError = String(
                 localized: "Une actualisation des prix de la collection est déjà en cours ou en attente de reprise. Terminez-la avant d'actualiser une sélection."
@@ -106,7 +128,7 @@ struct WishlistView: View {
         if failureCount > 0 {
             selectionActionError = String(localized: "\(failureCount) set(s) n'ont pas pu être retirés de la liste cadeaux.")
         } else {
-            editMode = .inactive
+            isSelecting = false
         }
     }
 
@@ -134,7 +156,7 @@ struct WishlistView: View {
         if failureCount > 0 {
             selectionActionError = String(localized: "\(failureCount) set(s) n'ont pas pu être ajoutés à la collection. Vérifiez votre connexion.")
         } else {
-            editMode = .inactive
+            isSelecting = false
         }
     }
 
@@ -153,29 +175,45 @@ struct WishlistView: View {
                     description: Text("Essayez de modifier la recherche.")
                 )
             } else {
-                List(filteredSets, id: \.setNum, selection: $selectedSetNums) { cached in
+                // No `List(selection:)` binding — its native circle can't be moved off the
+                // leading edge (#161), so selection is homemade: the row's own tap either
+                // toggles it or navigates, never both (#165).
+                List(filteredSets, id: \.setNum) { cached in
                     Button {
-                        lookupViewModel.lookupSetNumber(cached.setNum, source: .listReopen)
+                        if isSelecting {
+                            toggleSelection(cached.setNum)
+                        } else {
+                            lookupViewModel.lookupSetNumber(cached.setNum, source: .listReopen)
+                        }
                     } label: {
-                        SetRowView(
-                            setNum: cached.setNum,
-                            name: cached.name,
-                            setImgUrl: cached.setImgUrl,
-                            resolvedPrice: resolvedPrice(for: cached)
-                        ) {
-                            if cached.isInCollection {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(.green)
+                        HStack(spacing: 12) {
+                            SetRowView(
+                                setNum: cached.setNum,
+                                name: cached.name,
+                                setImgUrl: cached.setImgUrl,
+                                resolvedPrice: resolvedPrice(for: cached)
+                            ) {
+                                if cached.isInCollection {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.title3)
+                                        .foregroundStyle(.green)
+                                }
+                            }
+                            if isSelecting {
+                                RowSelectionIndicator(isSelected: selectedSetNums.contains(cached.setNum))
                             }
                         }
                     }
                     .buttonStyle(.plain)
                     .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            remove(cached)
-                        } label: {
-                            Label("Retirer", systemImage: "trash")
+                        // Hidden while selecting — the row's own tap is repurposed for selection
+                        // (#165); a swipe shouldn't offer a second, unguarded way to mutate state.
+                        if !isSelecting {
+                            Button(role: .destructive) {
+                                remove(cached)
+                            } label: {
+                                Label("Retirer", systemImage: "trash")
+                            }
                         }
                     }
                 }
@@ -198,8 +236,14 @@ struct WishlistView: View {
             // search bar of its own to fight with.
             if !cachedSets.isEmpty {
                 ToolbarItemGroup(placement: .bottomBar) {
+                    if isSelecting {
+                        Button(areAllFilteredSelected ? "Tout désélectionner" : "Tout sélectionner") {
+                            toggleSelectAll()
+                        }
+                        .disabled(filteredSets.isEmpty)
+                    }
                     Spacer()
-                    if editMode.isEditing {
+                    if isSelecting {
                         Menu {
                             Button {
                                 Task { await refreshSelectedPrices() }
@@ -230,21 +274,20 @@ struct WishlistView: View {
                         .disabled(selectedSetNums.isEmpty || isPerformingBulkAction)
                     }
                     Button {
-                        withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+                        withAnimation { isSelecting.toggle() }
                     } label: {
-                        if editMode.isEditing {
+                        if isSelecting {
                             Text("Terminé")
                         } else {
                             Image(systemName: "square.and.pencil")
                         }
                     }
-                    .accessibilityLabel(editMode.isEditing ? "Terminé" : "Actions")
+                    .accessibilityLabel(isSelecting ? "Terminé" : "Actions")
                 }
             }
         }
-        .environment(\.editMode, $editMode)
-        .onChange(of: editMode) { _, newValue in
-            if !newValue.isEditing {
+        .onChange(of: isSelecting) { _, newValue in
+            if !newValue {
                 selectedSetNums.removeAll()
             }
         }

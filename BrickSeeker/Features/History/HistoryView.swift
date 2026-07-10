@@ -11,6 +11,9 @@ struct HistoryView: View {
     @State private var showScanMap = false
     @State private var setPendingDeletion: CachedSet?
     var rebrickableRepository: RebrickableRepositoryProtocol = RebrickableRepository()
+    // Wishlist is Brickset-backed, not a Rebrickable setlist (see `SetDetailViewModel
+    // .toggleWishlist()`) — needed for the "Ajouter à ma liste de cadeaux" bulk action (#166).
+    var bricksetRepository: BricksetRepositoryProtocol = BricksetRepository()
     let lookupViewModel: ScannerViewModel
     let onSelect: (String) -> Void
 
@@ -18,7 +21,7 @@ struct HistoryView: View {
     /// dictionary was previously a computed property re-run on every keystroke in the search bar.
     @State private var pricesBySetNum: [String: [PriceQuote]] = [:]
 
-    @State private var editMode: EditMode = .inactive
+    @State private var isSelecting = false
     @State private var selectedSetNums: Set<String> = []
     @State private var isPerformingBulkAction = false
     @State private var selectionActionError: String?
@@ -28,6 +31,28 @@ struct HistoryView: View {
     private var filteredSets: [CachedSet] { cachedSets.filteredAndSorted(by: filter, resolvedPrice: resolvedPrice) }
     private var availableThemeIds: [Int] { Set(cachedSets.map(\.themeId)).sorted() }
     private var availableYears: [Int] { Set(cachedSets.map(\.year)).sorted(by: >) }
+
+    private var areAllFilteredSelected: Bool {
+        !filteredSets.isEmpty && filteredSets.allSatisfy { selectedSetNums.contains($0.setNum) }
+    }
+
+    private func toggleSelection(_ setNum: String) {
+        if selectedSetNums.contains(setNum) {
+            selectedSetNums.remove(setNum)
+        } else {
+            selectedSetNums.insert(setNum)
+        }
+    }
+
+    /// Selects/deselects only the sets currently visible under the active filters/search (#164)
+    /// — never the whole scan history.
+    private func toggleSelectAll() {
+        if areAllFilteredSelected {
+            selectedSetNums.subtract(filteredSets.map(\.setNum))
+        } else {
+            selectedSetNums.formUnion(filteredSets.map(\.setNum))
+        }
+    }
 
     private func resolvedPrice(for cached: CachedSet) -> Double? {
         resolveNewPrice(storePriceEUR: cached.storePriceEUR, quotes: pricesBySetNum[cached.setNum] ?? [])
@@ -51,7 +76,7 @@ struct HistoryView: View {
 
         switch outcome {
         case .completed:
-            editMode = .inactive
+            isSelecting = false
         case .busy:
             selectionActionError = String(
                 localized: "Une actualisation des prix de la collection est déjà en cours ou en attente de reprise. Terminez-la avant d'actualiser une sélection."
@@ -85,7 +110,39 @@ struct HistoryView: View {
         if failureCount > 0 {
             selectionActionError = String(localized: "\(failureCount) set(s) n'ont pas pu être ajoutés à la collection. Vérifiez votre connexion.")
         } else {
-            editMode = .inactive
+            isSelecting = false
+        }
+    }
+
+    /// Adds every selected set to the Brickset wishlist (#166) — same repository/local-cache
+    /// pairing as `SetDetailViewModel.toggleWishlist()`'s add branch, looped over the selection.
+    private func addSelectedToWishlist() async {
+        selectionActionError = nil
+        guard NetworkMonitor.shared.isConnected else {
+            selectionActionError = UserMessage.offlineStatus
+            return
+        }
+        let selected = filteredSets.filter { selectedSetNums.contains($0.setNum) }
+        guard !selected.isEmpty else { return }
+
+        isPerformingBulkAction = true
+        defer { isPerformingBulkAction = false }
+
+        let localRepository = LocalRepository(modelContext: modelContext)
+        var failureCount = 0
+        for cached in selected {
+            do {
+                try await bricksetRepository.addToWishlist(setNum: cached.setNum)
+                localRepository.setWishlistStatus(setNum: cached.setNum, isInWishlist: true)
+            } catch {
+                failureCount += 1
+            }
+        }
+
+        if failureCount > 0 {
+            selectionActionError = String(localized: "\(failureCount) set(s) n'ont pas pu être ajoutés à la liste cadeaux. Vérifiez votre connexion.")
+        } else {
+            isSelecting = false
         }
     }
 
@@ -96,7 +153,7 @@ struct HistoryView: View {
         for setNum in selectedSetNums {
             repository.deleteFromHistory(setNum: setNum)
         }
-        editMode = .inactive
+        isSelecting = false
     }
 
     var body: some View {
@@ -114,34 +171,50 @@ struct HistoryView: View {
                     description: Text("Essayez de modifier la recherche ou les filtres.")
                 )
             } else {
-                List(filteredSets, id: \.setNum, selection: $selectedSetNums) { cached in
+                // No `List(selection:)` binding — its native circle can't be moved off the
+                // leading edge (#161), so selection is homemade: the row's own tap either
+                // toggles it or navigates, never both (#165).
+                List(filteredSets, id: \.setNum) { cached in
                     Button {
-                        // Deliberately no dismiss() here: pushed onto Home's NavigationStack like
-                        // Collection/Wishlist (#141) — Home's own (ungated) lookupResultSheets
-                        // presents SetDetail on top of the whole stack, so closing it reveals
-                        // History again, not Home.
-                        onSelect(cached.setNum)
+                        if isSelecting {
+                            toggleSelection(cached.setNum)
+                        } else {
+                            // Deliberately no dismiss() here: pushed onto Home's NavigationStack
+                            // like Collection/Wishlist (#141) — Home's own (ungated)
+                            // lookupResultSheets presents SetDetail on top of the whole stack, so
+                            // closing it reveals History again, not Home.
+                            onSelect(cached.setNum)
+                        }
                     } label: {
-                        SetRowView(
-                            setNum: cached.setNum,
-                            name: cached.name,
-                            setImgUrl: cached.setImgUrl,
-                            resolvedPrice: resolvedPrice(for: cached),
-                            isInWishlist: cached.isInWishlist
-                        ) {
-                            if cached.isInCollection {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(.green)
+                        HStack(spacing: 12) {
+                            SetRowView(
+                                setNum: cached.setNum,
+                                name: cached.name,
+                                setImgUrl: cached.setImgUrl,
+                                resolvedPrice: resolvedPrice(for: cached),
+                                isInWishlist: cached.isInWishlist
+                            ) {
+                                if cached.isInCollection {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.title3)
+                                        .foregroundStyle(.green)
+                                }
+                            }
+                            if isSelecting {
+                                RowSelectionIndicator(isSelected: selectedSetNums.contains(cached.setNum))
                             }
                         }
                     }
                     .buttonStyle(.plain)
                     .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            setPendingDeletion = cached
-                        } label: {
-                            Label("Supprimer", systemImage: "trash")
+                        // Hidden while selecting — the row's own tap is repurposed for selection
+                        // (#165); a swipe shouldn't offer a second, unguarded way to mutate state.
+                        if !isSelecting {
+                            Button(role: .destructive) {
+                                setPendingDeletion = cached
+                            } label: {
+                                Label("Supprimer", systemImage: "trash")
+                            }
                         }
                     }
                 }
@@ -172,8 +245,14 @@ struct HistoryView: View {
             // CollectionView (#141): iOS hides the top nav bar's toolbar items while the search
             // field is focused, which used to make this button unreachable mid-search.
             ToolbarItemGroup(placement: .bottomBar) {
+                if isSelecting {
+                    Button(areAllFilteredSelected ? "Tout désélectionner" : "Tout sélectionner") {
+                        toggleSelectAll()
+                    }
+                    .disabled(filteredSets.isEmpty)
+                }
                 Spacer()
-                if editMode.isEditing {
+                if isSelecting {
                     Menu {
                         Button {
                             Task { await refreshSelectedPrices() }
@@ -184,6 +263,11 @@ struct HistoryView: View {
                             showAddToListPicker = true
                         } label: {
                             Label("Ajouter à la collection", systemImage: "shippingbox")
+                        }
+                        Button {
+                            Task { await addSelectedToWishlist() }
+                        } label: {
+                            Label("Ajouter à ma liste de cadeaux", systemImage: "heart")
                         }
                         // Not `role: .destructive` — SwiftUI previews a destructive Menu item
                         // across the List's selected rows the instant the Menu opens (a red
@@ -204,20 +288,19 @@ struct HistoryView: View {
                     .disabled(selectedSetNums.isEmpty || isPerformingBulkAction)
                 }
                 Button {
-                    withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+                    withAnimation { isSelecting.toggle() }
                 } label: {
-                    if editMode.isEditing {
+                    if isSelecting {
                         Text("Terminé")
                     } else {
                         Image(systemName: "square.and.pencil")
                     }
                 }
-                .accessibilityLabel(editMode.isEditing ? "Terminé" : "Actions")
+                .accessibilityLabel(isSelecting ? "Terminé" : "Actions")
             }
         }
-        .environment(\.editMode, $editMode)
-        .onChange(of: editMode) { _, newValue in
-            if !newValue.isEditing {
+        .onChange(of: isSelecting) { _, newValue in
+            if !newValue {
                 selectedSetNums.removeAll()
             }
         }
