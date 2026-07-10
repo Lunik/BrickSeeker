@@ -56,7 +56,11 @@ struct StatisticsView: View {
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
         }
-        .onChange(of: CollectionPriceUpdater.shared.isRunning) { _, isUpdating in
+        // `initial: true` re-checks the current state as soon as this view appears — a batch can
+        // already be `isRunning` (started from Collection's bulk actions, #141) before the user
+        // ever navigates here, and a plain `.onChange` only fires on future transitions, missing
+        // that already-true state for the rest of the batch (#162).
+        .onChange(of: CollectionPriceUpdater.shared.isRunning, initial: true) { _, isUpdating in
             UIApplication.shared.isIdleTimerDisabled = isUpdating
         }
         .onChange(of: CollectionPriceUpdater.shared.done) { _, _ in
