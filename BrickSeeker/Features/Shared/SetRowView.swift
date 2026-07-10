@@ -1,5 +1,20 @@
 import SwiftUI
 
+/// Trailing selection mark for list rows in multi-select mode (Collection/History/Wishlist/
+/// batch scan session summary) — drawn by hand and placed at the end of the row rather than
+/// using `List(selection:)`'s native circle, which SwiftUI always pins to the leading edge with
+/// no repositioning modifier (#161).
+struct RowSelectionIndicator: View {
+    let isSelected: Bool
+
+    var body: some View {
+        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+            .font(.title3)
+            .foregroundStyle(isSelected ? AppTheme.shared.accent : Color.secondary.opacity(0.5))
+            .accessibilityHidden(true)
+    }
+}
+
 /// Shared row component for History and Collection list items.
 /// The caller is responsible for resolving `resolvedPrice` according to its own rules —
 /// History always uses new-price sources, Collection uses new or used depending on list condition.
