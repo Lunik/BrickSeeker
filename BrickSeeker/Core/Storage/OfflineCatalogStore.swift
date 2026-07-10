@@ -84,6 +84,14 @@ final class OfflineCatalogStore: @unchecked Sendable {
         _ = snapshotLoadTask()
     }
 
+    /// Exposes the decoded `set_num → LegoSet` table for callers that need to join against it
+    /// directly (e.g. `OfflineMinifigCatalogStore` deriving a minifig's year/theme from its
+    /// containing sets) rather than looking up one `setNum` at a time via `lookup(setNum:)`.
+    @MainActor
+    func currentSnapshot() async -> [String: LegoSet] {
+        await snapshotLoadTask().value
+    }
+
     /// Mirrors `RebrickableRepository.resolveSet`'s two-suffix lookup order: most set numbers
     /// encountered while scanning omit the "-1" variant suffix that Rebrickable's catalogue
     /// actually keys on, so the exact variant is tried first. Quasi-instant once the snapshot is

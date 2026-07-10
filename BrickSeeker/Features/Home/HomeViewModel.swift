@@ -9,6 +9,7 @@ final class HomeViewModel {
     var ownedSetsCount = 0
     var wishlistSetsCount = 0
     var lastSyncedAt: Date?
+    var ownedMinifigsCount = 0
 
     var isAccountLinked = false
     var isBricksetAccountLinked = false
@@ -37,6 +38,30 @@ final class HomeViewModel {
         lastSyncedAt = localRepository.lastFullSyncAt()
         isAccountLinked = KeychainService.shared.hasUserToken
         isBricksetAccountLinked = KeychainService.shared.hasBricksetUserHash
+    }
+
+    /// Counts distinct owned minifigs (issue #170's Home tile) — a minifig is "owned" if any set
+    /// it appears in (per the offline minifig catalogue's join, see `OfflineMinifigCatalogStore`)
+    /// is itself in the local collection. Entirely offline/local: 0 if the minifig catalogue
+    /// hasn't been downloaded yet (mirrors `ownedSetsCount` being 0 before the first sync), no
+    /// network call either way. Separate from `loadFromCache()` (which stays synchronous) since
+    /// decoding the minifig catalogue snapshot is async.
+    func loadOwnedMinifigsCount() async {
+        guard isAccountLinked else {
+            ownedMinifigsCount = 0
+            return
+        }
+        let ownedSetNums = Set(localRepository.ownedSets().map(\.setNum))
+        guard !ownedSetNums.isEmpty else {
+            ownedMinifigsCount = 0
+            return
+        }
+        let entries = await OfflineMinifigCatalogStore.shared.allEntries()
+        ownedMinifigsCount = entries.reduce(into: 0) { count, entry in
+            if entry.containingSets.contains(where: { ownedSetNums.contains($0.setNum) }) {
+                count += 1
+            }
+        }
     }
 
     func syncCollection() async {
