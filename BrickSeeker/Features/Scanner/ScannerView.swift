@@ -132,7 +132,13 @@ struct ScannerView: View {
             viewModel.localRepository = LocalRepository(modelContext: modelContext)
             viewModel.onAppear()
         }
-        .onDisappear { viewModel.onDisappear() }
+        .onDisappear {
+            viewModel.onDisappear()
+            // Always clear, independent of `isBatchModeEnabled` below — leaving the camera screen
+            // must never leave the idle timer disabled, or the screen stays on indefinitely and
+            // drains the battery (#163).
+            UIApplication.shared.isIdleTimerDisabled = false
+        }
         .onChange(of: isMenuOpen) { _, isOpen in
             if isOpen {
                 viewModel.cameraController.stop()
@@ -145,6 +151,12 @@ struct ScannerView: View {
                 newState,
                 markAsScanned: viewModel.lastLookupSource.shouldRecordScanEvent
             )
+        }
+        // `initial: true` covers batch mode already being on when this view (re)appears, same
+        // reasoning as `StatisticsView`'s price-batch handling (#162) — keeps the screen awake for
+        // the whole batch-scan session instead of letting auto-lock interrupt it (#163).
+        .onChange(of: viewModel.isBatchModeEnabled, initial: true) { _, isEnabled in
+            UIApplication.shared.isIdleTimerDisabled = isEnabled
         }
     }
 
