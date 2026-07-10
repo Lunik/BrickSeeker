@@ -321,6 +321,55 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    if let metadata = viewModel.minifigCatalogMetadata {
+                        HStack {
+                            Text("\(metadata.minifigCount) minifigs")
+                            Spacer()
+                            Text(metadata.downloadedAt.formatted(frenchDateStyle))
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        Text("Aucun catalogue téléchargé")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if viewModel.isUpdatingMinifigCatalog {
+                        ProgressView(value: viewModel.minifigCatalogDownloadProgress)
+                    }
+
+                    if let errorMessage = viewModel.minifigCatalogErrorMessage {
+                        Text(errorMessage)
+                            .foregroundStyle(Color.brickDanger)
+                            .font(.footnote)
+                    }
+
+                    Button {
+                        Task { await viewModel.downloadMinifigCatalog() }
+                    } label: {
+                        HStack {
+                            Text(minifigCatalogDownloadButtonTitle)
+                            Spacer()
+                            if viewModel.isUpdatingMinifigCatalog {
+                                Text(viewModel.minifigCatalogDownloadProgress, format: .percent.precision(.fractionLength(0)))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .disabled(viewModel.isUpdatingMinifigCatalog)
+
+                    if viewModel.minifigCatalogMetadata != nil {
+                        Button("Purger le catalogue", role: .destructive) {
+                            viewModel.purgeMinifigCatalog()
+                        }
+                        .disabled(viewModel.isUpdatingMinifigCatalog)
+                    }
+                } header: {
+                    Text("Catalogue minifigs hors-ligne")
+                } footer: {
+                    Text("Alimente la galerie « Mes minifigs » de l'accueil (~15 000 minifigs). Téléchargé depuis Rebrickable ; utilise aussi le catalogue de sets ci-dessus pour déterminer année/thème, et le télécharge d'abord si besoin. Les prix restent toujours en cache/en ligne, jamais chargés en masse ici.")
+                }
+
+                Section {
                     CollectionPriceUpdateSection()
                 } header: {
                     Text("Prix de la collection")
@@ -416,6 +465,13 @@ struct SettingsView: View {
             return "Reprendre le téléchargement"
         }
         return viewModel.offlineCatalogMetadata == nil ? "Télécharger le catalogue" : "Mettre à jour le catalogue"
+    }
+
+    private var minifigCatalogDownloadButtonTitle: String {
+        if viewModel.isUpdatingMinifigCatalog {
+            return "Téléchargement en cours…"
+        }
+        return viewModel.minifigCatalogMetadata == nil ? "Télécharger le catalogue" : "Mettre à jour le catalogue"
     }
 
     private func clearCache() async {

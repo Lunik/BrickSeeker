@@ -19,11 +19,12 @@ struct HomeView: View {
     // CollectionView/StatisticsView/WishlistView kept getting created and torn down forever,
     // freezing the app at ~100% CPU. `.navigationDestination(item:)` has exactly one destination to
     // resolve, so there's nothing to oscillate between.
-    private enum Destination: Identifiable {
+    private enum Destination: Identifiable, Equatable {
         case collection
         case statistics
         case wishlist
         case history
+        case minifigs
 
         var id: Self { self }
     }
@@ -84,6 +85,8 @@ struct HomeView: View {
                     HistoryView(lookupViewModel: lookupViewModel) { setNum in
                         lookupViewModel.lookupSetNumber(setNum, source: .listReopen)
                     }
+                case .minifigs:
+                    MinifigGalleryView(lookupViewModel: lookupViewModel)
                 }
             }
             .sheet(isPresented: $showManualEntry) {
@@ -94,6 +97,10 @@ struct HomeView: View {
             .sheet(isPresented: $showSettings, onDismiss: {
                 hasAPIKey = KeychainService.shared.hasAPIKey
                 Task { await viewModel.syncCollection() }
+                // The minifig catalogue's own download/purge lives in Settings too (issue #170) —
+                // refresh the Home tile's count in case it changed there, same reasoning as the
+                // `.minifigs` destination's own onChange below.
+                Task { await viewModel.loadOwnedMinifigsCount() }
             }) {
                 SettingsView()
             }
@@ -128,8 +135,18 @@ struct HomeView: View {
             // open without re-syncing the whole remote collection just for returning to Home.
             viewModel.loadFromCache()
             consumePendingAction()
+            Task { await viewModel.loadOwnedMinifigsCount() }
         }
         .onChange(of: pendingAction) { _, _ in consumePendingAction() }
+        // Refreshes the "Mes minifigs" count after returning from the gallery — unlike the other
+        // pushed destinations, that screen can change the answer mid-visit (downloading the
+        // minifig catalogue there), and `HomeView` itself isn't recreated by a push/pop the way
+        // it is by exiting the camera, so `onAppear` alone wouldn't catch it.
+        .onChange(of: destination) { oldValue, newValue in
+            if oldValue == .minifigs, newValue == nil {
+                Task { await viewModel.loadOwnedMinifigsCount() }
+            }
+        }
     }
 
 
@@ -204,6 +221,13 @@ struct HomeView: View {
                         destination = .collection
                     } label: {
                         StatCard(title: "Sets possédés", value: "\(viewModel.ownedSetsCount)", icon: "shippingbox")
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        destination = .minifigs
+                    } label: {
+                        StatCard(title: "Mes minifigs", value: "\(viewModel.ownedMinifigsCount)", icon: "person.fill")
                     }
                     .buttonStyle(.plain)
                 }
@@ -281,8 +305,12 @@ struct HomeView: View {
             Image(systemName: icon)
                 .font(.title2)
                 .foregroundStyle(.tint)
+            // Matches `StatCard`'s reserved 2-line height (see its doc) so this card doesn't grow
+            // taller than its `StatCard` neighbours in the same row just because its title wraps.
             Text(title)
                 .font(.title2.bold())
+                .lineLimit(2)
+                .frame(minHeight: 56, alignment: .top)
             Text("Voir le détail")
                 .font(.caption)
                 .foregroundStyle(.secondary)

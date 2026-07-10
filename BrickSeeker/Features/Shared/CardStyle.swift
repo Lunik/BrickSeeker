@@ -24,8 +24,14 @@ struct StatCard: View {
             Image(systemName: icon)
                 .font(.title2)
                 .foregroundStyle(.tint)
+            // `.lineLimit(2)` + a reserved 2-line-tall frame: a long `value` (or, on
+            // `statCardLink`'s sibling `Text`, a long title) wrapping to 2 lines must not make
+            // that one card taller than its neighbours in the same row — see `HomeView`'s
+            // "Statistiques"/"Sets possédés"/"Mes minifigs" row.
             Text(value)
                 .font(.title2.bold())
+                .lineLimit(2)
+                .frame(minHeight: 56, alignment: .top)
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)

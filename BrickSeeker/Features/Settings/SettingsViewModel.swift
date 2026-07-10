@@ -29,7 +29,13 @@ final class SettingsViewModel {
     var offlineCatalogErrorMessage: String?
     var offlineCatalogMetadata: OfflineCatalogStore.Metadata?
 
+    var isUpdatingMinifigCatalog = false
+    var minifigCatalogDownloadProgress: Double = 0
+    var minifigCatalogErrorMessage: String?
+    var minifigCatalogMetadata: OfflineMinifigCatalogStore.Metadata?
+
     private let offlineCatalogStore: OfflineCatalogStore
+    private let minifigCatalogStore: OfflineMinifigCatalogStore
     /// Set right before `cancelActiveDownloadPreservingProgress()` so the resulting
     /// `.networkUnavailable` thrown back into `downloadOfflineCatalog()` is recognized as a
     /// deliberate pause (app backgrounding) rather than a real connectivity failure, and shown
@@ -42,7 +48,8 @@ final class SettingsViewModel {
     init(
         repository: RebrickableRepositoryProtocol = RebrickableRepository(),
         bricksetRepository: BricksetRepositoryProtocol = BricksetRepository(),
-        offlineCatalogStore: OfflineCatalogStore = .shared
+        offlineCatalogStore: OfflineCatalogStore = .shared,
+        minifigCatalogStore: OfflineMinifigCatalogStore = .shared
     ) {
         self.apiKey = KeychainService.shared.load(key: .apiKey) ?? ""
         self.isAccountLinked = KeychainService.shared.load(key: .userToken) != nil
@@ -56,6 +63,8 @@ final class SettingsViewModel {
         self.bricksetRepository = bricksetRepository
         self.offlineCatalogStore = offlineCatalogStore
         self.offlineCatalogMetadata = offlineCatalogStore.metadata
+        self.minifigCatalogStore = minifigCatalogStore
+        self.minifigCatalogMetadata = minifigCatalogStore.metadata
     }
 
     var hasResumableOfflineCatalogDownload: Bool {
@@ -126,6 +135,34 @@ final class SettingsViewModel {
     func purgeOfflineCatalog() {
         offlineCatalogStore.purge()
         offlineCatalogMetadata = nil
+    }
+
+    /// Downloads the minifig catalogue (issue #170's "Mes minifigs" gallery). Unlike
+    /// `downloadOfflineCatalog()`, this isn't resumable across app restarts — see
+    /// `OfflineMinifigCatalogStore`'s doc for why (combined payload is small enough that a retry
+    /// is cheap) — so there's no `pausedForBackgrounding`-style distinction here, just a plain
+    /// error message on failure.
+    func downloadMinifigCatalog() async {
+        isUpdatingMinifigCatalog = true
+        minifigCatalogDownloadProgress = 0
+        minifigCatalogErrorMessage = nil
+        defer { isUpdatingMinifigCatalog = false }
+
+        do {
+            try await minifigCatalogStore.download { [weak self] value in
+                self?.minifigCatalogDownloadProgress = value
+            }
+            minifigCatalogMetadata = minifigCatalogStore.metadata
+        } catch let error as APIError {
+            minifigCatalogErrorMessage = error.errorDescription
+        } catch {
+            minifigCatalogErrorMessage = String(localized: "Téléchargement impossible. Vérifiez votre réseau.")
+        }
+    }
+
+    func purgeMinifigCatalog() {
+        minifigCatalogStore.purge()
+        minifigCatalogMetadata = nil
     }
 
     /// Delete-on-empty for every key, not just a conditional save: with `canSave` no longer
