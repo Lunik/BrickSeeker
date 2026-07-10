@@ -62,6 +62,12 @@
     "%lld set(s) n'ont pas pu être ajoutés à la collection. Vérifiez votre connexion." : {
 
     },
+    "%lld set(s) n'ont pas pu être ajoutés à la liste cadeaux. Vérifiez votre connexion." : {
+
+    },
+    "%lld set(s) n'ont pas pu être ajoutés à la liste. Vérifiez votre connexion." : {
+
+    },
     "%lld set(s) n'ont pas pu être déplacés. Vérifiez votre connexion." : {
 
     },
@@ -146,7 +152,13 @@
     "Ajouter à la collection" : {
 
     },
+    "Ajouter à la liste cadeau" : {
+
+    },
     "Ajouter à la liste cadeaux" : {
+
+    },
+    "Ajouter à ma liste de cadeaux" : {
 
     },
     "Ajouter à ta liste cadeaux" : {
@@ -870,6 +882,12 @@
 
     },
     "Tous les scans de « %@ » seront supprimés." : {
+
+    },
+    "Tout désélectionner" : {
+
+    },
+    "Tout sélectionner" : {
 
     },
     "Toutes" : {
