@@ -496,15 +496,16 @@ struct SetDetailView: View {
         }
     }
 
-    /// "Dans quels sets ?" gallery (issue #178) — a horizontally scrolling row of the same
-    /// gallery-card look as `MinifigThumbnailView` (#170), shown only for a minifig. Tapping a
-    /// card opens that set's own detail sheet via `relatedSetLookupViewModel`, exactly like every
-    /// other list-reopen tap in the app (`ScanMapView`'s callers, `MinifigGalleryView`, etc.).
+    /// "Peut être trouvé dans les sets" gallery (issue #178) — a horizontally scrolling row of
+    /// the same gallery-card look as `MinifigThumbnailView` (#170), shown only for a minifig.
+    /// Tapping a card opens that set's own detail sheet via `relatedSetLookupViewModel`, exactly
+    /// like every other list-reopen tap in the app (`ScanMapView`'s callers, `MinifigGalleryView`,
+    /// etc.).
     @ViewBuilder
     private var setsContainingMinifigSection: some View {
         if isMinifig {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Dans quels sets ?")
+                Text("Peut être trouvé dans les sets")
                     .font(.subheadline.bold())
 
                 if isLoadingSetsContainingMinifig, setsContainingMinifig.isEmpty {
