@@ -49,6 +49,9 @@
         }
       }
     },
+    "%lld minifigs" : {
+
+    },
     "%lld scan%@" : {
       "localizations" : {
         "fr" : {
@@ -170,6 +173,9 @@
     "Ajouter un set" : {
 
     },
+    "Alimente la galerie « Mes minifigs » de l'accueil (~15 000 minifigs). Téléchargé depuis Rebrickable ; utilise aussi le catalogue de sets ci-dessus pour déterminer année/thème, et le télécharge d'abord si besoin. Les prix restent toujours en cache/en ligne, jamais chargés en masse ici." : {
+
+    },
     "Année" : {
 
     },
@@ -210,6 +216,9 @@
 
     },
     "Aucun scan localisé" : {
+
+    },
+    "Aucun set connu pour cette minifig" : {
 
     },
     "Aucun set dans votre collection." : {
@@ -263,6 +272,12 @@
     "Catalogue hors-ligne" : {
 
     },
+    "Catalogue minifigs hors-ligne" : {
+
+    },
+    "Catalogue minifigs non téléchargé" : {
+
+    },
     "Catalogue téléchargé (%lld sets)" : {
 
     },
@@ -273,6 +288,9 @@
 
     },
     "Changer de liste" : {
+
+    },
+    "Chargement du catalogue…" : {
 
     },
     "Choisir un fichier CSV" : {
@@ -342,6 +360,9 @@
 
     },
     "Créer une nouvelle liste" : {
+
+    },
+    "Dans quels sets ?" : {
 
     },
     "Dans ta liste cadeaux" : {
@@ -414,6 +435,9 @@
 
     },
     "et %lld scans plus anciens" : {
+
+    },
+    "et %lld sets supplémentaires" : {
 
     },
     "Évolution des prix" : {
@@ -569,6 +593,9 @@
     "Meilleur prix vu ici" : {
 
     },
+    "Mes minifigs" : {
+
+    },
     "Mise à jour en cours…" : {
 
     },
@@ -597,6 +624,9 @@
 
     },
     "Nom de la nouvelle liste" : {
+
+    },
+    "Nom ou identifiant" : {
 
     },
     "Nom ou numéro de set" : {
@@ -645,6 +675,9 @@
 
     },
     "Position des scans (si activée dans les paramètres) : approximative, sur l'appareil uniquement, supprimée dès qu'un set rejoint votre collection ou que l'historique est purgé" : {
+
+    },
+    "Possédées seulement" : {
 
     },
     "Possédés" : {
@@ -845,6 +878,9 @@
     "Synchronisez votre collection depuis l'accueil pour voir vos listes Rebrickable ici." : {
 
     },
+    "Télécharge le catalogue Rebrickable (~15 000 minifigs) pour parcourir ta collection. Peut aussi se faire depuis Réglages." : {
+
+    },
     "Téléchargement impossible. Vérifiez votre réseau." : {
 
     },
@@ -852,6 +888,9 @@
 
     },
     "Téléchargement interrompu — il reprendra où il s'est arrêté à la prochaine ouverture." : {
+
+    },
+    "Télécharger le catalogue" : {
 
     },
     "Télécharger le catalogue hors-ligne" : {
