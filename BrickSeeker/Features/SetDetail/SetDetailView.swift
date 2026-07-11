@@ -19,6 +19,26 @@ struct SetDetailView: View {
     @State private var showPricePrompt = false
     @State private var priceInputText = ""
     @State private var scanEventPendingDeletion: ScanEvent?
+    /// Sets containing this minifig (issue #178) — only ever populated for a `fig-…` item, see
+    /// `setsContainingMinifigSection`.
+    @State private var setsContainingMinifig: [MinifigSetEntry] = []
+    @State private var setsContainingMinifigTotalCount = 0
+    @State private var isLoadingSetsContainingMinifig = false
+    @State private var setsContainingMinifigErrorMessage: String?
+    /// Cache-only resolved "new" price per set number, computed once when the gallery loads —
+    /// never a live fetch for the whole list (issue #178, mirroring `MinifigGalleryView`'s own
+    /// cache-only price rule).
+    @State private var priceBySetNumInMinifigGallery: [String: Double] = [:]
+    /// Own, independent `ScannerViewModel` (issue #178) — deliberately NOT the presenting
+    /// screen's shared instance. `SetDetailView` is always presented as the leaf content of an
+    /// outer `.lookupResultSheets(for:)` (see that type's doc); reusing that same view model here
+    /// would set its `state` on the very instance already driving this sheet, which — for a
+    /// same-identity `true`→`true` re-render — does NOT get a fresh `SetDetailView` (`@State`'s
+    /// initial value is only applied the first time a view identity is created, per this file's
+    /// note on `priceScanEventForPrompt`), silently leaving the old set's data on screen. A local,
+    /// scoped instance sidesteps that entirely: tapping a card here always transitions its own
+    /// nested sheet from not-presented to presented, which always gets a fresh identity.
+    @State private var relatedSetLookupViewModel = ScannerViewModel()
     /// Live query (not a one-shot repository read) so a location fix that arrives while the
     /// sheet is already open — the common case, GPS + geocoding take a few seconds — updates
     /// the freshly-recorded scan row in place.
@@ -29,6 +49,11 @@ struct SetDetailView: View {
     let onScanAgain: () -> Void
     private let reconcileOnAppear: Bool
     private let isOfflineResult: Bool
+    /// Only used by `setsContainingMinifigSection` (issue #178) — a plain repository call kept
+    /// at the View level, same as `scanHistorySection`'s direct `LocalRepository` reads just
+    /// below, rather than growing `SetDetailViewModel` for a section unrelated to its existing
+    /// collection/price responsibilities.
+    var rebrickableRepository: RebrickableRepositoryProtocol = RebrickableRepository()
 
     init(
         legoSet: LegoSet,
@@ -59,6 +84,18 @@ struct SetDetailView: View {
         self.reconcileOnAppear = reconcileOnAppear
         self.isOfflineResult = isOfflineResult
         self.onScanAgain = onScanAgain
+    }
+
+    private var isMinifig: Bool { viewModel.legoSet.setNum.isMinifig }
+
+    /// Rebrickable never returns `set_url` for a minifig (no `fetchMinifig` endpoint is called
+    /// today, see issue #176) — falls back to the same URL convention lego.com pages use
+    /// (`LegoStoreRepository.storeUrl`/`instructionsUrl`): construct it from the `fig-…` id rather
+    /// than fetch it.
+    private var rebrickableURL: URL? {
+        if let setUrl = viewModel.legoSet.setUrl { return URL(string: setUrl) }
+        guard isMinifig else { return nil }
+        return URL(string: "https://rebrickable.com/minifigs/\(viewModel.legoSet.setNum)/")
     }
 
     var body: some View {
@@ -103,6 +140,8 @@ struct SetDetailView: View {
 
                     scanHistorySection
 
+                    setsContainingMinifigSection
+
                     if viewModel.isLoading {
                         ProgressView()
                     }
@@ -116,11 +155,13 @@ struct SetDetailView: View {
                     actionButtons
 
                     HStack(spacing: 16) {
-                        if let setUrl = viewModel.legoSet.setUrl, let url = URL(string: setUrl) {
+                        if let url = rebrickableURL {
                             Link("Voir sur Rebrickable", destination: url)
                                 .font(.footnote)
                         }
-                        if let url = LegoStoreRepository.instructionsUrl(setNum: viewModel.legoSet.setNum) {
+                        // lego.com has no building-instructions page for a minifig (issue #173) —
+                        // only shown for a real set.
+                        if !isMinifig, let url = LegoStoreRepository.instructionsUrl(setNum: viewModel.legoSet.setNum) {
                             Link("Notice de montage", destination: url)
                                 .font(.footnote)
                         }
@@ -194,6 +235,8 @@ struct SetDetailView: View {
                 )
             }
             .toast($viewModel.toastMessage)
+            // Nested, not the presenter's shared instance — see `relatedSetLookupViewModel`'s doc.
+            .lookupResultSheets(for: relatedSetLookupViewModel)
         }
         .onChange(of: viewModel.collectionStatus) { _, _ in syncCache() }
         .onChange(of: viewModel.collectionListName) { _, _ in syncCache() }
@@ -216,6 +259,13 @@ struct SetDetailView: View {
         }
         .task {
             reloadPriceHistory()
+        }
+        .task {
+            relatedSetLookupViewModel.localRepository = LocalRepository(modelContext: modelContext)
+            relatedSetLookupViewModel.playsFeedbackSounds = false
+        }
+        .task {
+            await loadSetsContainingMinifigIfNeeded()
         }
     }
 
@@ -417,6 +467,109 @@ struct SetDetailView: View {
         .onTapGesture { showScanMap = true }
         .accessibilityLabel("Carte des scans de ce set")
         .accessibilityAddTraits(.isButton)
+    }
+
+    /// Loads which sets this minifig appears in (issue #178) — the one live network call this
+    /// section needs, since Rebrickable has no local/offline source for it. Runs once per view
+    /// identity (guarded on `setsContainingMinifig.isEmpty`); pricing for each result is then
+    /// resolved from the existing price cache only, never fetched live per card.
+    private func loadSetsContainingMinifigIfNeeded() async {
+        guard isMinifig, setsContainingMinifig.isEmpty, !isLoadingSetsContainingMinifig else { return }
+        isLoadingSetsContainingMinifig = true
+        defer { isLoadingSetsContainingMinifig = false }
+        do {
+            let response = try await rebrickableRepository.fetchSetsContainingMinifig(
+                figNum: viewModel.legoSet.setNum, pageSize: 30
+            )
+            setsContainingMinifig = response.results
+            setsContainingMinifigTotalCount = response.count
+            let repository = LocalRepository(modelContext: modelContext)
+            var prices: [String: Double] = [:]
+            for entry in response.results {
+                let storePriceEUR = repository.cachedSet(setNum: entry.setNum)?.storePriceEUR
+                let quotes = repository.cachedPrices(setNum: entry.setNum)
+                prices[entry.setNum] = resolveNewPrice(storePriceEUR: storePriceEUR, quotes: quotes)
+            }
+            priceBySetNumInMinifigGallery = prices
+        } catch {
+            setsContainingMinifigErrorMessage = UserMessage.unknownError
+        }
+    }
+
+    /// "Peut être trouvé dans les sets" gallery (issue #178) — a horizontally scrolling row of
+    /// the same gallery-card look as `MinifigThumbnailView` (#170), shown only for a minifig.
+    /// Tapping a card opens that set's own detail sheet via `relatedSetLookupViewModel`, exactly
+    /// like every other list-reopen tap in the app (`ScanMapView`'s callers, `MinifigGalleryView`,
+    /// etc.).
+    @ViewBuilder
+    private var setsContainingMinifigSection: some View {
+        if isMinifig {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Peut être trouvé dans les sets")
+                    .font(.subheadline.bold())
+
+                if isLoadingSetsContainingMinifig, setsContainingMinifig.isEmpty {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                } else if let errorMessage = setsContainingMinifigErrorMessage, setsContainingMinifig.isEmpty {
+                    Text(errorMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else if setsContainingMinifig.isEmpty {
+                    Text("Aucun set connu pour cette minifig")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(setsContainingMinifig) { entry in
+                                Button {
+                                    relatedSetLookupViewModel.lookupSetNumber(entry.setNum, source: .listReopen)
+                                } label: {
+                                    minifigSetCard(entry)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 1)
+                    }
+                    if setsContainingMinifigTotalCount > setsContainingMinifig.count {
+                        Text("et \(setsContainingMinifigTotalCount - setsContainingMinifig.count) sets supplémentaires")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardStyle(padding: 12)
+        }
+    }
+
+    private static let minifigSetCardWidth: CGFloat = 110
+
+    private func minifigSetCard(_ entry: MinifigSetEntry) -> some View {
+        VStack(spacing: 6) {
+            SetThumbnailView(imageUrl: entry.setImgUrl, size: Self.minifigSetCardWidth)
+
+            VStack(spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(entry.setNum.baseSetNum)
+                        .font(.caption.bold())
+                    if let quantity = entry.quantity, quantity > 1 {
+                        Text("×\(quantity)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if let price = priceBySetNumInMinifigGallery[entry.setNum] {
+                    Text(Decimal(price).formatted(.currency(code: "EUR")))
+                        .font(.caption2.bold())
+                }
+            }
+        }
+        .frame(width: Self.minifigSetCardWidth)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(entry.name)
     }
 
     /// Whether any price source is currently being (re)fetched — drives the
