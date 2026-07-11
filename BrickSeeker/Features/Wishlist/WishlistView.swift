@@ -24,6 +24,10 @@ struct WishlistView: View {
     @State private var showAddToListPicker = false
     @State private var showRemoveConfirmation = false
     @State private var searchText = ""
+    /// Sets targeted by the next `showAddToListPicker`/`showRemoveConfirmation` flow — either the
+    /// current multi-select checkbox selection, or the single row long-pressed for a context menu
+    /// action (#172), set right before presenting the sheet/alert.
+    @State private var pendingActionTargets: [CachedSet] = []
 
     /// Wishlist has no full `SetFilterState` like Collection/History — just a name/number search,
     /// matched the same way as the shared `filteredAndSorted` (case-insensitive, name or set number).
@@ -74,17 +78,17 @@ struct WishlistView: View {
 
     /// Reuses `CollectionPriceUpdater.shared`, same as `CollectionView`/`HistoryView`'s bulk
     /// refresh (#141) — a single global run, so a concurrent/paused unrelated job means `.busy`,
-    /// not silently hijacking that other queue.
-    private func refreshSelectedPrices() async {
+    /// not silently hijacking that other queue. Shared by the bulk menu (`selectedCachedSets`)
+    /// and the row context menu (`[cached]`, #172).
+    private func refreshPrices(for sets: [CachedSet]) async {
         selectionActionError = nil
-        let selected = selectedCachedSets
-        guard !selected.isEmpty else { return }
+        guard !sets.isEmpty else { return }
 
         isPerformingBulkAction = true
         defer { isPerformingBulkAction = false }
 
         let outcome = await CollectionPriceUpdater.shared.refreshPrices(
-            for: selected.map { $0.asLegoSet() },
+            for: sets.map { $0.asLegoSet() },
             persist: CollectionPriceUpdater.persistClosure(modelContext: modelContext)
         )
 
@@ -100,23 +104,25 @@ struct WishlistView: View {
         }
     }
 
-    /// Bulk counterpart to `remove(_:)` — same Brickset-first-then-local-cache order, so a
-    /// failed removal (offline, expired session) doesn't desync a set that Brickset still lists.
-    private func removeSelectedFromWishlist() async {
+    /// Counterpart to `remove(_:)` (used by the row's swipe action, which removes without
+    /// confirmation) — this path keeps the confirmation alert, shared by the bulk menu
+    /// (`selectedCachedSets`) and the row context menu (`[cached]`, via `pendingActionTargets`,
+    /// #172). Same Brickset-first-then-local-cache order, so a failed removal (offline, expired
+    /// session) doesn't desync a set that Brickset still lists.
+    private func removeFromWishlist(_ sets: [CachedSet]) async {
         selectionActionError = nil
         guard NetworkMonitor.shared.isConnected else {
             selectionActionError = UserMessage.offlineStatus
             return
         }
-        let selected = selectedCachedSets
-        guard !selected.isEmpty else { return }
+        guard !sets.isEmpty else { return }
 
         isPerformingBulkAction = true
         defer { isPerformingBulkAction = false }
 
         let localRepository = LocalRepository(modelContext: modelContext)
         var failureCount = 0
-        for cached in selected {
+        for cached in sets {
             do {
                 try await bricksetRepository.removeFromWishlist(setNum: cached.setNum)
                 localRepository.setWishlistStatus(setNum: cached.setNum, isInWishlist: false)
@@ -132,19 +138,19 @@ struct WishlistView: View {
         }
     }
 
-    /// Adds every selected set to `listId` on Rebrickable — doesn't touch wishlist status, same
-    /// as `SetDetailViewModel.addToList` (a set can be both owned and still wanted).
-    private func addSelectedToCollection(listId: Int, listName: String) async {
+    /// Adds every set in `sets` to `listId` on Rebrickable — doesn't touch wishlist status, same
+    /// as `SetDetailViewModel.addToList` (a set can be both owned and still wanted). Shared by the
+    /// bulk menu and the row context menu (`[cached]`, via `pendingActionTargets`, #172).
+    private func addToCollection(_ sets: [CachedSet], listId: Int, listName: String) async {
         selectionActionError = nil
-        let selected = selectedCachedSets
-        guard !selected.isEmpty else { return }
+        guard !sets.isEmpty else { return }
 
         isPerformingBulkAction = true
         defer { isPerformingBulkAction = false }
 
         let localRepository = LocalRepository(modelContext: modelContext)
         var failureCount = 0
-        for cached in selected {
+        for cached in sets {
             do {
                 try await rebrickableRepository.addSetToList(setNum: cached.setNum, listId: listId)
                 localRepository.setCollectionStatus(setNum: cached.setNum, isInCollection: true, listId: listId, listName: listName)
@@ -216,6 +222,32 @@ struct WishlistView: View {
                             }
                         }
                     }
+                    // Long-press shortcut for the same actions as the multi-select "Actions" menu
+                    // below, applied to this single set (#172). Hidden while selecting — the two
+                    // selection modes don't cohabit. Unlike the swipe action above, "Retirer de la
+                    // liste cadeaux" here goes through the confirmation alert, matching the bulk
+                    // mode's behavior as requested in #172.
+                    .contextMenu {
+                        if !isSelecting {
+                            Button {
+                                Task { await refreshPrices(for: [cached]) }
+                            } label: {
+                                Label("Actualiser les prix", systemImage: "arrow.clockwise")
+                            }
+                            Button {
+                                pendingActionTargets = [cached]
+                                showAddToListPicker = true
+                            } label: {
+                                Label("Ajouter à la collection", systemImage: "shippingbox")
+                            }
+                            Button(role: .destructive) {
+                                pendingActionTargets = [cached]
+                                showRemoveConfirmation = true
+                            } label: {
+                                Label("Retirer de la liste cadeaux", systemImage: "trash")
+                            }
+                        }
+                    }
                 }
                 .contentMargins(.top, 0, for: .scrollContent)
             }
@@ -246,11 +278,12 @@ struct WishlistView: View {
                     if isSelecting {
                         Menu {
                             Button {
-                                Task { await refreshSelectedPrices() }
+                                Task { await refreshPrices(for: selectedCachedSets) }
                             } label: {
                                 Label("Actualiser les prix", systemImage: "arrow.clockwise")
                             }
                             Button {
+                                pendingActionTargets = selectedCachedSets
                                 showAddToListPicker = true
                             } label: {
                                 Label("Ajouter à la collection", systemImage: "shippingbox")
@@ -260,6 +293,7 @@ struct WishlistView: View {
                             // flash on the selection background), not just on tap. The icon still
                             // renders in the app's red accent color either way.
                             Button {
+                                pendingActionTargets = selectedCachedSets
                                 showRemoveConfirmation = true
                             } label: {
                                 Label("Retirer de la liste cadeaux", systemImage: "trash")
@@ -296,16 +330,16 @@ struct WishlistView: View {
         }
         .sheet(isPresented: $showAddToListPicker) {
             ListPickerView(repository: rebrickableRepository) { listId, listName in
-                Task { await addSelectedToCollection(listId: listId, listName: listName) }
+                Task { await addToCollection(pendingActionTargets, listId: listId, listName: listName) }
             }
         }
         .alert("Retirer de la liste cadeaux ?", isPresented: $showRemoveConfirmation) {
             Button("Retirer", role: .destructive) {
-                Task { await removeSelectedFromWishlist() }
+                Task { await removeFromWishlist(pendingActionTargets) }
             }
             Button("Annuler", role: .cancel) {}
         } message: {
-            Text("\(selectedSetNums.count) set(s) seront retirés de votre liste cadeaux.")
+            Text("\(pendingActionTargets.count) set(s) seront retirés de votre liste cadeaux.")
         }
         .onChange(of: SetPriceIndex.Version(allCachedPrices), initial: true) { _, _ in
             pricesBySetNum = SetPriceIndex.pricesBySetNum(allCachedPrices)
