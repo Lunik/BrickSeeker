@@ -8,13 +8,22 @@ import Foundation
 /// background.
 ///
 /// Rebrickable doesn't expose a minifig's year/theme directly (a minifig has neither — those are
-/// properties of the sets it appears in). This store derives them by joining three of
+/// properties of the sets it appears in). This store derives them by joining four of
 /// Rebrickable's public CSV dumps entirely offline:
 /// `minifigs.csv` (fig_num,name,num_parts,img_url) + `inventories.csv` (id,version,set_num) +
-/// `inventory_minifigs.csv` (inventory_id,fig_num,quantity) → for each fig_num, the list of
-/// set_nums it appears in, then `OfflineCatalogStore`'s already-downloaded `set_num → year/theme_id`
-/// table gives the actual values. Per the issue owner's ruling, the *first* containing set found
-/// wins — no attempt to pick "the most representative" one.
+/// `inventory_minifigs.csv` (inventory_id,fig_num,quantity) + `inventory_sets.csv`
+/// (inventory_id,set_num,quantity) → for each fig_num, the list of set_nums it appears in, then
+/// `OfflineCatalogStore`'s already-downloaded `set_num → year/theme_id` table gives the actual
+/// values. Per the issue owner's ruling, the *first* containing set found wins — no attempt to
+/// pick "the most representative" one.
+///
+/// `inventory_sets.csv` (issue #177) covers *nested* inventories: a CMF (collectible minifigures)
+/// box like `71051-13` doesn't list its minifigs directly in `inventory_minifigs.csv` — its
+/// inventory instead references 12 sub-sets `71051-1`…`71051-12` (one per random bag) via
+/// `inventory_sets.csv`, and each of *those* sub-sets directly contains one minifig. Without
+/// walking that nested level, owning the box never counted as owning the minifigs inside it.
+/// The join walks `inventory_sets.csv` recursively (a case-of-boxes can itself nest a box which
+/// nests bags) so any ancestor set — at any depth — counts as a containing set.
 ///
 /// `@unchecked Sendable` for the same reason as `OfflineCatalogStore`: `snapshotLoad`/`metadata`
 /// are only ever mutated from `@MainActor` members, no concurrent mutation.
@@ -24,6 +33,7 @@ final class OfflineMinifigCatalogStore: @unchecked Sendable {
     private static let minifigsURL = URL(string: "https://cdn.rebrickable.com/media/downloads/minifigs.csv.gz")!
     private static let inventoriesURL = URL(string: "https://cdn.rebrickable.com/media/downloads/inventories.csv.gz")!
     private static let inventoryMinifigsURL = URL(string: "https://cdn.rebrickable.com/media/downloads/inventory_minifigs.csv.gz")!
+    private static let inventorySetsURL = URL(string: "https://cdn.rebrickable.com/media/downloads/inventory_sets.csv.gz")!
 
     /// One set this minifig appears in, plus how many copies of the minifig one instance of that
     /// set contains (`inventory_minifigs.csv`'s `quantity` column) — used to compute how many
@@ -110,12 +120,12 @@ final class OfflineMinifigCatalogStore: @unchecked Sendable {
 
     var isEmpty: Bool { metadata == nil }
 
-    /// Downloads the 3 minifig CSV dumps and joins them against `OfflineCatalogStore`'s sets
+    /// Downloads the 4 minifig CSV dumps and joins them against `OfflineCatalogStore`'s sets
     /// snapshot (downloading that too, first, if it isn't already present — reused as-is if it
     /// is, no duplicate `sets.csv.gz` fetch in the common case).
     ///
     /// Unlike `OfflineCatalogStore.download()`, this isn't resumable byte-for-byte: the combined
-    /// payload here (~650KB compressed across 3 small files) is a fraction of the ~500KB single
+    /// payload here (~750KB compressed across 4 small files) is a fraction of the ~500KB single
     /// `sets.csv.gz` that motivated that store's resumable-download machinery, so replicating that
     /// delicate, previously-buggy code three times over wasn't judged worth it — an interruption
     /// just means retrying the whole (small, fast) download. `progress` still reports `0...1`
@@ -134,10 +144,12 @@ final class OfflineMinifigCatalogStore: @unchecked Sendable {
         let setsByNum = await OfflineCatalogStore.shared.currentSnapshot()
 
         let minifigsData = try await Self.fetch(Self.minifigsURL)
-        progress(0.6)
+        progress(0.55)
         let inventoriesData = try await Self.fetch(Self.inventoriesURL)
-        progress(0.8)
+        progress(0.7)
         let inventoryMinifigsData = try await Self.fetch(Self.inventoryMinifigsURL)
+        progress(0.85)
+        let inventorySetsData = try await Self.fetch(Self.inventorySetsURL)
         progress(0.9)
 
         let snapshotURL = self.snapshotURL
@@ -147,6 +159,7 @@ final class OfflineMinifigCatalogStore: @unchecked Sendable {
                 minifigsCSV: OfflineCatalogStore.gunzip(minifigsData),
                 inventoriesCSV: OfflineCatalogStore.gunzip(inventoriesData),
                 inventoryMinifigsCSV: OfflineCatalogStore.gunzip(inventoryMinifigsData),
+                inventorySetsCSV: OfflineCatalogStore.gunzip(inventorySetsData),
                 setsByNum: setsByNum
             )
 
@@ -184,12 +197,13 @@ final class OfflineMinifigCatalogStore: @unchecked Sendable {
         }
     }
 
-    /// Joins the three raw (already-gunzipped) CSVs into `[MinifigCatalogEntry]`. `setsByNum` is
+    /// Joins the four raw (already-gunzipped) CSVs into `[MinifigCatalogEntry]`. `setsByNum` is
     /// `OfflineCatalogStore`'s snapshot — used only for `year`/`themeId` lookups by set_num.
     static func join(
         minifigsCSV: Data,
         inventoriesCSV: Data,
         inventoryMinifigsCSV: Data,
+        inventorySetsCSV: Data,
         setsByNum: [String: LegoSet]
     ) throws -> [MinifigCatalogEntry] {
         // inventories.csv: id,version,set_num — id → set_num (any version; a minifig's presence
@@ -199,18 +213,61 @@ final class OfflineMinifigCatalogStore: @unchecked Sendable {
             setNumByInventoryId[fields[0]] = fields[2]
         }
 
+        // inventory_sets.csv: inventory_id,set_num,quantity — a set's inventory can itself contain
+        // other *sets* rather than parts/minifigs directly (issue #177): a CMF box like 71051-13
+        // contains 12 sub-sets 71051-1…71051-12 (one per random bag), each of which then directly
+        // contains one minifig. childSetNum → its immediate parent set_num(s) + how many copies of
+        // the child one parent contains, so owning the parent can be walked down to the minifigs
+        // nested arbitrarily deep inside it.
+        var parentsByChildSetNum: [String: [(setNum: String, quantity: Int)]] = [:]
+        for fields in try CSV.records(in: inventorySetsCSV) where fields.count >= 3 {
+            guard let parentSetNum = setNumByInventoryId[fields[0]] else { continue }
+            let childSetNum = fields[1]
+            let quantity = Int(fields[2]) ?? 1
+            parentsByChildSetNum[childSetNum, default: []].append((setNum: parentSetNum, quantity: quantity))
+        }
+
+        // All ancestors of `setNum` (parent, grandparent, …) with the multiplied quantity one
+        // instance of `setNum` requires of each ancestor. Memoized since many sibling sub-sets
+        // (e.g. every bag in a CMF box) share the same ancestor chain. `depth` is a cycle guard
+        // only — real Rebrickable data is a strict containment DAG, never circular.
+        var ancestorsCache: [String: [(setNum: String, quantity: Int)]] = [:]
+        func ancestors(of setNum: String, depth: Int = 0) -> [(setNum: String, quantity: Int)] {
+            if let cached = ancestorsCache[setNum] { return cached }
+            guard depth < 10, let parents = parentsByChildSetNum[setNum] else { return [] }
+            var result: [(setNum: String, quantity: Int)] = []
+            for parent in parents {
+                result.append(parent)
+                for grandparent in ancestors(of: parent.setNum, depth: depth + 1) {
+                    result.append((setNum: grandparent.setNum, quantity: parent.quantity * grandparent.quantity))
+                }
+            }
+            ancestorsCache[setNum] = result
+            return result
+        }
+
         // inventory_minifigs.csv: inventory_id,fig_num,quantity — fig_num → containing sets (with
-        // per-set quantity), first-occurrence order preserved (file row order), deduped by
-        // (fig_num, set_num) pair.
+        // per-set quantity), first-occurrence order preserved (file row order: the direct set
+        // first, then its ancestors), deduped by (fig_num, set_num) pair.
         var containingSetsByFigNum: [String: [ContainingSet]] = [:]
         var seenPairs = Set<String>()
         for fields in try CSV.records(in: inventoryMinifigsCSV) where fields.count >= 3 {
             guard let setNum = setNumByInventoryId[fields[0]] else { continue }
             let figNum = fields[1]
-            let pairKey = "\(figNum)|\(setNum)"
-            guard seenPairs.insert(pairKey).inserted else { continue }
             let quantityPerSet = Int(fields[2]) ?? 1
-            containingSetsByFigNum[figNum, default: []].append(ContainingSet(setNum: setNum, quantityPerSet: quantityPerSet))
+
+            var candidates = [(setNum: setNum, quantity: quantityPerSet)]
+            for ancestor in ancestors(of: setNum) {
+                candidates.append((setNum: ancestor.setNum, quantity: quantityPerSet * ancestor.quantity))
+            }
+
+            for candidate in candidates {
+                let pairKey = "\(figNum)|\(candidate.setNum)"
+                guard seenPairs.insert(pairKey).inserted else { continue }
+                containingSetsByFigNum[figNum, default: []].append(
+                    ContainingSet(setNum: candidate.setNum, quantityPerSet: candidate.quantity)
+                )
+            }
         }
 
         // minifigs.csv: fig_num,name,num_parts,img_url

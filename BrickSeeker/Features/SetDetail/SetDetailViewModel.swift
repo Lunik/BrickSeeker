@@ -219,8 +219,14 @@ final class SetDetailViewModel {
 
     /// Reconciles a cache-displayed status with the live one, without flashing a spinner or
     /// error UI — if the fetch fails (e.g. offline), keep showing whatever the cache had.
+    /// Skipped entirely for `fig-…` synthetic entries (`MinifigGalleryView.openDetail`):
+    /// `fetchUserSet` hits the real `/users/{token}/sets/{set_num}/` endpoint, which has no
+    /// notion of a minifig id and always comes back nil, clobbering a correct cache-derived
+    /// "owned" status with a false `.notInCollection` (same "fig-… can't be resolved live"
+    /// situation `ScannerViewModel.resolveSet`'s `.notFound` case already accounts for).
     @MainActor
     func silentlyReconcileCollectionStatus() async {
+        guard !legoSet.setNum.isMinifig else { return }
         guard NetworkMonitor.shared.isConnected else { return }
         do {
             let userSet = try await repository.fetchUserSet(setNum: legoSet.setNum)
