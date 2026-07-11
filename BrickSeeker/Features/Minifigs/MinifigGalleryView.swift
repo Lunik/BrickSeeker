@@ -6,15 +6,31 @@ private let frenchDateStyle = Date.FormatStyle(date: .abbreviated, time: .omitte
 /// "Mes minifigs" (issue #170): a photo gallery of every minifig in Rebrickable's catalogue,
 /// owned ones in colour and missing ones in silhouette (`MinifigThumbnailView`), searchable,
 /// filterable by year/theme, sortable, with an "owned only" toggle. Entirely offline-driven
-/// (`OfflineMinifigCatalogStore`) and cache-only on price (`SetPriceIndex`/`LocalRepository`) —
-/// never a live network call from this screen, see the issue's decisions #2/#3. Tapping a tile
-/// opens the same `SetDetailView` sheet as tapping a `fig-…` item anywhere else in the app —
-/// see `openDetail(for:ownedQuantity:)`.
+/// (`OfflineMinifigCatalogStore`) on load — the catalogue itself is never fetched live while
+/// browsing, see the issue's decisions #2/#3. Tapping a tile opens the same `SetDetailView` sheet
+/// as tapping a `fig-…` item anywhere else in the app — see `openDetail(for:ownedQuantity:)`.
+///
+/// Multi-select + long-press context menu mirror `CollectionView`'s pattern (#141/#172), with two
+/// deliberate differences: the only quick action is "Actualiser les prix" — a wishlist add/remove
+/// was tried first and dropped, since Brickset's `getSets` has no notion of a `fig-…` id and
+/// `setWanted` always throws `.notFound` for one (confirmed live: the exact same failure already
+/// happens today from `SetDetailView`'s own heart button on a minifig, this isn't new breakage);
+/// a "move to list"/"remove from collection" action doesn't apply either, since a `fig-…` entry
+/// has no Rebrickable list membership the way an owned set does — and "select all" is scoped to
+/// `windowed` (what's currently paged onto the grid), not every filtered match, since unlike a
+/// user's own collection the minifig catalogue is ~15 000 entries and an unscoped select-all
+/// could queue thousands of sequential price-scrape requests.
 struct MinifigGalleryView: View {
+    @Environment(\.modelContext) private var modelContext
     @State private var viewModel = MinifigGalleryViewModel()
     @Bindable private var filter = MinifigGalleryFilterState.shared
     @State private var showFilters = false
     @State private var displayedCount = Self.pageSize
+
+    @State private var isSelecting = false
+    @State private var selectedFigNums: Set<String> = []
+    @State private var isPerformingBulkAction = false
+    @State private var selectionActionError: String?
     /// Not started/camera-driven (see `HomeView`'s own `lookupViewModel`) — reused purely to open
     /// the exact same `SetDetailView` sheet a tap in Collection opens (`openDetail(for:ownedQuantity:)`).
     /// `HomeView`'s existing (ungated) `.lookupResultSheets(for: lookupViewModel)` already presents
@@ -78,14 +94,12 @@ struct MinifigGalleryView: View {
         return result
     }
 
-    /// Opens the exact same `SetDetailView` sheet tapping a `fig-…` item from Collection would
-    /// (issue #170 feedback #7/#8) — not a custom minifig page. Seeds a `CachedSet` row from this
-    /// catalogue entry's rich offline data *before* calling `lookupSetNumber`, so
-    /// `ScannerViewModel.resolveSet`'s cache-hit branch fires immediately with complete data
-    /// (image/name/theme/year/parts) instead of falling through to a live `/lego/sets/…` lookup,
-    /// which 404s for a `fig-…` id (see `AGENTS.md`'s note on this exact case).
-    private func openDetail(for entry: OfflineMinifigCatalogStore.MinifigCatalogEntry, ownedQuantity: Int) {
-        let syntheticLegoSet = LegoSet(
+    /// Shared by `openDetail`/`cacheEntryIfNeeded` (which need a full `LegoSet` to upsert the
+    /// `CachedSet` row) and `refreshPrices` (which needs one per entry to hand to
+    /// `CollectionPriceUpdater`, the same way `CollectionView.refreshPrices` calls `asLegoSet()`
+    /// on each selected `CachedSet`).
+    private func syntheticLegoSet(for entry: OfflineMinifigCatalogStore.MinifigCatalogEntry) -> LegoSet {
+        LegoSet(
             setNum: entry.figNum,
             name: entry.name,
             year: entry.year ?? 0,
@@ -94,13 +108,78 @@ struct MinifigGalleryView: View {
             setImgUrl: entry.imgUrl,
             setUrl: nil
         )
+    }
+
+    /// Seeds a `CachedSet` row from this catalogue entry's rich offline data — used by
+    /// `openDetail`, before pushing the detail sheet.
+    private func cacheEntryIfNeeded(_ entry: OfflineMinifigCatalogStore.MinifigCatalogEntry, ownedQuantity: Int) {
         lookupViewModel.localRepository?.cacheSet(
-            syntheticLegoSet, isInCollection: ownedQuantity > 0, listId: nil, listName: nil, markAsScanned: false
+            syntheticLegoSet(for: entry), isInCollection: ownedQuantity > 0, listId: nil, listName: nil, markAsScanned: false
         )
         if ownedQuantity > 0 {
             lookupViewModel.localRepository?.setQuantity(setNum: entry.figNum, quantity: ownedQuantity)
         }
+    }
+
+    /// Opens the exact same `SetDetailView` sheet tapping a `fig-…` item from Collection would
+    /// (issue #170 feedback #7/#8) — not a custom minifig page. Seeds the `CachedSet` row
+    /// *before* calling `lookupSetNumber`, so `ScannerViewModel.resolveSet`'s cache-hit branch
+    /// fires immediately with complete data (image/name/theme/year/parts) instead of falling
+    /// through to a live `/lego/sets/…` lookup, which 404s for a `fig-…` id (see `AGENTS.md`'s
+    /// note on this exact case).
+    private func openDetail(for entry: OfflineMinifigCatalogStore.MinifigCatalogEntry, ownedQuantity: Int) {
+        cacheEntryIfNeeded(entry, ownedQuantity: ownedQuantity)
         lookupViewModel.lookupSetNumber(entry.figNum, source: .listReopen)
+    }
+
+    private func toggleSelection(_ figNum: String) {
+        if selectedFigNums.contains(figNum) {
+            selectedFigNums.remove(figNum)
+        } else {
+            selectedFigNums.insert(figNum)
+        }
+    }
+
+    /// Scoped to `entries` (always `windowed` in practice, see the type doc) rather than every
+    /// filtered match — see the type doc for why an unbounded "select all" is unsafe here.
+    private func toggleSelectAll(_ entries: [OfflineMinifigCatalogStore.MinifigCatalogEntry]) {
+        let figNums = entries.map(\.figNum)
+        if figNums.allSatisfy(selectedFigNums.contains) {
+            selectedFigNums.subtract(figNums)
+        } else {
+            selectedFigNums.formUnion(figNums)
+        }
+    }
+
+    /// "Refresh prices" action, reusing `CollectionPriceUpdater.shared` — the same singleton
+    /// driven by `CollectionPriceUpdateSection` from Réglages and by Collection/History/Wishlist's
+    /// own bulk/context-menu actions (#141/#172). `PriceRepository.fetchPrices` already special-
+    /// cases `legoSet.setNum.isMinifig` (BrickLink only, no retail scrapes, issue #175), so this
+    /// needs no minifig-specific branching of its own. No `cacheEntryIfNeeded` first: unlike
+    /// wishlist status, `LocalRepository.cachePrices`/`cacheStorePrice` write to `CachedSetPrice`
+    /// rows keyed by `setNum` directly, not through an existing `CachedSet` row.
+    private func refreshPrices(for entries: [OfflineMinifigCatalogStore.MinifigCatalogEntry]) async {
+        selectionActionError = nil
+        guard !entries.isEmpty else { return }
+
+        isPerformingBulkAction = true
+        defer { isPerformingBulkAction = false }
+
+        let outcome = await CollectionPriceUpdater.shared.refreshPrices(
+            for: entries.map(syntheticLegoSet(for:)),
+            persist: CollectionPriceUpdater.persistClosure(modelContext: modelContext)
+        )
+
+        switch outcome {
+        case .completed:
+            isSelecting = false
+        case .busy:
+            selectionActionError = String(
+                localized: "Une actualisation des prix de la collection est déjà en cours ou en attente de reprise. Terminez-la avant d'actualiser une sélection."
+            )
+        case .cancelled:
+            break
+        }
     }
 
     private func sectionHeader(for entry: OfflineMinifigCatalogStore.MinifigCatalogEntry) -> String {
@@ -172,16 +251,44 @@ struct MinifigGalleryView: View {
                             SwiftUI.Section {
                                 LazyVGrid(columns: Self.columns, spacing: 12) {
                                     ForEach(section.items) { entry in
+                                        // No `List(selection:)`-style circle to rely on (this is
+                                        // a grid, not a list) — same homemade toggle-or-navigate
+                                        // split as `CollectionView`'s rows (#161/#165): the tile's
+                                        // own tap either selects or opens detail, never both.
                                         Button {
-                                            openDetail(for: entry, ownedQuantity: ownedQuantityByFigNum[entry.figNum, default: 0])
+                                            if isSelecting {
+                                                toggleSelection(entry.figNum)
+                                            } else {
+                                                openDetail(for: entry, ownedQuantity: ownedQuantityByFigNum[entry.figNum, default: 0])
+                                            }
                                         } label: {
                                             MinifigThumbnailView(
                                                 entry: entry,
                                                 ownedQuantity: ownedQuantityByFigNum[entry.figNum, default: 0],
                                                 price: resolvedPrice(figNum: entry.figNum, prices: prices)
                                             )
+                                            .overlay(alignment: .topTrailing) {
+                                                if isSelecting {
+                                                    RowSelectionIndicator(isSelected: selectedFigNums.contains(entry.figNum))
+                                                        .padding(4)
+                                                        .background(.thinMaterial, in: Circle())
+                                                        .padding(6)
+                                                }
+                                            }
                                         }
                                         .buttonStyle(.plain)
+                                        // Long-press shortcut for "Actualiser les prix", applied to
+                                        // this single tile (#172's pattern). Hidden while
+                                        // selecting — the two selection modes don't cohabit.
+                                        .contextMenu {
+                                            if !isSelecting {
+                                                Button {
+                                                    Task { await refreshPrices(for: [entry]) }
+                                                } label: {
+                                                    Label("Actualiser les prix", systemImage: "arrow.clockwise")
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             } header: {
@@ -226,6 +333,66 @@ struct MinifigGalleryView: View {
                 .accessibilityLabel("Filtres")
                 .accessibilityValue(filter.isFilterActive ? "Actifs" : "Inactifs")
             }
+            // Pinned to the bottom bar rather than top-trailing, matching Collection/History/
+            // Wishlist (#141) — the top nav bar's toolbar items hide while the search field is
+            // focused, which would otherwise make this unreachable mid-search.
+            if !viewModel.allEntries.isEmpty {
+                ToolbarItemGroup(placement: .bottomBar) {
+                    if isSelecting {
+                        // Scoped to `windowed` (what's currently paged onto the grid), not every
+                        // filtered match — see the type doc for why an unscoped select-all is
+                        // unsafe against a ~15 000-entry catalogue.
+                        let areAllWindowedSelected = !windowed.isEmpty && windowed.allSatisfy { selectedFigNums.contains($0.figNum) }
+                        Button(areAllWindowedSelected ? "Tout désélectionner" : "Tout sélectionner") {
+                            toggleSelectAll(windowed)
+                        }
+                        .disabled(windowed.isEmpty)
+                    }
+                    Spacer()
+                    if isSelecting {
+                        // A single quick action doesn't need a `Menu` wrapper (unlike Collection/
+                        // History/Wishlist's multi-action bulk menu) — a direct `Button` saves the
+                        // extra tap.
+                        let selectedEntries = windowed.filter { selectedFigNums.contains($0.figNum) }
+                        Button {
+                            Task { await refreshPrices(for: selectedEntries) }
+                        } label: {
+                            if isPerformingBulkAction {
+                                ProgressView()
+                            } else {
+                                Label("Actualiser les prix (\(selectedFigNums.count))", systemImage: "arrow.clockwise")
+                            }
+                        }
+                        .disabled(selectedFigNums.isEmpty || isPerformingBulkAction)
+                    }
+                    Button {
+                        withAnimation { isSelecting.toggle() }
+                    } label: {
+                        if isSelecting {
+                            Text("Terminé")
+                        } else {
+                            Image(systemName: "square.and.pencil")
+                        }
+                    }
+                    .accessibilityLabel(isSelecting ? "Terminé" : "Actions")
+                }
+            }
+        }
+        .onChange(of: isSelecting) { _, newValue in
+            if !newValue {
+                selectedFigNums.removeAll()
+            }
+        }
+        .alert(
+            "Action impossible",
+            isPresented: Binding(
+                get: { selectionActionError != nil },
+                set: { isPresented in if !isPresented { selectionActionError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(selectionActionError ?? "")
         }
         .sheet(isPresented: $showFilters) {
             MinifigFilterSheet(
