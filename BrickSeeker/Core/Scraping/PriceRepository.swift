@@ -26,6 +26,14 @@ struct PriceRepository: PriceRepositoryProtocol {
     func fetchPrices(for legoSet: LegoSet) async -> [PriceQuote] {
         guard await NetworkMonitor.shared.isConnected else { return [] }
 
+        // A minifig (`fig-…`) is never sold at retail on its own — lego.com, Amazon and
+        // Cdiscount don't list it individually, so scraping them only wastes throttled
+        // requests and produces misleading "Indisponible" rows. Only BrickLink prices it
+        // (issue #175).
+        guard !legoSet.setNum.isMinifig else {
+            return (try? await brickLinkRepository.fetchPrices(for: legoSet)) ?? []
+        }
+
         return await withTaskGroup(of: [PriceQuote].self) { group in
             group.addTask {
                 (try? await brickLinkRepository.fetchPrices(for: legoSet)) ?? []

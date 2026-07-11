@@ -72,6 +72,11 @@ final class SetDetailViewModel {
 
     @MainActor
     func refreshStorePrice() async {
+        // A minifig has no standalone lego.com listing — only BrickLink prices it (issue #175).
+        guard !legoSet.setNum.isMinifig else {
+            isLoadingStorePrice = false
+            return
+        }
         guard NetworkMonitor.shared.isConnected else {
             // `isLoadingStorePrice` may already be `true` from `init` (it pre-sets the spinner
             // when there's no cached price yet, before this function ever runs) — must be reset
@@ -118,10 +123,18 @@ final class SetDetailViewModel {
     /// A missing source is never treated as a fresh cache hit — "Indisponible" is always
     /// re-checked live rather than trusted from cache, since it's the state most likely to
     /// have changed.
+    ///
+    /// A minifig only ever has BrickLink quotes (`PriceRepository.fetchPrices` skips the retail
+    /// scrapes for it, issue #175) — expecting the full `PriceSource.allCases` set would make
+    /// `hasEverySource` permanently false and force a live re-fetch on every appearance instead
+    /// of respecting `staleAfter`.
     @discardableResult
     @MainActor
     func loadPricesIfNeeded(staleAfter: TimeInterval = 24 * 60 * 60) async -> Bool {
-        let hasEverySource = PriceSource.allCases.allSatisfy { source in
+        let expectedSources: [PriceSource] = legoSet.setNum.isMinifig
+            ? [.bricklinkNew, .bricklinkUsed]
+            : PriceSource.allCases
+        let hasEverySource = expectedSources.allSatisfy { source in
             priceQuotes.contains { $0.source == source }
         }
         if hasEverySource, let oldestFetch = priceQuotes.map(\.fetchedAt).min(),

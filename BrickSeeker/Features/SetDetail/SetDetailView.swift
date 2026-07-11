@@ -599,11 +599,18 @@ struct SetDetailView: View {
                 .accessibilityLabel("Actualiser les prix")
             }
 
-            legoStoreRow
+            // A minifig has no standalone retail listing — lego.com/€ per pièce/Amazon/Cdiscount
+            // never sell it individually, so only BrickLink actually quotes it (issue #175).
+            if !isMinifig {
+                legoStoreRow
 
-            pricePerPartRow
+                pricePerPartRow
+            }
 
-            ForEach([PriceSource.amazon, .cdiscount, .bricklinkNew, .bricklinkUsed], id: \.self) { source in
+            let sources: [PriceSource] = isMinifig
+                ? [.bricklinkNew, .bricklinkUsed]
+                : [.amazon, .cdiscount, .bricklinkNew, .bricklinkUsed]
+            ForEach(sources, id: \.self) { source in
                 sourceRow(source)
             }
         }
