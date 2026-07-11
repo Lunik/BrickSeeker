@@ -27,8 +27,13 @@ struct HistoryView: View {
     @State private var selectionActionError: String?
     @State private var showRemoveScansConfirmation = false
     @State private var showAddToListPicker = false
+    /// Sets targeted by the next `showAddToListPicker` flow — either the current multi-select
+    /// checkbox selection, or the single row long-pressed for a context menu action (#172), set
+    /// right before presenting the sheet.
+    @State private var pendingActionTargets: [CachedSet] = []
 
     private var filteredSets: [CachedSet] { cachedSets.filteredAndSorted(by: filter, resolvedPrice: resolvedPrice) }
+    private var selectedCachedSets: [CachedSet] { filteredSets.filter { selectedSetNums.contains($0.setNum) } }
     private var availableThemeIds: [Int] { Set(cachedSets.map(\.themeId)).sorted() }
     private var availableYears: [Int] { Set(cachedSets.map(\.year)).sorted(by: >) }
 
@@ -60,17 +65,17 @@ struct HistoryView: View {
 
     /// Reuses `CollectionPriceUpdater.shared`, same as `CollectionView`'s bulk refresh (#141) —
     /// a single global run, so a concurrent/paused unrelated job means `.busy`, not silently
-    /// hijacking that other queue.
-    private func refreshSelectedPrices() async {
+    /// hijacking that other queue. Shared by the bulk menu and the row context menu (#172), which
+    /// pass the filtered selection / `[cached]` respectively.
+    private func refreshPrices(for sets: [CachedSet]) async {
         selectionActionError = nil
-        let selected = filteredSets.filter { selectedSetNums.contains($0.setNum) }
-        guard !selected.isEmpty else { return }
+        guard !sets.isEmpty else { return }
 
         isPerformingBulkAction = true
         defer { isPerformingBulkAction = false }
 
         let outcome = await CollectionPriceUpdater.shared.refreshPrices(
-            for: selected.map { $0.asLegoSet() },
+            for: sets.map { $0.asLegoSet() },
             persist: CollectionPriceUpdater.persistClosure(modelContext: modelContext)
         )
 
@@ -86,19 +91,19 @@ struct HistoryView: View {
         }
     }
 
-    /// Adds every selected set to `listId` on Rebrickable — same as `WishlistView`'s bulk action
+    /// Adds every set in `sets` to `listId` on Rebrickable — same as `WishlistView`'s bulk action
     /// (#141): a scanned set isn't necessarily owned, so this just adds it to the chosen list.
-    private func addSelectedToCollection(listId: Int, listName: String) async {
+    /// Shared by the bulk menu and the row context menu (`[cached]`, via `pendingActionTargets`, #172).
+    private func addToCollection(_ sets: [CachedSet], listId: Int, listName: String) async {
         selectionActionError = nil
-        let selected = filteredSets.filter { selectedSetNums.contains($0.setNum) }
-        guard !selected.isEmpty else { return }
+        guard !sets.isEmpty else { return }
 
         isPerformingBulkAction = true
         defer { isPerformingBulkAction = false }
 
         let localRepository = LocalRepository(modelContext: modelContext)
         var failureCount = 0
-        for cached in selected {
+        for cached in sets {
             do {
                 try await rebrickableRepository.addSetToList(setNum: cached.setNum, listId: listId)
                 localRepository.setCollectionStatus(setNum: cached.setNum, isInCollection: true, listId: listId, listName: listName)
@@ -114,23 +119,23 @@ struct HistoryView: View {
         }
     }
 
-    /// Adds every selected set to the Brickset wishlist (#166) — same repository/local-cache
+    /// Adds every set in `sets` to the Brickset wishlist (#166) — same repository/local-cache
     /// pairing as `SetDetailViewModel.toggleWishlist()`'s add branch, looped over the selection.
-    private func addSelectedToWishlist() async {
+    /// Shared by the bulk menu and the row context menu (`[cached]`, #172).
+    private func addToWishlist(_ sets: [CachedSet]) async {
         selectionActionError = nil
         guard NetworkMonitor.shared.isConnected else {
             selectionActionError = UserMessage.offlineStatus
             return
         }
-        let selected = filteredSets.filter { selectedSetNums.contains($0.setNum) }
-        guard !selected.isEmpty else { return }
+        guard !sets.isEmpty else { return }
 
         isPerformingBulkAction = true
         defer { isPerformingBulkAction = false }
 
         let localRepository = LocalRepository(modelContext: modelContext)
         var failureCount = 0
-        for cached in selected {
+        for cached in sets {
             do {
                 try await bricksetRepository.addToWishlist(setNum: cached.setNum)
                 localRepository.setWishlistStatus(setNum: cached.setNum, isInWishlist: true)
@@ -217,6 +222,35 @@ struct HistoryView: View {
                             }
                         }
                     }
+                    // Long-press shortcut for the same actions as the multi-select "Actions" menu
+                    // below, applied to this single set (#172). Hidden while selecting — the two
+                    // selection modes don't cohabit. "Retirer le scan" reuses `setPendingDeletion`,
+                    // the exact same confirmation flow already wired to the swipe action above.
+                    .contextMenu {
+                        if !isSelecting {
+                            Button {
+                                Task { await refreshPrices(for: [cached]) }
+                            } label: {
+                                Label("Actualiser les prix", systemImage: "arrow.clockwise")
+                            }
+                            Button {
+                                pendingActionTargets = [cached]
+                                showAddToListPicker = true
+                            } label: {
+                                Label("Ajouter à la collection", systemImage: "shippingbox")
+                            }
+                            Button {
+                                Task { await addToWishlist([cached]) }
+                            } label: {
+                                Label("Ajouter à ma liste de cadeaux", systemImage: "heart")
+                            }
+                            Button(role: .destructive) {
+                                setPendingDeletion = cached
+                            } label: {
+                                Label("Retirer le scan", systemImage: "trash")
+                            }
+                        }
+                    }
                 }
                 .contentMargins(.top, 0, for: .scrollContent)
             }
@@ -255,17 +289,18 @@ struct HistoryView: View {
                 if isSelecting {
                     Menu {
                         Button {
-                            Task { await refreshSelectedPrices() }
+                            Task { await refreshPrices(for: selectedCachedSets) }
                         } label: {
                             Label("Actualiser les prix", systemImage: "arrow.clockwise")
                         }
                         Button {
+                            pendingActionTargets = selectedCachedSets
                             showAddToListPicker = true
                         } label: {
                             Label("Ajouter à la collection", systemImage: "shippingbox")
                         }
                         Button {
-                            Task { await addSelectedToWishlist() }
+                            Task { await addToWishlist(selectedCachedSets) }
                         } label: {
                             Label("Ajouter à ma liste de cadeaux", systemImage: "heart")
                         }
@@ -306,7 +341,7 @@ struct HistoryView: View {
         }
         .sheet(isPresented: $showAddToListPicker) {
             ListPickerView(repository: rebrickableRepository) { listId, listName in
-                Task { await addSelectedToCollection(listId: listId, listName: listName) }
+                Task { await addToCollection(pendingActionTargets, listId: listId, listName: listName) }
             }
         }
         .alert("Retirer ces sets de l'Historique ?", isPresented: $showRemoveScansConfirmation) {

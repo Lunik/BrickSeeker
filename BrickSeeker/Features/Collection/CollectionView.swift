@@ -21,6 +21,10 @@ struct CollectionView: View {
     @State private var selectionActionError: String?
     @State private var showMoveListPicker = false
     @State private var showRemoveConfirmation = false
+    /// Sets targeted by the next `showMoveListPicker`/`showRemoveConfirmation` flow — either the
+    /// current multi-select checkbox selection, or the single row long-pressed for a context menu
+    /// action (#172), set right before presenting the sheet/alert.
+    @State private var pendingActionTargets: [CachedSet] = []
 
     private var conditionByListId: [Int: ListCondition] {
         Dictionary(allCachedSetLists.map { ($0.listId, $0.condition) }, uniquingKeysWith: { first, _ in first })
@@ -69,19 +73,19 @@ struct CollectionView: View {
         return viewModel.cachedSets.filter { selectedSetNums.contains($0.setNum) }
     }
 
-    /// Batch "refresh prices" action on the selected sets, reusing `CollectionPriceUpdater
-    /// .shared` — the same singleton driven by `CollectionPriceUpdateSection` from Réglages —
-    /// rather than a parallel pipeline (see #141).
-    private func refreshSelectedPrices() async {
+    /// "Refresh prices" action, reusing `CollectionPriceUpdater.shared` — the same singleton
+    /// driven by `CollectionPriceUpdateSection` from Réglages — rather than a parallel pipeline
+    /// (see #141). Shared by the multi-select bulk menu and the single-row context menu (#172),
+    /// which pass `selectedCachedSets` / `[cached]` respectively.
+    private func refreshPrices(for sets: [CachedSet]) async {
         selectionActionError = nil
-        let selected = selectedCachedSets
-        guard !selected.isEmpty else { return }
+        guard !sets.isEmpty else { return }
 
         isPerformingBulkAction = true
         defer { isPerformingBulkAction = false }
 
         let outcome = await CollectionPriceUpdater.shared.refreshPrices(
-            for: selected.map { $0.asLegoSet() },
+            for: sets.map { $0.asLegoSet() },
             persist: CollectionPriceUpdater.persistClosure(modelContext: modelContext)
         )
 
@@ -97,19 +101,19 @@ struct CollectionView: View {
         }
     }
 
-    /// Moves every selected set into `listId` on Rebrickable — a set with no known current list
-    /// is added rather than moved (there's nothing to remove it from).
-    private func moveSelectedToList(listId: Int, listName: String) async {
+    /// Moves every set in `sets` into `listId` on Rebrickable — a set with no known current list
+    /// is added rather than moved (there's nothing to remove it from). Shared by the bulk menu
+    /// (`selectedCachedSets`) and the row context menu (`[cached]`, via `pendingActionTargets`, #172).
+    private func moveToList(_ sets: [CachedSet], listId: Int, listName: String) async {
         selectionActionError = nil
-        let selected = selectedCachedSets
-        guard !selected.isEmpty else { return }
+        guard !sets.isEmpty else { return }
 
         isPerformingBulkAction = true
         defer { isPerformingBulkAction = false }
 
         let localRepository = LocalRepository(modelContext: modelContext)
         var failureCount = 0
-        for cached in selected {
+        for cached in sets {
             do {
                 if let fromListId = cached.currentListId, fromListId != listId {
                     try await rebrickableRepository.moveSetToList(setNum: cached.setNum, fromListId: fromListId, toListId: listId)
@@ -129,17 +133,18 @@ struct CollectionView: View {
         }
     }
 
-    private func removeSelectedFromCollection() async {
+    /// Shared by the bulk menu (`selectedCachedSets`) and the row context menu (`[cached]`, via
+    /// `pendingActionTargets`, #172).
+    private func removeFromCollection(_ sets: [CachedSet]) async {
         selectionActionError = nil
-        let selected = selectedCachedSets
-        guard !selected.isEmpty else { return }
+        guard !sets.isEmpty else { return }
 
         isPerformingBulkAction = true
         defer { isPerformingBulkAction = false }
 
         let localRepository = LocalRepository(modelContext: modelContext)
         var failureCount = 0
-        for cached in selected {
+        for cached in sets {
             do {
                 try await rebrickableRepository.removeSetFromCollection(setNum: cached.setNum)
                 localRepository.setCollectionStatus(setNum: cached.setNum, isInCollection: false, listId: nil, listName: nil)
@@ -206,6 +211,33 @@ struct CollectionView: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        // Long-press shortcut for the same actions as the multi-select "Actions"
+                        // menu below, applied to this single set (#172). Hidden while selecting —
+                        // the two selection modes don't cohabit.
+                        .contextMenu {
+                            if !isSelecting {
+                                Button {
+                                    Task { await refreshPrices(for: [cached]) }
+                                } label: {
+                                    Label("Actualiser les prix", systemImage: "arrow.clockwise")
+                                }
+                                Button {
+                                    pendingActionTargets = [cached]
+                                    showMoveListPicker = true
+                                } label: {
+                                    Label("Déplacer vers une liste", systemImage: "folder")
+                                }
+                                // Unlike the bulk `Menu` above, a `.contextMenu` on a single row
+                                // doesn't get the destructive red-flash-across-selection glitch,
+                                // so `role: .destructive` is safe to use here (see #172).
+                                Button(role: .destructive) {
+                                    pendingActionTargets = [cached]
+                                    showRemoveConfirmation = true
+                                } label: {
+                                    Label("Retirer de la collection", systemImage: "trash")
+                                }
+                            }
+                        }
                     }
                     .contentMargins(.top, 0, for: .scrollContent)
                 }
@@ -248,11 +280,12 @@ struct CollectionView: View {
                     if isSelecting {
                         Menu {
                             Button {
-                                Task { await refreshSelectedPrices() }
+                                Task { await refreshPrices(for: selectedCachedSets) }
                             } label: {
                                 Label("Actualiser les prix", systemImage: "arrow.clockwise")
                             }
                             Button {
+                                pendingActionTargets = selectedCachedSets
                                 showMoveListPicker = true
                             } label: {
                                 Label("Déplacer vers une liste", systemImage: "folder")
@@ -262,6 +295,7 @@ struct CollectionView: View {
                             // flash on the selection background), not just on tap. The icon still
                             // renders in the app's red accent color either way.
                             Button {
+                                pendingActionTargets = selectedCachedSets
                                 showRemoveConfirmation = true
                             } label: {
                                 Label("Retirer de la collection", systemImage: "trash")
@@ -295,16 +329,16 @@ struct CollectionView: View {
         }
         .sheet(isPresented: $showMoveListPicker) {
             ListPickerView(repository: rebrickableRepository) { listId, listName in
-                Task { await moveSelectedToList(listId: listId, listName: listName) }
+                Task { await moveToList(pendingActionTargets, listId: listId, listName: listName) }
             }
         }
         .alert("Retirer de la collection ?", isPresented: $showRemoveConfirmation) {
             Button("Retirer", role: .destructive) {
-                Task { await removeSelectedFromCollection() }
+                Task { await removeFromCollection(pendingActionTargets) }
             }
             Button("Annuler", role: .cancel) {}
         } message: {
-            Text("\(selectedSetNums.count) set(s) seront retirés de votre collection Rebrickable.")
+            Text("\(pendingActionTargets.count) set(s) seront retirés de votre collection Rebrickable.")
         }
         .alert(
             "Action impossible",
