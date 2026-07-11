@@ -101,7 +101,10 @@ final class CollectionPriceUpdater {
 
             let legoSet = queue.remaining.removeFirst()
             let quotes = await priceRepository.fetchPrices(for: legoSet)
-            let storePrice = try? await legoStoreRepository.fetchStorePrice(setNum: legoSet.setNum)
+            // lego.com never lists a minifig on its own — only BrickLink prices it (issue #175).
+            let storePrice = legoSet.setNum.isMinifig
+                ? nil
+                : try? await legoStoreRepository.fetchStorePrice(setNum: legoSet.setNum)
             await persist(legoSet, quotes, storePrice)
 
             saveQueue(queue)
