@@ -13,6 +13,7 @@ protocol RebrickableRepositoryProtocol: Sendable {
     func updateSetQuantity(setNum: String, listId: Int, quantity: Int) async throws
     func fetchUserSetLists() async throws -> [SetList]
     func createSetList(name: String) async throws -> SetList
+    func fetchSetsContainingMinifig(figNum: String, pageSize: Int) async throws -> PaginatedResponse<MinifigSetEntry>
 }
 
 enum SetResolution {
@@ -182,6 +183,18 @@ final class RebrickableRepository: RebrickableRepositoryProtocol, @unchecked Sen
                 formBody: ["quantity": String(quantity)]
             )
         }
+    }
+
+    // Endpoint 11
+    // One page only (`pageSize`), not a full `fetchAllUserSets`-style pagination loop — a
+    // popular minifig can appear in hundreds of sets, and #178 only ever shows a capped gallery,
+    // so looping to fetch every page would be pure waste. `count` in the response tells the
+    // caller how many more exist beyond this page for an "et N sets supplémentaires" note.
+    func fetchSetsContainingMinifig(figNum: String, pageSize: Int = 30) async throws -> PaginatedResponse<MinifigSetEntry> {
+        try await client.get(
+            path: RebrickableEndpoint.minifigSetsPath(figNum: figNum),
+            queryItems: [URLQueryItem(name: "page_size", value: String(pageSize))]
+        )
     }
 
     // MARK: - User token retry on 403

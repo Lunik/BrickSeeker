@@ -30,4 +30,8 @@ enum RebrickableEndpoint {
     static func setListSetPath(userToken: String, listId: Int, setNum: String) -> String {
         "/users/\(userToken)/setlists/\(listId)/sets/\(setNum)/"
     }
+
+    static func minifigSetsPath(figNum: String) -> String {
+        "/lego/minifigs/\(figNum)/sets/"
+    }
 }
