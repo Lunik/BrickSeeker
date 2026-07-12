@@ -10,9 +10,10 @@ struct MinifigFilterSheet: View {
     let availableYears: [Int]
     let themeName: (Int) -> String
 
-    /// "Tous" stays pinned first; actual themes sort by display name, not raw `themeId`.
-    private var sortedThemeIds: [Int] {
-        availableThemeIds.sorted { themeName($0).localizedCaseInsensitiveCompare(themeName($1)) == .orderedAscending }
+    /// "Tous" stays pinned first. The actual rows are deduplicated by display name rather than
+    /// one per `themeId` — same reasoning as `SetFilterSheet.sortedThemeNames` (issue #171).
+    private var sortedThemeNames: [String] {
+        Set(availableThemeIds.map(themeName)).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
     var body: some View {
@@ -40,10 +41,10 @@ struct MinifigFilterSheet: View {
                 }
 
                 Section("Filtres") {
-                    Picker("Thème", selection: $filter.themeId) {
-                        Text("Tous").tag(Int?.none)
-                        ForEach(sortedThemeIds, id: \.self) { themeId in
-                            Text(themeName(themeId)).tag(Int?.some(themeId))
+                    Picker("Thème", selection: $filter.themeName) {
+                        Text("Tous").tag(String?.none)
+                        ForEach(sortedThemeNames, id: \.self) { name in
+                            Text(name).tag(String?.some(name))
                         }
                     }
 

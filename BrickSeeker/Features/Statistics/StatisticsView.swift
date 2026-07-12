@@ -116,7 +116,7 @@ struct StatisticsView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Répartition par thème").font(.headline)
             Chart(stats.themeBreakdown.prefix(10)) { entry in
-                BarMark(x: .value("Sets", entry.setCount), y: .value("Thème", ThemeNameStore.shared.displayName(forThemeId: entry.themeId)))
+                BarMark(x: .value("Sets", entry.setCount), y: .value("Thème", entry.themeName))
             }
             .frame(height: CGFloat(min(stats.themeBreakdown.count, 10)) * 28 + 20)
         }

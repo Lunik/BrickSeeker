@@ -41,8 +41,11 @@ enum SetSortOption: String, CaseIterable, Identifiable {
 @MainActor
 final class SetFilterState {
     var searchText = ""
-    /// `CachedSet.themeId`; nil means "all themes".
-    var themeId: Int?
+    /// Resolved theme display name (e.g. "City"), not a raw `themeId` — Rebrickable's theme
+    /// table is hierarchical and several distinct ids can share the same name (issue #171), so
+    /// the filter selects on the name and matches every id that resolves to it, rather than
+    /// picking one arbitrary id and silently excluding its homonyms. `nil` means "all themes".
+    var themeName: String?
     var year: Int?
     /// Collection only — filters by `CachedSet.currentListName`.
     var listName: String?
@@ -52,12 +55,12 @@ final class SetFilterState {
     var sortAscending = SetSortOption.dateScanned.defaultAscending
 
     var isFilterActive: Bool {
-        themeId != nil || year != nil || listName != nil || ownedOnly != nil ||
+        themeName != nil || year != nil || listName != nil || ownedOnly != nil ||
             sort != .dateScanned || sortAscending != sort.defaultAscending
     }
 
     func resetFilters() {
-        themeId = nil
+        themeName = nil
         year = nil
         listName = nil
         ownedOnly = nil
@@ -83,13 +86,17 @@ enum HistoryFilterState {
 }
 
 extension Array where Element == CachedSet {
-    /// - Parameter resolvedPrice: closure used only for `.price` sort — each screen passes its own
-    ///   rule (new-price chain for History, condition-aware for Collection). Nil falls back to
-    ///   `storePriceEUR` so callers that don't need price sorting can omit it.
+    /// - Parameters:
+    ///   - resolvedPrice: closure used only for `.price` sort — each screen passes its own rule
+    ///     (new-price chain for History, condition-aware for Collection). Nil falls back to
+    ///     `storePriceEUR` so callers that don't need price sorting can omit it.
+    ///   - themeName: display-name resolver, used to match `filter.themeName` against every
+    ///     `themeId` that resolves to it (see `SetFilterState.themeName`'s doc for why).
     @MainActor
     func filteredAndSorted(
         by filter: SetFilterState,
-        resolvedPrice: ((CachedSet) -> Double?)? = nil
+        resolvedPrice: ((CachedSet) -> Double?)? = nil,
+        themeName: (Int) -> String = { ThemeNameStore.shared.displayName(forThemeId: $0) }
     ) -> [CachedSet] {
         var result = self
 
@@ -100,8 +107,8 @@ extension Array where Element == CachedSet {
                     $0.setNum.localizedCaseInsensitiveContains(trimmedSearch)
             }
         }
-        if let themeId = filter.themeId {
-            result = result.filter { $0.themeId == themeId }
+        if let selectedThemeName = filter.themeName {
+            result = result.filter { themeName($0.themeId) == selectedThemeName }
         }
         if let year = filter.year {
             result = result.filter { $0.year == year }
