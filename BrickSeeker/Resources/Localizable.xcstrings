@@ -137,6 +137,9 @@
     "Actualiser les prix" : {
 
     },
+    "Actualiser les prix (%lld)" : {
+
+    },
     "Actualiser les prix de la collection" : {
 
     },
@@ -360,9 +363,6 @@
 
     },
     "Créer une nouvelle liste" : {
-
-    },
-    "Dans quels sets ?" : {
 
     },
     "Dans ta liste cadeaux" : {
@@ -668,6 +668,9 @@
     "Permet d'identifier un set déjà connu même sans réseau. Téléchargé depuis Rebrickable (~25 000 sets) ; le statut collection et les prix restent toujours en ligne." : {
 
     },
+    "Peut être trouvé dans les sets" : {
+
+    },
     "Plusieurs sets correspondent à %@, ouvre BrickSeeker pour préciser." : {
 
     },
@@ -801,6 +804,9 @@
 
     },
     "Retirer de la liste cadeaux ?" : {
+
+    },
+    "Retirer le scan" : {
 
     },
     "Retirer tous les scans" : {
