@@ -29,6 +29,16 @@ struct SetDetailView: View {
     /// never a live fetch for the whole list (issue #178, mirroring `MinifigGalleryView`'s own
     /// cache-only price rule).
     @State private var priceBySetNumInMinifigGallery: [String: Double] = [:]
+    /// Minifigs contained in this set (issue #184) — the exact reverse of
+    /// `setsContainingMinifig`, only ever populated for a real set, see `minifigsInSetSection`.
+    @State private var minifigsInSet: [MinifigSetEntry] = []
+    @State private var minifigsInSetTotalCount = 0
+    @State private var isLoadingMinifigsInSet = false
+    @State private var minifigsInSetErrorMessage: String?
+    /// Cache-only BrickLink-used price per fig number (issue #184) — the same single-number
+    /// convention `MinifigGalleryView.resolvedPrice` uses for a minifig card, since lego.com/
+    /// Amazon/Cdiscount never sell one individually (issue #175).
+    @State private var priceByFigNumInSetGallery: [String: Double] = [:]
     /// Own, independent `ScannerViewModel` (issue #178) — deliberately NOT the presenting
     /// screen's shared instance. `SetDetailView` is always presented as the leaf content of an
     /// outer `.lookupResultSheets(for:)` (see that type's doc); reusing that same view model here
@@ -141,6 +151,8 @@ struct SetDetailView: View {
                     scanHistorySection
 
                     setsContainingMinifigSection
+
+                    minifigsInSetSection
 
                     if viewModel.isLoading {
                         ProgressView()
@@ -266,6 +278,9 @@ struct SetDetailView: View {
         }
         .task {
             await loadSetsContainingMinifigIfNeeded()
+        }
+        .task {
+            await loadMinifigsInSetIfNeeded()
         }
     }
 
@@ -568,6 +583,136 @@ struct SetDetailView: View {
             }
         }
         .frame(width: Self.minifigSetCardWidth)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(entry.name)
+    }
+
+    /// Loads the minifigs this set contains (issue #184) — the exact reverse of
+    /// `loadSetsContainingMinifigIfNeeded` (#178). Runs once per view identity (guarded on
+    /// `minifigsInSet.isEmpty`); pricing for each minifig is resolved from the existing price
+    /// cache only (BrickLink used — the same single-number convention `MinifigGalleryView` uses
+    /// for a minifig card, since lego.com/Amazon/Cdiscount never sell one individually, #175).
+    private func loadMinifigsInSetIfNeeded() async {
+        guard !isMinifig, minifigsInSet.isEmpty, !isLoadingMinifigsInSet else { return }
+        isLoadingMinifigsInSet = true
+        defer { isLoadingMinifigsInSet = false }
+        do {
+            let response = try await rebrickableRepository.fetchMinifigsInSet(
+                setNum: viewModel.legoSet.setNum, pageSize: 30
+            )
+            minifigsInSet = response.results
+            minifigsInSetTotalCount = response.count
+            let repository = LocalRepository(modelContext: modelContext)
+            var prices: [String: Double] = [:]
+            for entry in response.results {
+                let quotes = repository.cachedPrices(setNum: entry.setNum)
+                if let quote = quotes.first(where: { $0.source == .bricklinkUsed }) {
+                    prices[entry.setNum] = (quote.amount as NSDecimalNumber).doubleValue
+                }
+            }
+            priceByFigNumInSetGallery = prices
+        } catch {
+            minifigsInSetErrorMessage = UserMessage.unknownError
+        }
+    }
+
+    /// "Minifigs de ce set" gallery (issue #184) — the exact symmetric of
+    /// `setsContainingMinifigSection` (#178), shown only for a real set. Collapses to nothing
+    /// once loaded if the set has no known minifig (the common case for most non-CMF/non-licensed
+    /// sets) rather than a persistent "aucune minifig" line — unlike `setsContainingMinifigSection`,
+    /// where a minifig genuinely appearing in zero sets is the rare, worth-flagging case.
+    @ViewBuilder
+    private var minifigsInSetSection: some View {
+        if !isMinifig, isLoadingMinifigsInSet || minifigsInSetErrorMessage != nil || !minifigsInSet.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Minifigs de ce set")
+                    .font(.subheadline.bold())
+
+                if isLoadingMinifigsInSet, minifigsInSet.isEmpty {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                } else if let errorMessage = minifigsInSetErrorMessage, minifigsInSet.isEmpty {
+                    Text(errorMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(minifigsInSet) { entry in
+                                Button {
+                                    openMinifigDetail(entry)
+                                } label: {
+                                    minifigInSetCard(entry)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 1)
+                    }
+                    if minifigsInSetTotalCount > minifigsInSet.count {
+                        Text("et \(minifigsInSetTotalCount - minifigsInSet.count) minifigs supplémentaires")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardStyle(padding: 12)
+        }
+    }
+
+    /// Opens the tapped minifig's own detail sheet (issue #184). A `fig-…` id 404s against
+    /// Rebrickable's live `/lego/sets/…` endpoints — `ScannerViewModel.resolveSet` only succeeds
+    /// for one already cached (same "cache-first scan resolution" rule as everywhere else, see
+    /// AGENTS.md), exactly the problem `MinifigGalleryView.openDetail` already works around by
+    /// seeding a `CachedSet` row first. Only seeds when no row exists yet, so a minifig already
+    /// tracked (owned, in a list) never has its real state clobbered by this gallery's more
+    /// limited data (no theme/year, no ownership info).
+    private func openMinifigDetail(_ entry: MinifigSetEntry) {
+        let repository = LocalRepository(modelContext: modelContext)
+        if repository.cachedSet(setNum: entry.setNum) == nil {
+            repository.cacheSet(
+                LegoSet(
+                    setNum: entry.setNum,
+                    name: entry.name,
+                    year: 0,
+                    themeId: 0,
+                    numParts: entry.numParts,
+                    setImgUrl: entry.setImgUrl,
+                    setUrl: nil
+                ),
+                isInCollection: false,
+                listId: nil,
+                listName: nil,
+                markAsScanned: false
+            )
+        }
+        relatedSetLookupViewModel.lookupSetNumber(entry.setNum, source: .listReopen)
+    }
+
+    private static let minifigInSetCardWidth: CGFloat = 110
+
+    private func minifigInSetCard(_ entry: MinifigSetEntry) -> some View {
+        VStack(spacing: 6) {
+            SetThumbnailView(imageUrl: entry.setImgUrl, size: Self.minifigInSetCardWidth)
+
+            VStack(spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(entry.setNum.baseSetNum)
+                        .font(.caption.bold())
+                    if let quantity = entry.quantity, quantity > 1 {
+                        Text("×\(quantity)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if let price = priceByFigNumInSetGallery[entry.setNum] {
+                    Text(Decimal(price).formatted(.currency(code: "EUR")))
+                        .font(.caption2.bold())
+                }
+            }
+        }
+        .frame(width: Self.minifigInSetCardWidth)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(entry.name)
     }

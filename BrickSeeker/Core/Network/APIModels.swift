@@ -46,12 +46,15 @@ extension String {
     var isMinifig: Bool { hasPrefix("fig-") }
 }
 
-/// One entry from `/lego/minifigs/{fig_num}/sets/` (issue #178) — the sets a given minifig has
-/// appeared in. `quantity` is decoded defensively as optional: neither of the two independent
-/// third-party sources consulted while verifying this endpoint (check-rebrickable-endpoint skill)
-/// documented a per-set quantity field for this specific list, unlike sibling endpoints that
-/// nest a nearly-identical `LegoSet` shape alongside a `quantity` — so the UI only shows the
-/// "×N" badge when the field happens to be present rather than assuming it always is.
+/// One entry from `/lego/minifigs/{fig_num}/sets/` (issue #178, the sets a given minifig has
+/// appeared in) **or** its exact reverse `/lego/sets/{set_num}/minifigs/` (issue #184, the
+/// minifigs a given set contains) — Rebrickable serializes both sides of this pivot with the same
+/// nested shape, only the meaning of `setNum` flips (a real set number vs. a `fig-…` id). `quantity`
+/// is decoded defensively as optional: neither of the two independent third-party sources
+/// consulted while verifying this endpoint (check-rebrickable-endpoint skill) documented a
+/// per-entry quantity field for this specific list, unlike sibling endpoints that nest a
+/// nearly-identical `LegoSet` shape alongside a `quantity` — so the UI only shows the "×N" badge
+/// when the field happens to be present rather than assuming it always is.
 struct MinifigSetEntry: Codable, Identifiable, Hashable, Sendable {
     var id: String { setNum }
 
