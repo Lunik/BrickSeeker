@@ -2,11 +2,15 @@ import Foundation
 import Observation
 import SwiftData
 
-/// One theme's slice of the collection. `themeId` is shown raw (e.g. "Thème #158") since
-/// Rebrickable's `themes` endpoint isn't wired up — see issue #14's accepted fallback.
+/// One theme's slice of the collection, grouped by resolved display name rather than raw
+/// `themeId` — Rebrickable's theme table is hierarchical, so distinct ids can share a name, and
+/// grouping by id alone used to split a single theme (e.g. "City") into two identical-looking
+/// slices (issue #171). `themeId` is kept only as a stable `Identifiable` key (one representative
+/// id per name group), not for display.
 struct ThemeBreakdown: Identifiable {
     var id: Int { themeId }
     let themeId: Int
+    let themeName: String
     let setCount: Int
     let partCount: Int
 }
@@ -97,7 +101,11 @@ final class StatisticsViewModel {
     /// `@Observable`-only-tracks-stored-properties rule in AGENTS.md.
     func recomputeStats() {
         let priceByNum = Dictionary(uniqueKeysWithValues: ownedSets.map { ($0.setNum, effectivePriceEUR(for: $0)) })
-        stats = Self.computeStats(from: ownedSets, priceByNum: priceByNum)
+        stats = Self.computeStats(
+            from: ownedSets,
+            priceByNum: priceByNum,
+            themeName: { themeNameStore.displayName(forThemeId: $0) }
+        )
     }
 
     var setsForExport: [CachedSet] { ownedSets }
@@ -114,19 +122,27 @@ final class StatisticsViewModel {
         return effectiveValuationPrice(storePriceEUR: set.storePriceEUR, condition: condition, quotes: quotes)
     }
 
-    /// `priceByNum` is precomputed by `load()` via `effectivePriceEUR(for:)` — the lego.com →
-    /// Amazon → BrickLink-used fallback chain — since this function stays pure/static and has no
-    /// repository access of its own.
-    private static func computeStats(from sets: [CachedSet], priceByNum: [String: Double?]) -> CollectionStats {
+    /// - Parameters:
+    ///   - priceByNum: precomputed by `load()` via `effectivePriceEUR(for:)` — the lego.com →
+    ///     Amazon → BrickLink-used fallback chain — since this function stays pure/static and has
+    ///     no repository access of its own.
+    ///   - themeName: display-name resolver, used to group `themeBreakdown` by name rather than
+    ///     raw `themeId` (see `ThemeBreakdown`'s doc for why).
+    private static func computeStats(
+        from sets: [CachedSet],
+        priceByNum: [String: Double?],
+        themeName: (Int) -> String
+    ) -> CollectionStats {
         guard !sets.isEmpty else { return .empty }
 
         let partCount = sets.reduce(0) { $0 + $1.numParts * $1.quantity }
-        let themeCount = Set(sets.map(\.themeId)).count
+        let themeCount = Set(sets.map(\.themeId).map(themeName)).count
 
-        let themeBreakdown = Dictionary(grouping: sets, by: \.themeId)
-            .map { themeId, sets in
+        let themeBreakdown = Dictionary(grouping: sets) { themeName($0.themeId) }
+            .map { name, sets in
                 ThemeBreakdown(
-                    themeId: themeId,
+                    themeId: sets.map(\.themeId).min() ?? 0,
+                    themeName: name,
                     setCount: sets.count,
                     partCount: sets.reduce(0) { $0 + $1.numParts * $1.quantity }
                 )
