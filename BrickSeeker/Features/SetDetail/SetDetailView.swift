@@ -56,7 +56,6 @@ struct SetDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
-    let onScanAgain: () -> Void
     private let reconcileOnAppear: Bool
     private let isOfflineResult: Bool
     /// Only used by `setsContainingMinifigSection` (issue #178) — a plain repository call kept
@@ -74,8 +73,7 @@ struct SetDetailView: View {
         initialIsInWishlist: Bool = false,
         reconcileOnAppear: Bool = false,
         isOfflineResult: Bool = false,
-        pendingPriceScanEvent: ScanEvent? = nil,
-        onScanAgain: @escaping () -> Void
+        pendingPriceScanEvent: ScanEvent? = nil
     ) {
         _viewModel = State(initialValue: SetDetailViewModel(
             legoSet: legoSet,
@@ -93,7 +91,6 @@ struct SetDetailView: View {
         _priceScanEventForPrompt = State(initialValue: pendingPriceScanEvent)
         self.reconcileOnAppear = reconcileOnAppear
         self.isOfflineResult = isOfflineResult
-        self.onScanAgain = onScanAgain
     }
 
     private var isMinifig: Bool { viewModel.legoSet.setNum.isMinifig }
@@ -159,25 +156,39 @@ struct SetDetailView: View {
                     }
 
                     if let errorMessage = viewModel.errorMessage {
-                        Text(errorMessage)
-                            .foregroundStyle(Color.brickDanger)
-                            .font(.footnote)
+                        DismissibleErrorLabel(message: errorMessage) {
+                            viewModel.errorMessage = nil
+                        }
                     }
 
                     actionButtons
 
-                    HStack(spacing: 16) {
+                    // `.subheadline` + vertical padding (not the previous bare `.footnote` text,
+                    // a ~16 pt tap target) and a trailing "opens in browser" icon on each (#150) —
+                    // both leave the app, which nothing on screen used to signal before the tap.
+                    HStack(spacing: 24) {
                         if let url = rebrickableURL {
-                            Link("Voir sur Rebrickable", destination: url)
-                                .font(.footnote)
+                            Link(destination: url) {
+                                HStack(spacing: 4) {
+                                    Text("Voir sur Rebrickable")
+                                    ExternalLinkIcon()
+                                }
+                            }
+                            .font(.subheadline)
                         }
                         // lego.com has no building-instructions page for a minifig (issue #173) —
                         // only shown for a real set.
                         if !isMinifig, let url = LegoStoreRepository.instructionsUrl(setNum: viewModel.legoSet.setNum) {
-                            Link("Notice de montage", destination: url)
-                                .font(.footnote)
+                            Link(destination: url) {
+                                HStack(spacing: 4) {
+                                    Text("Notice de montage")
+                                    ExternalLinkIcon()
+                                }
+                            }
+                            .font(.subheadline)
                         }
                     }
+                    .padding(.vertical, 6)
                 }
                 .padding(16)
             }
@@ -188,9 +199,17 @@ struct SetDetailView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
+                    // Just closes the sheet (#153) — it used to also unconditionally call an
+                    // `onScanAgain` closure that reset the presenting `ScannerViewModel` back to
+                    // `.scanning`, worded and modeled as "resume the camera" even when this sheet
+                    // was opened from History/Collection/Wishlist/Statistics (`.listReopen`),
+                    // where there's no camera to resume. `dismiss()` alone already flips the
+                    // presenter's `isPresented` binding to `false`, and `LookupResultSheetsModifier`
+                    // already resets that same view model's state from its binding's `set` — the
+                    // one place that actually knows what dismissal should mean for a given
+                    // presenter, rather than this view guessing via a second, redundant call.
                     Button("Fermer") {
                         dismiss()
-                        onScanAgain()
                     }
                 }
             }
@@ -353,18 +372,37 @@ struct SetDetailView: View {
                     }
                 }
                 .frame(height: 180)
+                // Swift Charts draws no accessible content by default — VoiceOver saw nothing
+                // here at all (#143). A label + a plain-text summary of the latest reading per
+                // source stands in for a full `AXChartDescriptor` at a fraction of the code, and
+                // covers the actual question a VoiceOver user has ("what's the current price").
+                .accessibilityLabel("Évolution des prix, \(bySource.count) source\(bySource.count > 1 ? "s" : "")")
+                .accessibilityValue(priceHistoryAccessibilitySummary(bySource))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .cardStyle(padding: 12)
         }
     }
 
+    /// One "Source : dernier prix" clause per line, newest reading first — read out as the
+    /// `Chart`'s `accessibilityValue` (#143) since Swift Charts marks itself accessibility-hidden
+    /// by default.
+    private func priceHistoryAccessibilitySummary(_ bySource: [String: [PriceHistoryEntry]]) -> String {
+        bySource.keys.sorted().compactMap { source in
+            guard let latest = bySource[source]?.max(by: { $0.fetchedAt < $1.fetchedAt }) else { return nil }
+            let amount = latest.amount.formatted(.currency(code: latest.currency))
+            return "\(source.priceHistorySourceDisplayName) : \(amount)"
+        }.joined(separator: ", ")
+    }
+
     /// How many scan rows "Tes scans" shows before collapsing into an "et N scans plus
     /// anciens" line — keeps a much-rescanned set from bloating the sheet.
     private static let maxVisibleScanRows = 6
-    /// Fixed height budgeted per row in the embedded `List` below — sized generously enough for
-    /// a two-line row (date + place name) plus default List row insets.
-    private static let scanRowHeight: CGFloat = 60
+    /// Budgeted height per row in the embedded `List` below, sized generously enough for a
+    /// two-line row (date + place name) plus default List row insets at the *default* text size.
+    /// `@ScaledMetric` (#144) — a plain fixed 60 pt truncated the row at large accessibility
+    /// Dynamic Type sizes, where date+place+price no longer fit on two lines.
+    @ScaledMetric private var scanRowHeight: CGFloat = 60
 
     private var locatedScanEvents: [ScanEvent] {
         scanEvents.filter(\.hasLocation)
@@ -418,7 +456,7 @@ struct SetDetailView: View {
                 .listStyle(.plain)
                 .scrollDisabled(true)
                 .scrollContentBackground(.hidden)
-                .frame(height: CGFloat(min(scanEvents.count, Self.maxVisibleScanRows)) * Self.scanRowHeight)
+                .frame(height: CGFloat(min(scanEvents.count, Self.maxVisibleScanRows)) * scanRowHeight)
                 if scanEvents.count > Self.maxVisibleScanRows {
                     Text("et \(scanEvents.count - Self.maxVisibleScanRows) scans plus anciens")
                         .font(.caption)
@@ -478,6 +516,17 @@ struct SetDetailView: View {
         .frame(height: 140)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .allowsHitTesting(false)
+        // A plain map with no visible chrome read as a static illustration, not something to tap
+        // (#150) — this small corner badge is the same "expand" affordance a Photos/Maps
+        // thumbnail uses.
+        .overlay(alignment: .bottomTrailing) {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .font(.caption2.bold())
+                .foregroundStyle(.white)
+                .padding(6)
+                .background(.black.opacity(0.5), in: Circle())
+                .padding(6)
+        }
         .contentShape(Rectangle())
         .onTapGesture { showScanMap = true }
         .accessibilityLabel("Carte des scans de ce set")
@@ -771,20 +820,31 @@ struct SetDetailView: View {
                     availabilityBadge(viewModel.storePrice?.status ?? .unknown)
                     let code = viewModel.storePrice?.currency ?? "EUR"
                     if let url = LegoStoreRepository.storeUrl(setNum: viewModel.legoSet.setNum) {
-                        Link(Decimal(amount).formatted(.currency(code: code)), destination: url)
-                            .foregroundStyle(.primary)
+                        // Trailing external-link icon (#150) — in this same list, some prices are
+                        // tappable `Link`s and some are plain `Text`, with nothing before now to
+                        // tell them apart.
+                        Link(destination: url) {
+                            HStack(spacing: 4) {
+                                Text(Decimal(amount).formatted(.currency(code: code)))
+                                ExternalLinkIcon()
+                            }
+                        }
+                        .foregroundStyle(.primary)
                     } else {
                         Text(Decimal(amount).formatted(.currency(code: code)))
                     }
                 }
             } else if viewModel.isLoadingStorePrice {
                 ProgressView().controlSize(.small)
-            } else {
+            } else if let reason = viewModel.storePriceErrorMessage {
                 // Surfaces the specific reason (e.g. "Ce set n'est plus sur lego.com" for a 404)
-                // instead of the generic "Indisponible" the other price rows fall back to —
-                // a set genuinely removed from the store and one that's just slow to check
-                // aren't the same thing.
-                Text(viewModel.storePriceErrorMessage ?? "Indisponible")
+                // instead of the generic "Indisponible" the other price rows fall back to — a set
+                // genuinely removed from the store and one that's just slow to check aren't the
+                // same thing, so this gets error styling (#149) while plain "Indisponible" below
+                // stays neutral/secondary.
+                InlineErrorLabel(message: reason, font: .subheadline)
+            } else {
+                Text("Indisponible")
                     .foregroundStyle(.secondary)
             }
         }
@@ -836,6 +896,12 @@ struct SetDetailView: View {
                         }
                         Text(ppp.formatted(.currency(code: currency)))
                             .foregroundStyle(.primary)
+                        // This row opens Settings (to adjust the €/pièce threshold), unlike every
+                        // other row in this list which is either static text or a `Link` out to
+                        // the web — nothing distinguished it from a plain price (#150).
+                        Image(systemName: "gearshape")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -861,8 +927,13 @@ struct SetDetailView: View {
                             .foregroundStyle(promo.color)
                     }
                     if let sourceURL = quote.sourceURL {
-                        Link(quote.amount.formatted(.currency(code: quote.currency)), destination: sourceURL)
-                            .foregroundStyle(.primary)
+                        Link(destination: sourceURL) {
+                            HStack(spacing: 4) {
+                                Text(quote.amount.formatted(.currency(code: quote.currency)))
+                                ExternalLinkIcon()
+                            }
+                        }
+                        .foregroundStyle(.primary)
                     } else {
                         Text(quote.amount.formatted(.currency(code: quote.currency)))
                     }
@@ -966,10 +1037,14 @@ struct SetDetailView: View {
             VStack(spacing: 8) {
                 Label("Statut inconnu : \(message)", systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
-                Button("Réessayer") {
+                // The only way out of this state (#149) — a plain footnote link read as
+                // low-priority/optional text, not the actionable recovery it actually is.
+                Button("Réessayer", systemImage: "arrow.clockwise") {
                     Task { await viewModel.retryCollectionStatus() }
                 }
-                .font(.footnote)
+                .buttonStyle(.borderedProminent)
+                .tint(Color.brickDanger)
+                .controlSize(.small)
             }
         }
     }
@@ -1009,9 +1084,12 @@ struct SetDetailView: View {
                 } else {
                     Image(systemName: viewModel.isInWishlist ? "heart.fill" : "heart")
                 }
-                Text(viewModel.isInWishlist ? "Dans ta liste cadeaux" : "Ajouter à ta liste cadeaux")
+                Text(viewModel.isInWishlist ? "Dans votre liste cadeaux" : "Ajouter à votre liste cadeaux")
             }
-            .foregroundStyle(viewModel.isInWishlist ? .pink : .secondary)
+            // `.secondary` read as disabled rather than as a live, tappable action (#150) — the
+            // accent tint here reads as "you can tap this", matching every other action button
+            // on this screen, while still keeping pink once it's actually in the wishlist.
+            .foregroundStyle(viewModel.isInWishlist ? .pink : AppTheme.shared.accent)
         }
         .buttonStyle(.plain)
         .disabled(viewModel.isWishlistLoading)

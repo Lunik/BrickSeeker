@@ -113,7 +113,11 @@ struct HistoryView: View {
         }
 
         if failureCount > 0 {
-            selectionActionError = String(localized: "\(failureCount) set(s) n'ont pas pu être ajoutés à la collection. Vérifiez votre connexion.")
+            selectionActionError = setsCountSentence(
+                failureCount,
+                singular: "n'a pas pu être ajouté à la collection. Vérifiez votre connexion.",
+                plural: "n'ont pas pu être ajoutés à la collection. Vérifiez votre connexion."
+            )
         } else {
             isSelecting = false
         }
@@ -145,7 +149,11 @@ struct HistoryView: View {
         }
 
         if failureCount > 0 {
-            selectionActionError = String(localized: "\(failureCount) set(s) n'ont pas pu être ajoutés à la liste cadeaux. Vérifiez votre connexion.")
+            selectionActionError = setsCountSentence(
+                failureCount,
+                singular: "n'a pas pu être ajouté à la liste cadeaux. Vérifiez votre connexion.",
+                plural: "n'ont pas pu être ajoutés à la liste cadeaux. Vérifiez votre connexion."
+            )
         } else {
             isSelecting = false
         }
@@ -167,7 +175,7 @@ struct HistoryView: View {
                 ContentUnavailableView(
                     "Aucun set scanné",
                     systemImage: "clock.arrow.circlepath",
-                    description: Text("Les sets que tu scannes apparaîtront ici.")
+                    description: Text("Les sets que vous scannez apparaîtront ici.")
                 )
             } else if filteredSets.isEmpty {
                 ContentUnavailableView(
@@ -200,9 +208,12 @@ struct HistoryView: View {
                                 isInWishlist: cached.isInWishlist
                             ) {
                                 if cached.isInCollection {
+                                    // Color-only signal before this (#143) — a green checkmark
+                                    // reads as "owned" only if you can see green.
                                     Image(systemName: "checkmark.circle.fill")
                                         .font(.title3)
                                         .foregroundStyle(.green)
+                                        .accessibilityLabel("Dans votre collection")
                                 }
                             }
                             if isSelecting {
@@ -328,10 +339,13 @@ struct HistoryView: View {
                     if isSelecting {
                         Text("Terminé")
                     } else {
-                        Image(systemName: "square.and.pencil")
+                        // `square.and.pencil` (compose/edit) + "Actions" said neither "select"
+                        // nor "multiple" (#151) — `checklist` + "Sélectionner" names what tapping
+                        // it actually does.
+                        Image(systemName: "checklist")
                     }
                 }
-                .accessibilityLabel(isSelecting ? "Terminé" : "Actions")
+                .accessibilityLabel(isSelecting ? "Terminé" : "Sélectionner plusieurs sets")
             }
         }
         .onChange(of: isSelecting) { _, newValue in
@@ -389,7 +403,7 @@ struct HistoryView: View {
             Button("Annuler", role: .cancel) {}
         } message: { cached in
             if cached.isInCollection {
-                Text("« \(cached.name) » restera dans ta Collection, mais disparaîtra de l'Historique.")
+                Text("« \(cached.name) » restera dans votre Collection, mais disparaîtra de l'Historique.")
             } else {
                 Text("Tous les scans de « \(cached.name) » seront supprimés.")
             }
@@ -410,8 +424,9 @@ struct HistoryView: View {
         .onChange(of: SetPriceIndex.Version(allCachedPrices), initial: true) { _, _ in
             pricesBySetNum = SetPriceIndex.pricesBySetNum(allCachedPrices)
         }
-        .onDisappear {
-            HistoryFilterState.shared.resetFilters()
-        }
+        // No `onDisappear` filter reset (#153) — `HistoryFilterState` is a process-lifetime
+        // singleton precisely so the filter survives this view being torn down and recreated by
+        // a push/pop (see AGENTS.md); opening a set from a filtered list and coming back used to
+        // silently drop the filter every time.
     }
 }

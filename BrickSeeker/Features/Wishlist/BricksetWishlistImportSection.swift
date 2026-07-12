@@ -47,7 +47,7 @@ struct BricksetWishlistImportSection: View {
                 Task { await runImport(setNums: []) }
             } else {
                 guard KeychainService.shared.hasBricksetUserHash else {
-                    errorMessage = String(localized: "Lie d'abord ton compte Brickset ci-dessus.")
+                    errorMessage = String(localized: "Liez d'abord votre compte Brickset ci-dessus.")
                     return
                 }
                 errorMessage = nil

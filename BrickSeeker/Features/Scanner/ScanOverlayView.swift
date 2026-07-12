@@ -4,6 +4,7 @@ struct ScanOverlayView: View {
     let state: ScannerState
     var candidateDetected: Bool = false
     var candidateThumbnail: UIImage? = nil
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var frameColor: Color {
         switch state {
@@ -37,25 +38,51 @@ struct ScanOverlayView: View {
         }
     }
 
+    /// Only the genuine-error case gets an icon + a distinct background (#149) — a raw backend
+    /// error string used to render with the exact same chrome as "Scan en cours..."/"Détecté !",
+    /// no title, icon, or visual cue that this one meant something went wrong.
+    private var isErrorState: Bool {
+        if case .error = state { return true }
+        return false
+    }
+
     var body: some View {
         VStack {
-            Text(statusText)
+            HStack(spacing: 8) {
+                if isErrorState {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                }
+                Text(statusText)
+            }
                 .font(.headline)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(.black.opacity(0.6))
+                .background(isErrorState ? Color.brickDanger.opacity(0.85) : .black.opacity(0.6))
                 .foregroundStyle(.white)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .padding(.top, 24)
                 .animation(.easeInOut(duration: 0.2), value: statusText)
+                // The status text changes meaningfully (detected / not found / error) but was
+                // never announced to VoiceOver (#143) — combine into one element that updates as
+                // a live region instead of silently changing on screen.
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.updatesFrequently)
+                .onChange(of: statusText) { _, newValue in
+                    UIAccessibility.post(notification: .announcement, argument: newValue)
+                }
 
             Spacer()
 
             RoundedRectangle(cornerRadius: 12)
                 .strokeBorder(frameColor, lineWidth: candidateDetected ? 5 : 3)
                 .frame(width: ScannerViewModel.reticleSize.width, height: ScannerViewModel.reticleSize.height)
-                .scaleEffect(candidateDetected && state == .scanning ? 1.04 : 1)
-                .animation(.easeInOut(duration: 0.4).repeatForever(autoreverses: true), value: candidateDetected)
+                .scaleEffect(candidateDetected && state == .scanning && !reduceMotion ? 1.04 : 1)
+                // "Réduire les animations" used to be ignored entirely (#144) — the reticle kept
+                // pulsing in a loop regardless.
+                .animation(
+                    reduceMotion ? nil : .easeInOut(duration: 0.4).repeatForever(autoreverses: true),
+                    value: candidateDetected
+                )
                 .overlay {
                     if state == .processing {
                         ProgressView()

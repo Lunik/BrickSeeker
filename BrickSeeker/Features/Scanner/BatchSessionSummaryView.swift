@@ -240,9 +240,15 @@ struct BatchSessionSummaryView: View {
                 }
 
                 if let dealPercent = item.dealPercent {
-                    Text("\(dealPercent > 0 ? "+" : "")\(dealPercent)%")
-                        .font(.caption2.bold())
-                        .foregroundStyle(dealPercent < 0 ? .green : .red)
+                    // Green/red alone used to be the only signal for "good deal" vs "not" (#143)
+                    // — an arrow adds a shape-based channel next to the sign already in the text.
+                    Label {
+                        Text("\(dealPercent > 0 ? "+" : "")\(dealPercent)%")
+                    } icon: {
+                        Image(systemName: dealPercent < 0 ? "arrow.down.right" : "arrow.up.right")
+                    }
+                    .font(.caption2.bold())
+                    .foregroundStyle(dealPercent < 0 ? .green : .red)
                 }
             }
         }

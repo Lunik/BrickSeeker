@@ -170,15 +170,19 @@ struct HomeView: View {
         } label: {
             HStack {
                 Image(systemName: "exclamationmark.triangle.fill")
-                Text("API Key Rebrickable non configurée")
+                Text("Clé API Rebrickable non configurée")
                 Spacer()
                 Image(systemName: "chevron.right")
             }
             .font(.footnote.bold())
             .padding(12)
-            .background(Color.brickStud)
+            // `brickStud` is the scan/processing color, not a warning one (#156) — this banner
+            // means "something needs attention", the same semantic `.orange` uses for
+            // `StoreAvailabilityStatus.outOfStock`/the collection-status "unknown" badge
+            // elsewhere in the app.
+            .background(.orange)
             .foregroundStyle(.black)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
         }
     }
 
@@ -190,7 +194,9 @@ struct HomeView: View {
                 Button {
                     destination = .history
                 } label: {
-                    StatCard(title: "Sets scannés", value: "\(viewModel.scannedSetsCount)", icon: "number.square")
+                    // `isLink: true` (#150) — this card and "Scans effectués" right next to it
+                    // shared the exact same chrome despite only one of them going anywhere.
+                    StatCard(title: "Sets scannés", value: "\(viewModel.scannedSetsCount)", icon: "number.square", isLink: true)
                 }
                 .buttonStyle(.plain)
 
@@ -220,14 +226,14 @@ struct HomeView: View {
                     Button {
                         destination = .collection
                     } label: {
-                        StatCard(title: "Sets possédés", value: "\(viewModel.ownedSetsCount)", icon: "shippingbox")
+                        StatCard(title: "Sets possédés", value: "\(viewModel.ownedSetsCount)", icon: "shippingbox", isLink: true)
                     }
                     .buttonStyle(.plain)
 
                     Button {
                         destination = .minifigs
                     } label: {
-                        StatCard(title: "Mes minifigs", value: "\(viewModel.ownedMinifigsCount)", icon: "person.fill")
+                        StatCard(title: "Mes minifigs", value: "\(viewModel.ownedMinifigsCount)", icon: "person.fill", isLink: true)
                     }
                     .buttonStyle(.plain)
                 }
@@ -241,16 +247,23 @@ struct HomeView: View {
                     if viewModel.isSyncing {
                         ProgressView().controlSize(.small)
                         Text("Synchronisation…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     } else if let errorMessage = viewModel.syncErrorMessage {
-                        Text(errorMessage)
+                        // Was plain `.caption`/`.secondary` — identical to the neutral "Dernière
+                        // synchronisation" line right below it (#149), so a failed sync read as
+                        // just another status update.
+                        InlineErrorLabel(message: errorMessage, font: .caption)
                     } else if let lastSyncedAt = viewModel.lastSyncedAt {
                         Text("Dernière synchronisation : \(lastSyncedAt.formatted(date: .abbreviated, time: .shortened))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     } else {
                         Text(" ")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
                 .frame(minHeight: 16, alignment: .leading)
             }
         }
@@ -272,7 +285,7 @@ struct HomeView: View {
                 Button {
                     destination = .wishlist
                 } label: {
-                    StatCard(title: "Dans la liste cadeaux", value: "\(viewModel.wishlistSetsCount)", icon: "heart")
+                    StatCard(title: "Dans la liste cadeaux", value: "\(viewModel.wishlistSetsCount)", icon: "heart", isLink: true)
                 }
                 .buttonStyle(.plain)
 
@@ -283,16 +296,20 @@ struct HomeView: View {
                     if viewModel.isSyncing {
                         ProgressView().controlSize(.small)
                         Text("Synchronisation…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     } else if let errorMessage = viewModel.syncErrorMessage {
-                        Text(errorMessage)
+                        InlineErrorLabel(message: errorMessage, font: .caption)
                     } else if let lastSyncedAt = viewModel.lastSyncedAt {
                         Text("Dernière synchronisation : \(lastSyncedAt.formatted(date: .abbreviated, time: .shortened))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     } else {
                         Text(" ")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
                 .frame(minHeight: 16, alignment: .leading)
             }
         }
@@ -338,6 +355,20 @@ struct HomeView: View {
             }
         }
         .padding(.bottom, 32)
+        .background {
+            // Scrolled text used to show straight through the satellite buttons' `.thinMaterial`
+            // with nothing behind them (#156) — a bottom-anchored fade so content dims out before
+            // it reaches the cluster instead of bleeding through it.
+            LinearGradient(
+                colors: [Color(.systemBackground).opacity(0), Color(.systemBackground).opacity(0.9)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 160)
+            .frame(maxWidth: .infinity)
+            .allowsHitTesting(false)
+            .ignoresSafeArea(edges: .bottom)
+        }
     }
 
     private var scanButton: some View {

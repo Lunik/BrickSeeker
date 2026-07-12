@@ -39,21 +39,32 @@ struct PrivacyDetailView: View {
                 Section {
                     Label("Vous gardez le contrôle", systemImage: "hand.raised")
                         .font(.headline)
-                    Button("Gérer votre API Key sur Rebrickable") {
+                    // Every one of these opens a web page (#150) — nothing said so before the tap.
+                    externalLinkButton("Gérer votre API Key sur Rebrickable") {
                         showSafari = true
                     }
-                    Button("Gérer votre API Key sur Brickset") {
+                    externalLinkButton("Gérer votre API Key sur Brickset") {
                         showBricksetSafari = true
                     }
-                    Button("Gérer votre API Key sur BrickLink") {
+                    externalLinkButton("Gérer votre API Key sur BrickLink") {
                         showBrickLinkSafari = true
                     }
-                    Button("Lire la politique de confidentialité") {
+                    externalLinkButton("Lire la politique de confidentialité") {
                         showPrivacyPolicy = true
                     }
-                    Button("Réinitialiser BrickSeeker", role: .destructive) {
+                }
+
+                // Split into its own section, away from four anodyne "opens a web page" buttons
+                // it used to sit at the bottom of with only its red text/role to set it apart —
+                // an irreversible action (#152) deserves its own visual space.
+                Section {
+                    Button(role: .destructive) {
                         showResetConfirmation = true
+                    } label: {
+                        Label("Réinitialiser BrickSeeker", systemImage: "trash")
                     }
+                } footer: {
+                    Text("Supprime l'API Key enregistrée et l'historique des sets scannés.")
                 }
             }
             .navigationTitle("Comment BrickSeeker protège vos données")
@@ -86,6 +97,17 @@ struct PrivacyDetailView: View {
                 Button("Annuler", role: .cancel) {}
             } message: {
                 Text("Supprime l'API Key enregistrée et l'historique des sets scannés.")
+            }
+        }
+    }
+
+    private func externalLinkButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(title)
+                    .foregroundStyle(.primary)
+                Spacer()
+                ExternalLinkIcon()
             }
         }
     }

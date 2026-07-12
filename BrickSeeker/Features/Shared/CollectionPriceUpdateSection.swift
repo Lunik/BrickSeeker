@@ -38,9 +38,10 @@ struct CollectionPriceUpdateSection: View {
         }
 
         if let errorMessage {
-            Text(errorMessage)
-                .foregroundStyle(Color.brickDanger)
-                .font(.footnote)
+            // Used to persist with no way to dismiss it short of starting another update (#149).
+            DismissibleErrorLabel(message: errorMessage) {
+                self.errorMessage = nil
+            }
         }
 
         Button(buttonTitle) {

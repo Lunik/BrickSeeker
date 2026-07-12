@@ -29,6 +29,13 @@ struct ListPickerView: View {
             List {
                 if isLoading {
                     ProgressView()
+                } else if setLists.isEmpty && errorMessage == nil {
+                    // A successful load that just came back empty looked identical to a stuck
+                    // spinner or a silently-failed fetch, with nothing explaining there's simply
+                    // no list yet (#147).
+                    Text("Aucune liste sur votre compte. Créez-en une ci-dessous.")
+                        .foregroundStyle(.secondary)
+                        .font(.footnote)
                 } else {
                     ForEach(setLists.filter { $0.id != excludeListId }) { list in
                         Button {

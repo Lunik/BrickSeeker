@@ -42,6 +42,10 @@ struct SetFilterSheet: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.borderless)
+                        // Icon-only, no label before this (#143) — VoiceOver would have announced
+                        // the raw SF Symbol name instead of what tapping it does.
+                        .accessibilityLabel("Ordre de tri")
+                        .accessibilityValue(filter.sortAscending ? "Croissant" : "Décroissant")
                     }
                 }
 
@@ -80,7 +84,9 @@ struct SetFilterSheet: View {
 
                 if filter.isFilterActive {
                     Section {
-                        Button("Réinitialiser les filtres", role: .destructive) {
+                        // Was `role: .destructive` (red) — clearing filters loses no data, unlike
+                        // every other red button in the app (#153).
+                        Button("Réinitialiser les filtres") {
                             filter.resetFilters()
                         }
                     }
@@ -89,8 +95,11 @@ struct SetFilterSheet: View {
             .navigationTitle("Filtres")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // Filters already apply live as they're changed — a single "OK" (no "Annuler")
+                // implied a pending choice to confirm/cancel that doesn't actually exist (#153).
+                // "Fermer" says what the button does: close the sheet, nothing more.
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("OK") { dismiss() }
+                    Button("Fermer") { dismiss() }
                 }
             }
         }

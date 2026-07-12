@@ -16,7 +16,10 @@ struct SettingsView: View {
     @State private var isBrickLinkCredentialsVisible = false
     @State private var showClearCacheConfirmation = false
     @State private var isClearingCache = false
-    @State private var cacheCleared = false
+    @State private var toastMessage: String?
+    @State private var showUnlinkConfirmation = false
+    @State private var showUnlinkBricksetConfirmation = false
+    @State private var pricePerPartFeedback: String?
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -24,71 +27,16 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    HStack(spacing: 18) {
-                        ForEach(BrandColor.allCases) { brand in
-                            Button {
-                                theme.brandColor = brand
-                            } label: {
-                                Circle()
-                                    .fill(brand.accent)
-                                    .frame(width: 34, height: 34)
-                                    .overlay {
-                                        if theme.brandColor == brand {
-                                            Circle()
-                                                .strokeBorder(.primary, lineWidth: 2)
-                                                .padding(-3)
-                                        }
-                                    }
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(brand.displayName)
-                        }
-                    }
-                    .padding(.vertical, 4)
-
-                    Picker("Apparence", selection: $theme.appearanceMode) {
-                        ForEach(AppearanceMode.allCases) { mode in
-                            Text(mode.displayName).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                } header: {
-                    Text("Thème")
-                } footer: {
-                    Text("Choisissez la couleur de marque et l'apparence claire/sombre de l'application.")
-                }
-
-                Section {
-                    HStack {
-                        Text("Cible €/pièce")
-                        Spacer()
-                        TextField("0,12", text: $preferredPPPText)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 80)
-                            .onChange(of: preferredPPPText) { _, new in
-                                let normalised = new.replacingOccurrences(of: ",", with: ".")
-                                if let value = Double(normalised), value > 0 {
-                                    theme.preferredPricePerPart = value
-                                }
-                            }
-                        Text("€")
-                            .foregroundStyle(.secondary)
-                    }
-                } header: {
-                    Text("Valeur cible")
-                } footer: {
-                    Text("Seuil de €/pièce en dessous duquel un set est considéré comme un bon rapport qualité-prix. Affiché en vert sur la fiche set si le prix lego.com est inférieur à cette valeur, en rouge au-dessus.")
-                }
+                themeSection
+                pricePerPartSection
 
                 Section {
                     HStack {
                         Group {
                             if isAPIKeyVisible {
-                                TextField("API Key", text: $viewModel.apiKey)
+                                TextField("Clé API", text: $viewModel.apiKey)
                             } else {
-                                SecureField("API Key", text: $viewModel.apiKey)
+                                SecureField("Clé API", text: $viewModel.apiKey)
                             }
                         }
                         .textInputAutocapitalization(.never)
@@ -107,8 +55,11 @@ struct SettingsView: View {
                     if viewModel.isAccountLinked {
                         Label("Compte Rebrickable lié", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
+                        // Used to delete the token with no confirmation at all (#152), unlike
+                        // "Vider le cache"/"Purger le catalogue" right below in this same form —
+                        // re-linking means re-entering the password, which is never stored.
                         Button("Délier mon compte", role: .destructive) {
-                            viewModel.unlinkAccount()
+                            showUnlinkConfirmation = true
                         }
                     } else {
                         TextField("Nom d'utilisateur ou email", text: $viewModel.username)
@@ -142,16 +93,16 @@ struct SettingsView: View {
                 } header: {
                     Text("Compte Rebrickable")
                 } footer: {
-                    Text("Génère ta clé sur rebrickable.com/profile, dans la section API Key. Nécessaire pour voir et gérer votre collection. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session.")
+                    Text("Générez votre clé sur rebrickable.com/profile, dans la section « API Key ». Nécessaire pour voir et gérer votre collection. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session.")
                 }
 
                 Section {
                     HStack {
                         Group {
                             if isBricksetAPIKeyVisible {
-                                TextField("API Key", text: $viewModel.bricksetApiKey)
+                                TextField("Clé API", text: $viewModel.bricksetApiKey)
                             } else {
-                                SecureField("API Key", text: $viewModel.bricksetApiKey)
+                                SecureField("Clé API", text: $viewModel.bricksetApiKey)
                             }
                         }
                         .textInputAutocapitalization(.never)
@@ -171,7 +122,7 @@ struct SettingsView: View {
                         Label("Compte Brickset lié", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                         Button("Délier mon compte", role: .destructive) {
-                            viewModel.unlinkBricksetAccount()
+                            showUnlinkBricksetConfirmation = true
                         }
                     } else {
                         TextField("Nom d'utilisateur", text: $viewModel.bricksetUsername)
@@ -246,7 +197,7 @@ struct SettingsView: View {
                 } header: {
                     Text("API BrickLink")
                 } footer: {
-                    Text("Génère ces 4 valeurs sur bricklink.com/v3/api.page (section \"Register a Consumer\", puis \"Manage a Consumer\" → génère un jeton). Utilisé pour afficher les prix neuf/occasion BrickLink officiels ; nécessaire uniquement pour cette fonctionnalité.")
+                    Text("Générez ces 4 valeurs sur bricklink.com/v3/api.page (section « Register a Consumer », puis « Manage a Consumer » → générez un jeton) — les noms de champs ci-dessus reprennent ceux du site BrickLink. Utilisé pour afficher les prix neuf/occasion BrickLink officiels ; nécessaire uniquement pour cette fonctionnalité.")
                 }
 
                 Section {
@@ -268,7 +219,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Localisation des scans")
                 } footer: {
-                    Text("Capture la position (approximative) au moment d'un scan caméra, pour retrouver le magasin où tu as vu le meilleur prix. Stockée uniquement sur l'appareil, et supprimée dès que le set rejoint ta collection.")
+                    Text("Capture la position (approximative) au moment d'un scan caméra, pour retrouver le magasin où vous avez vu le meilleur prix. Stockée uniquement sur l'appareil, et supprimée dès que le set rejoint votre collection.")
                 }
 
                 Section {
@@ -405,9 +356,6 @@ struct SettingsView: View {
                             Spacer()
                             if isClearingCache {
                                 ProgressView()
-                            } else if cacheCleared {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(.green)
                             }
                         }
                     }
@@ -432,6 +380,22 @@ struct SettingsView: View {
             .sheet(isPresented: $showPrivacyDetail) {
                 PrivacyDetailView()
             }
+            .alert("Délier votre compte Rebrickable ?", isPresented: $showUnlinkConfirmation) {
+                Button("Délier", role: .destructive) {
+                    viewModel.unlinkAccount()
+                }
+                Button("Annuler", role: .cancel) {}
+            } message: {
+                Text("Vous devrez ressaisir votre mot de passe pour relier ce compte.")
+            }
+            .alert("Délier votre compte Brickset ?", isPresented: $showUnlinkBricksetConfirmation) {
+                Button("Délier", role: .destructive) {
+                    viewModel.unlinkBricksetAccount()
+                }
+                Button("Annuler", role: .cancel) {}
+            } message: {
+                Text("Vous devrez ressaisir votre mot de passe pour relier ce compte.")
+            }
             .confirmationDialog(
                 "Vider le cache ?",
                 isPresented: $showClearCacheConfirmation,
@@ -454,6 +418,81 @@ struct SettingsView: View {
                 formatter.decimalSeparator = ","
                 preferredPPPText = formatter.string(from: theme.preferredPricePerPart as NSNumber) ?? "0,12"
             }
+            .toast($toastMessage)
+        }
+    }
+
+    /// Pulled out of `body` (#143's `BrandColorSwatch` extraction wasn't enough on its own) —
+    /// the whole `Form` as one inline expression was too complex for the type-checker to solve in
+    /// reasonable time once this section's accessibility modifiers were added.
+    @ViewBuilder
+    private var themeSection: some View {
+        Section {
+            HStack(spacing: 18) {
+                ForEach(BrandColor.allCases) { brand in
+                    BrandColorSwatch(brand: brand, isSelected: theme.brandColor == brand) {
+                        theme.brandColor = brand
+                    }
+                }
+            }
+            .padding(.vertical, 4)
+
+            Picker("Apparence", selection: $theme.appearanceMode) {
+                ForEach(AppearanceMode.allCases) { mode in
+                    Text(mode.displayName).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+        } header: {
+            Text("Thème")
+        } footer: {
+            Text("Choisissez la couleur de marque et l'apparence claire/sombre de l'application.")
+        }
+    }
+
+    /// Pulled out of `body` for the same type-checker reason as `themeSection` — the invalid
+    /// -input feedback row (#154) added enough branching to tip the whole `Form` over.
+    @ViewBuilder
+    private var pricePerPartSection: some View {
+        Section {
+            HStack {
+                Text("Cible €/pièce")
+                Spacer()
+                TextField("0,12", text: $preferredPPPText)
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 80)
+                    .onChange(of: preferredPPPText) { _, new in
+                        let normalised = new.replacingOccurrences(of: ",", with: ".")
+                        if let value = Double(normalised), value > 0 {
+                            theme.preferredPricePerPart = value
+                            pricePerPartFeedback = nil
+                        } else {
+                            // Used to silently keep the last valid value with zero feedback
+                            // (#154) — an empty/0/non-numeric entry now says so and offers a way
+                            // back to the default instead of leaving the field looking accepted.
+                            pricePerPartFeedback = String(localized: "Valeur invalide — la dernière valeur valide est conservée.")
+                        }
+                    }
+                Text("€")
+                    .foregroundStyle(.secondary)
+            }
+            if let pricePerPartFeedback {
+                HStack {
+                    InlineErrorLabel(message: pricePerPartFeedback)
+                    Spacer()
+                    Button("Réinitialiser") {
+                        preferredPPPText = "0,12"
+                        theme.preferredPricePerPart = AppTheme.defaultPreferredPricePerPart
+                        self.pricePerPartFeedback = nil
+                    }
+                    .font(.footnote)
+                }
+            }
+        } header: {
+            Text("Valeur cible")
+        } footer: {
+            Text("Seuil de €/pièce en dessous duquel un set est considéré comme un bon rapport qualité-prix. Affiché en vert sur la fiche set si le prix lego.com est inférieur à cette valeur, en rouge au-dessus.")
         }
     }
 
@@ -476,11 +515,44 @@ struct SettingsView: View {
 
     private func clearCache() async {
         isClearingCache = true
-        cacheCleared = false
         LocalRepository(modelContext: modelContext).clearAll()
         await ImageCache.shared.clearAll()
         await BrickLinkMinifigIdStore.shared.clearAll()
         isClearingCache = false
-        cacheCleared = true
+        // A transient toast (#154), not a permanent green checkmark — the checkmark used to never
+        // clear itself, so it kept reading "cache vidé" long after the cache had genuinely
+        // re-filled from normal use.
+        toastMessage = String(localized: "Cache vidé")
+    }
+}
+
+/// One brand-color swatch. Pulled out of `SettingsView.body` — inlined, the accessibility
+/// modifiers on top of the existing conditional overlay made that `ForEach` too complex for the
+/// type-checker to solve in reasonable time.
+private struct BrandColorSwatch: View {
+    let brand: BrandColor
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Circle()
+                .fill(brand.accent)
+                .frame(width: 34, height: 34)
+                .overlay {
+                    if isSelected {
+                        Circle()
+                            .strokeBorder(.primary, lineWidth: 2)
+                            .padding(-3)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(brand.displayName)
+        // The label named the color but never said which one was actually selected (#143) —
+        // VoiceOver's own "sélectionné(e)" trait plus an explicit value cover both a swipe
+        // -through and a direct query.
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        .accessibilityValue(isSelected ? "Sélectionné" : "")
     }
 }

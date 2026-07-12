@@ -33,9 +33,7 @@ struct LookupResultSheetsModifier: ViewModifier {
                         reconcileOnAppear: viewModel.lastFoundWasFromCache,
                         isOfflineResult: viewModel.lastFoundWasOffline,
                         pendingPriceScanEvent: viewModel.pendingPriceScanEvent
-                    ) {
-                        viewModel.resumeScanning()
-                    }
+                    )
                 }
             }
             .sheet(isPresented: ambiguousBinding) {

@@ -132,7 +132,11 @@ struct WishlistView: View {
         }
 
         if failureCount > 0 {
-            selectionActionError = String(localized: "\(failureCount) set(s) n'ont pas pu être retirés de la liste cadeaux.")
+            selectionActionError = setsCountSentence(
+                failureCount,
+                singular: "n'a pas pu être retiré de la liste cadeaux.",
+                plural: "n'ont pas pu être retirés de la liste cadeaux."
+            )
         } else {
             isSelecting = false
         }
@@ -160,7 +164,11 @@ struct WishlistView: View {
         }
 
         if failureCount > 0 {
-            selectionActionError = String(localized: "\(failureCount) set(s) n'ont pas pu être ajoutés à la collection. Vérifiez votre connexion.")
+            selectionActionError = setsCountSentence(
+                failureCount,
+                singular: "n'a pas pu être ajouté à la collection. Vérifiez votre connexion.",
+                plural: "n'ont pas pu être ajoutés à la collection. Vérifiez votre connexion."
+            )
         } else {
             isSelecting = false
         }
@@ -171,8 +179,14 @@ struct WishlistView: View {
             if cachedSets.isEmpty {
                 ContentUnavailableView(
                     "Liste cadeaux vide",
-                    systemImage: "heart",
-                    description: Text("Ajoute un set à ta liste cadeaux depuis sa fiche, ou importe une liste Rebrickable publique.")
+                    // `heart` (outline) here, `heart.fill` everywhere else the wishlist marker
+                    // shows (`SetRowView`, this same button's own toolbar icon) — mismatched
+                    // iconography for the same concept (#156).
+                    systemImage: "heart.fill",
+                    // The old copy promised "importer une liste Rebrickable publique" — the real
+                    // flow is a CSV file picker, and the file has to be downloaded from
+                    // Rebrickable first (#147); this now says what actually happens.
+                    description: Text("Ajoutez un set à votre liste cadeaux depuis sa fiche, ou importez le CSV d'une liste Rebrickable avec le bouton en haut.")
                 )
             } else if filteredSets.isEmpty {
                 ContentUnavailableView(
@@ -313,10 +327,17 @@ struct WishlistView: View {
                         if isSelecting {
                             Text("Terminé")
                         } else {
-                            Image(systemName: "square.and.pencil")
+                            // `square.and.pencil` (compose/edit) + "Actions" — right next to a
+                            // Menu labelled "Actions (N)" once selecting, i.e. two adjacent
+                            // "Actions" controls meaning different things (#143/#151).
+                            Image(systemName: "checklist")
                         }
                     }
-                    .accessibilityLabel(isSelecting ? "Terminé" : "Actions")
+                    // A tap here used to clear the selection and hide the spinner while the bulk
+                    // network loop kept running in the background, orphaning it (#151) — now
+                    // blocked for the duration of that loop, same as the bulk Menu itself.
+                    .disabled(isSelecting && isPerformingBulkAction)
+                    .accessibilityLabel(isSelecting ? "Terminé" : "Sélectionner plusieurs sets")
                 }
             }
         }
@@ -339,7 +360,11 @@ struct WishlistView: View {
             }
             Button("Annuler", role: .cancel) {}
         } message: {
-            Text("\(pendingActionTargets.count) set(s) seront retirés de votre liste cadeaux.")
+            Text(setsCountSentence(
+                pendingActionTargets.count,
+                singular: "sera retiré de votre liste cadeaux.",
+                plural: "seront retirés de votre liste cadeaux."
+            ))
         }
         .onChange(of: SetPriceIndex.Version(allCachedPrices), initial: true) { _, _ in
             pricesBySetNum = SetPriceIndex.pricesBySetNum(allCachedPrices)
@@ -380,7 +405,7 @@ struct WishlistView: View {
                 try await bricksetRepository.removeFromWishlist(setNum: setNum)
                 LocalRepository(modelContext: modelContext).setWishlistStatus(setNum: setNum, isInWishlist: false)
             } catch APIError.missingCredentials {
-                errorMessage = String(localized: "Lie ton compte Brickset dans Réglages pour utiliser la liste cadeaux.")
+                errorMessage = String(localized: "Liez votre compte Brickset dans Réglages pour utiliser la liste cadeaux.")
             } catch let error as APIError {
                 errorMessage = error.errorDescription
             } catch {
