@@ -48,10 +48,10 @@ extension String {
 
 /// One entry from `/lego/minifigs/{fig_num}/sets/` (issue #178) — the sets a given minifig has
 /// appeared in. `quantity` is decoded defensively as optional: neither of the two independent
-/// third-party sources consulted while verifying this endpoint (check-rebrickable-endpoint skill)
-/// documented a per-set quantity field for this specific list, unlike sibling endpoints that
-/// nest a nearly-identical `LegoSet` shape alongside a `quantity` — so the UI only shows the
-/// "×N" badge when the field happens to be present rather than assuming it always is.
+/// third-party sources consulted while verifying this endpoint (check-rebrickable-endpoint
+/// skill) documented a per-set quantity field for this specific list, unlike sibling endpoints
+/// that nest a nearly-identical `LegoSet` shape alongside a `quantity` — so the UI only shows
+/// the "×N" badge when the field happens to be present rather than assuming it always is.
 struct MinifigSetEntry: Codable, Identifiable, Hashable, Sendable {
     var id: String { setNum }
 
@@ -69,6 +69,29 @@ struct MinifigSetEntry: Codable, Identifiable, Hashable, Sendable {
         case setImgUrl = "set_img_url"
         case setUrl = "set_url"
         case quantity
+    }
+}
+
+/// One entry from `/lego/sets/{set_num}/minifigs/` (issue #184) — the minifigs a given set
+/// contains. **Not** the same shape as `MinifigSetEntry` despite being the pivot's reverse side
+/// — confirmed live (a session's earlier assumption that Rebrickable serializes both directions
+/// identically was wrong and shipped a silent decode failure on every response, caught by
+/// manual simulator verification): this side nests only `id`/`set_num`/`set_name`/`quantity`/
+/// `set_img_url`, no `num_parts` or `set_url`, and the minifig's own name comes back as
+/// `set_name` rather than `name`.
+struct SetMinifigEntry: Codable, Identifiable, Hashable, Sendable {
+    var id: String { setNum }
+
+    let setNum: String
+    let name: String
+    let quantity: Int?
+    let setImgUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case setNum = "set_num"
+        case name = "set_name"
+        case quantity
+        case setImgUrl = "set_img_url"
     }
 }
 
