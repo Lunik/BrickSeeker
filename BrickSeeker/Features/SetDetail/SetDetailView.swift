@@ -31,7 +31,7 @@ struct SetDetailView: View {
     @State private var priceBySetNumInMinifigGallery: [String: Double] = [:]
     /// Minifigs contained in this set (issue #184) — the exact reverse of
     /// `setsContainingMinifig`, only ever populated for a real set, see `minifigsInSetSection`.
-    @State private var minifigsInSet: [MinifigSetEntry] = []
+    @State private var minifigsInSet: [SetMinifigEntry] = []
     @State private var minifigsInSetTotalCount = 0
     @State private var isLoadingMinifigsInSet = false
     @State private var minifigsInSetErrorMessage: String?
@@ -668,7 +668,7 @@ struct SetDetailView: View {
     /// seeding a `CachedSet` row first. Only seeds when no row exists yet, so a minifig already
     /// tracked (owned, in a list) never has its real state clobbered by this gallery's more
     /// limited data (no theme/year, no ownership info).
-    private func openMinifigDetail(_ entry: MinifigSetEntry) {
+    private func openMinifigDetail(_ entry: SetMinifigEntry) {
         let repository = LocalRepository(modelContext: modelContext)
         if repository.cachedSet(setNum: entry.setNum) == nil {
             repository.cacheSet(
@@ -677,7 +677,7 @@ struct SetDetailView: View {
                     name: entry.name,
                     year: 0,
                     themeId: 0,
-                    numParts: entry.numParts,
+                    numParts: 0,
                     setImgUrl: entry.setImgUrl,
                     setUrl: nil
                 ),
@@ -692,7 +692,7 @@ struct SetDetailView: View {
 
     private static let minifigInSetCardWidth: CGFloat = 110
 
-    private func minifigInSetCard(_ entry: MinifigSetEntry) -> some View {
+    private func minifigInSetCard(_ entry: SetMinifigEntry) -> some View {
         VStack(spacing: 6) {
             SetThumbnailView(imageUrl: entry.setImgUrl, size: Self.minifigInSetCardWidth)
 

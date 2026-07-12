@@ -14,7 +14,7 @@ protocol RebrickableRepositoryProtocol: Sendable {
     func fetchUserSetLists() async throws -> [SetList]
     func createSetList(name: String) async throws -> SetList
     func fetchSetsContainingMinifig(figNum: String, pageSize: Int) async throws -> PaginatedResponse<MinifigSetEntry>
-    func fetchMinifigsInSet(setNum: String, pageSize: Int) async throws -> PaginatedResponse<MinifigSetEntry>
+    func fetchMinifigsInSet(setNum: String, pageSize: Int) async throws -> PaginatedResponse<SetMinifigEntry>
 }
 
 enum SetResolution {
@@ -199,13 +199,12 @@ final class RebrickableRepository: RebrickableRepositoryProtocol, @unchecked Sen
     }
 
     // Endpoint 12
-    // Exact reverse of fetchSetsContainingMinifig (#184 mirroring #178): same nested Set-like
-    // response shape (Rebrickable serializes both sides of this set↔minifig pivot the same way),
-    // so it decodes into the same MinifigSetEntry — here `setNum` holds the `fig-…` id and
-    // `quantity` is how many copies of that minifig this set contains. One page only, same
-    // rationale as above (a set rarely has more than a handful of distinct minifigs, but nothing
-    // stops it).
-    func fetchMinifigsInSet(setNum: String, pageSize: Int = 30) async throws -> PaginatedResponse<MinifigSetEntry> {
+    // Reverse of fetchSetsContainingMinifig (#184 mirroring #178), but Rebrickable does NOT
+    // serialize this side of the set↔minifig pivot the same way — decodes into SetMinifigEntry,
+    // a distinct shape (see its doc comment). `quantity` is how many copies of that minifig this
+    // set contains. One page only, same rationale as above (a set rarely has more than a handful
+    // of distinct minifigs, but nothing stops it).
+    func fetchMinifigsInSet(setNum: String, pageSize: Int = 30) async throws -> PaginatedResponse<SetMinifigEntry> {
         try await client.get(
             path: RebrickableEndpoint.setMinifigsPath(setNum: setNum),
             queryItems: [URLQueryItem(name: "page_size", value: String(pageSize))]
