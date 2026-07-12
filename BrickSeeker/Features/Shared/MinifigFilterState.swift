@@ -36,8 +36,12 @@ enum MinifigSortOption: String, CaseIterable, Identifiable {
 @MainActor
 final class MinifigFilterState {
     var searchText = ""
-    /// Derived `themeId` (from the minifig's first containing set); nil means "all themes".
-    var themeId: Int?
+    /// Resolved theme display name (e.g. "City"), derived from the minifig's first containing
+    /// set — not a raw `themeId` — since Rebrickable's theme table is hierarchical and several
+    /// distinct ids can share the same name (issue #171, same reasoning as `SetFilterState
+    /// .themeName`): the filter selects on the name and matches every id that resolves to it.
+    /// `nil` means "all themes".
+    var themeName: String?
     /// Derived `year` (from the minifig's first containing set); nil means "all years".
     var year: Int?
     /// Default sort is by year (newest first, via `.year`'s `defaultAscending == false`) — the
@@ -50,12 +54,12 @@ final class MinifigFilterState {
     var ownedOnly = false
 
     var isFilterActive: Bool {
-        themeId != nil || year != nil || ownedOnly ||
+        themeName != nil || year != nil || ownedOnly ||
             sort != .year || sortAscending != sort.defaultAscending
     }
 
     func resetFilters() {
-        themeId = nil
+        themeName = nil
         year = nil
         ownedOnly = false
         sort = .year
@@ -91,8 +95,8 @@ extension Array where Element == OfflineMinifigCatalogStore.MinifigCatalogEntry 
                     $0.figNum.localizedCaseInsensitiveContains(trimmedSearch)
             }
         }
-        if let themeId = filter.themeId {
-            result = result.filter { $0.themeId == themeId }
+        if let selectedThemeName = filter.themeName {
+            result = result.filter { $0.themeId.map(themeName) == selectedThemeName }
         }
         if let year = filter.year {
             result = result.filter { $0.year == year }

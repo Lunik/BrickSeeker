@@ -48,7 +48,7 @@ struct MinifigGalleryView: View {
 
     private struct FilterSignature: Equatable {
         let searchText: String
-        let themeId: Int?
+        let themeName: String?
         let year: Int?
         let sort: MinifigSortOption
         let sortAscending: Bool
@@ -57,7 +57,7 @@ struct MinifigGalleryView: View {
 
     private var filterSignature: FilterSignature {
         FilterSignature(
-            searchText: filter.searchText, themeId: filter.themeId, year: filter.year,
+            searchText: filter.searchText, themeName: filter.themeName, year: filter.year,
             sort: filter.sort, sortAscending: filter.sortAscending, ownedOnly: filter.ownedOnly
         )
     }
