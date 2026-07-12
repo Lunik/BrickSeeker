@@ -88,6 +88,61 @@ sync call to a path that fires just from Home reappearing.
 `RebrickableRepositoryProtocol` is a DI seam — view models depend on the protocol and inject
 `RebrickableRepository()` by default, which keeps the dependency swappable if that's ever needed.
 
+## List / gallery screens — the shared pattern (don't reinvent it)
+
+`CollectionView`, `HistoryView`, `WishlistView` (lists) and `MinifigGalleryView` (gallery) are all
+the *same screen* wearing different data. Before building a new one (e.g. "new sets", a theme
+browser), copy the nearest existing screen rather than assembling it from scratch — every piece
+below already exists and has a paid-for reason to be the way it is.
+
+- **Reached from Home as a typed destination.** Add a case to `HomeView`'s `Destination` enum, a
+  `StatCard`/`statCardLink` tile, and a branch in the single `.navigationDestination(item:)`. Use
+  `item:`, never a second `.navigationDestination(isPresented:)` — chaining multiple `isPresented:`
+  destinations on one `NavigationStack` oscillates forever (construct/destroy at ~100% CPU); the
+  comment on `Destination` documents this. Taps that open a set go through
+  `lookupViewModel.lookupSetNumber` (the shared `ScannerViewModel` lookup path), not a new
+  resolution path.
+
+- **Search/filter/sort state is a process-lifetime singleton, not `@State`.** `SetFilterState`
+  (`Features/Shared/SetFilterState.swift`) holds `searchText` + theme/year/list/owned filters +
+  `SetSortOption`. Each screen gets its own singleton (`CollectionFilterState`, `HistoryFilterState`,
+  and the gallery's `MinifigFilterState`) because the view is rebuilt from scratch on every
+  push/present — per #38 the filter must survive that and reset only on relaunch. Apply it with
+  `Array<CachedSet>.filteredAndSorted(by:resolvedPrice:)`; feed the filter sheet
+  `availableThemeIds`/`availableYears` derived from the data. ⚠️ Theme options are still keyed by raw
+  `themeId`, so homonymous themes double up (#171) — same bug in every filter, fix once.
+
+- **Search bar:** `.searchable(text: $filter.searchText, placement: .navigationBarDrawer(displayMode:
+  .always), prompt: …)`. **Filter button** presents `SetFilterSheet`.
+
+- **Row:** the shared `SetRowView` with `trailingContent`. Prices are **cache-only** — read cached
+  quotes via `SetPriceIndex.pricesBySetNum` (memoize behind `SetPriceIndex.Version`, never per
+  render) and resolve per-screen with `resolveNewPrice`/`resolveCollectionPrice`/`resolveWishlistPrice`.
+  Don't kick off scrapes just to populate a list.
+
+- **Multi-select is homemade — do not use `List(selection:)`.** Its native circle can't be moved off
+  the leading edge (#161). Use `@State isSelecting`, `selectedSetNums: Set<String>`, a trailing
+  `RowSelectionIndicator`, and a row tap that toggles selection while selecting / opens detail
+  otherwise. Put the controls in a `ToolbarItemGroup(placement: .bottomBar)` — **not** the top bar,
+  which iOS hides while the search field is focused (#141). The bar carries "Tout sélectionner /
+  désélectionner" (over the *filtered* set), an "Actions (N)" `Menu`, and "Terminé". Clear
+  `selectedSetNums` when leaving select mode. Gate long-running bulk work behind
+  `isPerformingBulkAction` (spinner + `.disabled`) and surface failures through an error alert.
+
+- **Action-on-hold is a `.contextMenu` per row (#172)** exposing the *same* actions as that screen's
+  multi-select `Menu`, applied to a single `setNum` (reuse the bulk code paths with a one-element
+  set — don't duplicate the logic). `role: .destructive` **is** safe on a single-row `.contextMenu`;
+  it is **not** safe on the bulk `Menu` over selected `List` rows (SwiftUI red-flashes every selected
+  row the instant the menu opens), which is why the bulk "Retirer…" items deliberately omit the role.
+  Don't show the context menu while multi-select is active.
+
+- **Empty states use `ContentUnavailableView`** (ideally with an action button — see #147).
+  Destructive actions confirm via `.alert` and carry `role: .destructive`.
+
+- **Gallery variant** swaps the `List`+`SetRowView` for a `LazyVGrid` of cards
+  (`MinifigThumbnailView` / `MinifigGalleryView`); everything else above (filter-state singleton,
+  `.searchable`, filter sheet, multi-select, context menu, cache-only prices) is identical.
+
 ## Auth model — read this before touching anything credential-related
 
 There is **no login screen**. The app opens directly into the scanner. Two independent pieces
