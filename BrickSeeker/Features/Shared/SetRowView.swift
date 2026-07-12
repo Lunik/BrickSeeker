@@ -38,9 +38,12 @@ struct SetRowView<Trailing: View>: View {
                 HStack(spacing: 4) {
                     Text(setNum.baseSetNum).font(.headline)
                     if quantity > 1 {
+                        // VoiceOver read the bare "×2" as "multiplication 2" (#143) — an explicit
+                        // label says what it actually means.
                         Text("×\(quantity)")
                             .font(.caption.bold())
                             .foregroundStyle(.secondary)
+                            .accessibilityLabel("\(quantity) exemplaires")
                     }
                     if isInWishlist {
                         Image(systemName: "heart.fill")

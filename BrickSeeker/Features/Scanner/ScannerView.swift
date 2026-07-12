@@ -296,10 +296,16 @@ struct AmbiguousSetPickerView: View {
                 Button {
                     onSelect(set)
                 } label: {
-                    VStack(alignment: .leading) {
-                        Text(duplicatedBaseSetNums.contains(set.setNum.baseSetNum) ? set.setNum : set.setNum.baseSetNum)
-                            .font(.headline)
-                        Text(set.name).font(.subheadline).foregroundStyle(.secondary)
+                    // Every other list in the app shows a thumbnail via `SetRowView` — this was
+                    // the one exception, making near-identical set numbers harder to tell apart
+                    // by more than digits alone (#156).
+                    HStack(spacing: 14) {
+                        SetThumbnailView(imageUrl: set.setImgUrl)
+                        VStack(alignment: .leading) {
+                            Text(duplicatedBaseSetNums.contains(set.setNum.baseSetNum) ? set.setNum : set.setNum.baseSetNum)
+                                .font(.headline)
+                            Text(set.name).font(.subheadline).foregroundStyle(.secondary)
+                        }
                     }
                     .foregroundStyle(.primary)
                 }

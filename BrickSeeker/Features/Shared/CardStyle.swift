@@ -18,12 +18,26 @@ struct StatCard: View {
     let title: String
     let value: String
     let icon: String
+    /// Shows a small trailing chevron (#150) — some `StatCard`s are wrapped in a `Button` that
+    /// navigates (Home's "Sets scannés"/"Sets possédés"/"Mes minifigs"/"Dans la liste cadeaux"),
+    /// others are inert display-only tiles (Home's "Scans effectués", every tile in Statistics'
+    /// "Totaux" row); with identical chrome otherwise, nothing on screen told them apart. Defaults
+    /// to `false` so existing non-tappable call sites are unaffected.
+    var isLink: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(.tint)
+            HStack {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundStyle(.tint)
+                if isLink {
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.bold())
+                        .foregroundStyle(.tertiary)
+                }
+            }
             // `.lineLimit(2)` + a reserved 2-line-tall frame: a long `value` (or, on
             // `statCardLink`'s sibling `Text`, a long title) wrapping to 2 lines must not make
             // that one card taller than its neighbours in the same row — see `HomeView`'s

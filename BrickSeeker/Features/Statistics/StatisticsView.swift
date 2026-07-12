@@ -7,6 +7,8 @@ struct StatisticsView: View {
     @State private var viewModel: StatisticsViewModel?
     @State private var csvFile: ShareableFile?
     @State private var pdfFile: ShareableFile?
+    @State private var exportErrorMessage: String?
+    @State private var showSettings = false
     let lookupViewModel: ScannerViewModel
 
     /// True while the initial launch sync (#148) is still unresolved and there's nothing to show
@@ -38,11 +40,15 @@ struct StatisticsView: View {
                 ProgressView("Synchronisation…")
                     .frame(maxWidth: .infinity, minHeight: 400)
             } else {
-                ContentUnavailableView(
-                    "Aucune statistique",
-                    systemImage: "chart.bar",
-                    description: Text("Liez votre compte Rebrickable et synchronisez depuis l'accueil.")
-                )
+                ContentUnavailableView {
+                    Label("Aucune statistique", systemImage: "chart.bar")
+                } description: {
+                    Text("Liez votre compte Rebrickable et synchronisez depuis l'accueil.")
+                } actions: {
+                    Button("Ouvrir les Réglages") {
+                        showSettings = true
+                    }
+                }
                 .frame(maxWidth: .infinity, minHeight: 400)
             }
         }
@@ -78,6 +84,22 @@ struct StatisticsView: View {
         }
         .sheet(item: $csvFile) { file in ShareSheet(items: [file.url]) }
         .sheet(item: $pdfFile) { file in ShareSheet(items: [file.url]) }
+        .sheet(isPresented: $showSettings, onDismiss: {
+            viewModel?.load()
+        }) {
+            SettingsView()
+        }
+        .alert(
+            "Export impossible",
+            isPresented: Binding(
+                get: { exportErrorMessage != nil },
+                set: { isPresented in if !isPresented { exportErrorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(exportErrorMessage ?? "")
+        }
     }
 
     private func totalsSection(_ stats: CollectionStats) -> some View {
@@ -109,7 +131,15 @@ struct StatisticsView: View {
                 }
             }
             .frame(height: 200)
+            // Swift Charts draws no accessible content by default (#143) — a plain-text summary
+            // covers the actual question a VoiceOver user has, without a full `AXChartDescriptor`.
+            .accessibilityLabel("Répartition des sets par année")
+            .accessibilityValue(
+                stats.yearBreakdown.map { "\($0.label) : \($0.setCount)" }.joined(separator: ", ")
+            )
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle()
     }
 
     private func themeChartSection(_ stats: CollectionStats, _ viewModel: StatisticsViewModel) -> some View {
@@ -119,7 +149,13 @@ struct StatisticsView: View {
                 BarMark(x: .value("Sets", entry.setCount), y: .value("Thème", entry.themeName))
             }
             .frame(height: CGFloat(min(stats.themeBreakdown.count, 10)) * 28 + 20)
+            .accessibilityLabel("Répartition des sets par thème")
+            .accessibilityValue(
+                stats.themeBreakdown.prefix(10).map { "\($0.themeName) : \($0.setCount)" }.joined(separator: ", ")
+            )
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle()
     }
 
     private func valueSection(_ viewModel: StatisticsViewModel) -> some View {
@@ -135,6 +171,8 @@ struct StatisticsView: View {
                 .contentTransition(.numericText(value: Double(viewModel.stats.setsWithKnownPrice)))
                 .animation(.default, value: viewModel.stats.setsWithKnownPrice)
 
+            // `.caption` alone was a ~16 pt tap target (#150) — `.subheadline` plus vertical
+            // padding gets this closer to the 44 pt minimum.
             NavigationLink {
                 ListConditionsView()
             } label: {
@@ -142,23 +180,33 @@ struct StatisticsView: View {
                     Text("Configurer le type (neuf/occasion) des listes")
                     Image(systemName: "chevron.right")
                 }
-                .font(.caption)
+                .font(.subheadline)
             }
+            .padding(.vertical, 6)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle()
     }
 
+    @ViewBuilder
     private func superlativesSection(_ stats: CollectionStats) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Superlatifs").font(.headline)
-            if let mostExpensive = stats.mostExpensiveSet, let price = stats.mostExpensiveSetPriceEUR {
-                superlativeLink(set: mostExpensive, label: "Le plus cher : \(mostExpensive.setNum) — \(mostExpensive.name) (\(price.formatted(.currency(code: "EUR"))))")
+        // The header rendered even with all three rows absent, e.g. a collection with no priced
+        // set — an orphaned "Superlatifs" title over nothing (#147).
+        if stats.mostExpensiveSet != nil || stats.oldestSet != nil || stats.largestSet != nil {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Superlatifs").font(.headline)
+                if let mostExpensive = stats.mostExpensiveSet, let price = stats.mostExpensiveSetPriceEUR {
+                    superlativeLink(set: mostExpensive, label: "Le plus cher : \(mostExpensive.setNum) — \(mostExpensive.name) (\(price.formatted(.currency(code: "EUR"))))")
+                }
+                if let oldest = stats.oldestSet {
+                    superlativeLink(set: oldest, label: "Le plus ancien : \(oldest.setNum) — \(oldest.name) (\(oldest.year))")
+                }
+                if let largest = stats.largestSet {
+                    superlativeLink(set: largest, label: "Le plus de pièces : \(largest.setNum) — \(largest.name) (\(largest.numParts) pièces)")
+                }
             }
-            if let oldest = stats.oldestSet {
-                superlativeLink(set: oldest, label: "Le plus ancien : \(oldest.setNum) — \(oldest.name) (\(oldest.year))")
-            }
-            if let largest = stats.largestSet {
-                superlativeLink(set: largest, label: "Le plus de pièces : \(largest.setNum) — \(largest.name) (\(largest.numParts) pièces)")
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardStyle()
         }
     }
 
@@ -180,6 +228,8 @@ struct StatisticsView: View {
             Text("Prix de la collection").font(.headline)
             CollectionPriceUpdateSection(onCompleted: { viewModel.load() })
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle()
     }
 
     private func exportSection(_ viewModel: StatisticsViewModel) -> some View {
@@ -187,22 +237,35 @@ struct StatisticsView: View {
             Text("Exporter").font(.headline)
             HStack(spacing: 12) {
                 Button("Exporter en CSV") {
-                    csvFile = CollectionReportExporter.writeCSVToTempFile(
+                    // `writeCSVToTempFile` returning nil (disk write failure) used to just not
+                    // open the share sheet, with no feedback at all — the button looked dead
+                    // (#149).
+                    guard let file = CollectionReportExporter.writeCSVToTempFile(
                         sets: viewModel.setsForExport,
                         priceEUR: viewModel.effectivePriceEUR
-                    ).map(ShareableFile.init)
+                    ).map(ShareableFile.init) else {
+                        exportErrorMessage = String(localized: "Impossible de créer le fichier CSV. Vérifiez l'espace disponible sur l'appareil.")
+                        return
+                    }
+                    csvFile = file
                 }
                 Button("Exporter en PDF") {
-                    pdfFile = CollectionReportExporter.writePDFToTempFile(
+                    guard let file = CollectionReportExporter.writePDFToTempFile(
                         sets: viewModel.setsForExport,
                         stats: viewModel.stats,
                         priceEUR: viewModel.effectivePriceEUR,
                         lastSyncedAt: LocalRepository(modelContext: modelContext).lastFullSyncAt(),
                         lastPriceUpdateAt: CollectionPriceUpdater.shared.lastCompletedAt
-                    ).map(ShareableFile.init)
+                    ).map(ShareableFile.init) else {
+                        exportErrorMessage = String(localized: "Impossible de créer le fichier PDF. Vérifiez l'espace disponible sur l'appareil.")
+                        return
+                    }
+                    pdfFile = file
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle()
     }
 
 }

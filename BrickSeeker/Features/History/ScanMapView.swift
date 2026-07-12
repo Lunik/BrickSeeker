@@ -10,6 +10,7 @@ struct ScanMapView: View {
     @Query private var events: [ScanEvent]
     @Query private var cachedSets: [CachedSet]
     @State private var selectedEventID: PersistentIdentifier?
+    @State private var showSettings = false
     @Environment(\.dismiss) private var dismiss
 
     /// Only meaningful for the global (History) map: re-looks up the tapped scan's set.
@@ -40,11 +41,18 @@ struct ScanMapView: View {
         NavigationStack {
             Group {
                 if events.isEmpty {
-                    ContentUnavailableView(
-                        "Aucun scan localisé",
-                        systemImage: "mappin.slash",
-                        description: Text("Active la localisation des scans dans les paramètres, puis scanne un set en magasin.")
-                    )
+                    // Named a setting that doesn't exist ("localisation des scans" — the real
+                    // toggle is "Enregistrer la position des scans") and gave no way to actually
+                    // reach it (#147).
+                    ContentUnavailableView {
+                        Label("Aucun scan localisé", systemImage: "mappin.slash")
+                    } description: {
+                        Text("Activez « Enregistrer la position des scans » dans les Réglages, puis scannez un set en magasin.")
+                    } actions: {
+                        Button("Ouvrir les Réglages") {
+                            showSettings = true
+                        }
+                    }
                 } else {
                     Map(selection: $selectedEventID) {
                         ForEach(events) { event in
@@ -73,29 +81,40 @@ struct ScanMapView: View {
                     Button("Fermer") { dismiss() }
                 }
             }
+            .sheet(isPresented: $showSettings) {
+                SettingsView()
+            }
         }
     }
 
     private func selectedEventCard(_ event: ScanEvent) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(nameBySetNum[event.setNum].map { "\(event.setNum.baseSetNum) · \($0)" } ?? event.setNum.baseSetNum)
-                .font(.subheadline.bold())
-                .lineLimit(1)
-            if let placeName = event.placeName {
-                Label(placeName, systemImage: "mappin.and.ellipse")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            HStack {
-                Text(event.scannedAt.formatted(Self.dateStyle))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                if let price = event.priceSeenEUR {
-                    Text(Decimal(price).formatted(.currency(code: "EUR")))
-                        .font(.footnote.bold())
+            // Combined into one VoiceOver stop instead of 4 separate ones (name, place, date,
+            // price) — matches `StatCard`'s `.combine` convention (#143). Scoped to just this
+            // inner group (not the whole card) so the "Voir le set" button below stays its own,
+            // independently actionable stop rather than being swallowed into the combine too.
+            VStack(alignment: .leading, spacing: 6) {
+                Text(nameBySetNum[event.setNum].map { "\(event.setNum.baseSetNum) · \($0)" } ?? event.setNum.baseSetNum)
+                    .font(.subheadline.bold())
+                    .lineLimit(1)
+                if let placeName = event.placeName {
+                    Label(placeName, systemImage: "mappin.and.ellipse")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                HStack {
+                    Text(event.scannedAt.formatted(Self.dateStyle))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if let price = event.priceSeenEUR {
+                        Text(Decimal(price).formatted(.currency(code: "EUR")))
+                            .font(.footnote.bold())
+                            .accessibilityLabel("Prix vu : \(Decimal(price).formatted(.currency(code: "EUR")))")
+                    }
                 }
             }
+            .accessibilityElement(children: .combine)
             if let onSelect {
                 Button("Voir le set") {
                     onSelect(event.setNum)

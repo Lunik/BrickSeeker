@@ -7,6 +7,7 @@ struct CollectionView: View {
     @Query private var allCachedSetLists: [CachedSetList]
     @State private var viewModel: CollectionViewModel?
     @State private var showFilters = false
+    @State private var showSettings = false
     @Bindable private var filter = CollectionFilterState.shared
     let lookupViewModel: ScannerViewModel
     var rebrickableRepository: RebrickableRepositoryProtocol = RebrickableRepository()
@@ -176,11 +177,18 @@ struct CollectionView: View {
         Group {
             if let viewModel, !viewModel.cachedSets.isEmpty {
                 if filteredSets.isEmpty {
-                    ContentUnavailableView(
-                        "Aucun résultat",
-                        systemImage: "magnifyingglass",
-                        description: Text("Essayez de modifier la recherche ou les filtres.")
-                    )
+                    // Was a dead end (#147): no way to recover short of manually clearing the
+                    // search field and reopening the filter sheet.
+                    ContentUnavailableView {
+                        Label("Aucun résultat", systemImage: "magnifyingglass")
+                    } description: {
+                        Text("Essayez de modifier la recherche ou les filtres.")
+                    } actions: {
+                        Button("Réinitialiser les filtres") {
+                            filter.resetFilters()
+                            filter.searchText = ""
+                        }
+                    }
                 } else {
                     List(filteredSets, id: \.setNum) { cached in
                         // No `List(selection:)` binding — its native circle can't be moved off
@@ -245,16 +253,32 @@ struct CollectionView: View {
                 ProgressView("Synchronisation…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ContentUnavailableView(
-                    "Aucun set possédé",
-                    systemImage: "shippingbox",
-                    description: Text("Liez votre compte Rebrickable et synchronisez depuis l'accueil.")
-                )
+                // No way to act on this short of leaving the screen to find Settings yourself
+                // (#147) — the button opens the same sheet as Home's gear icon.
+                ContentUnavailableView {
+                    Label("Aucun set possédé", systemImage: "shippingbox")
+                } description: {
+                    Text("Liez votre compte Rebrickable et synchronisez depuis l'accueil.")
+                } actions: {
+                    Button("Ouvrir les Réglages") {
+                        showSettings = true
+                    }
+                }
             }
         }
         .searchable(text: $filter.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Nom ou numéro de set")
         .navigationTitle("Ma collection")
         .toolbar {
+            // Previously only reachable from Statistiques (#153) even though it directly affects
+            // the prices shown right here in Collection.
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    ListConditionsView()
+                } label: {
+                    Image(systemName: "tag")
+                }
+                .accessibilityLabel("Types de listes (neuf/occasion)")
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showFilters = true
@@ -292,13 +316,17 @@ struct CollectionView: View {
                             }
                             // Not `role: .destructive` — SwiftUI previews a destructive Menu item
                             // across the List's selected rows the instant the Menu opens (a red
-                            // flash on the selection background), not just on tap. The icon still
-                            // renders in the app's red accent color either way.
+                            // flash on the selection background), not just on tap. Since `role`
+                            // can't carry the danger signal here, the label is colored explicitly
+                            // instead (#152) — the accent color it relied on before is user
+                            // -configurable (yellow/blue/red), so "red" isn't guaranteed without
+                            // this.
                             Button {
                                 pendingActionTargets = selectedCachedSets
                                 showRemoveConfirmation = true
                             } label: {
                                 Label("Retirer de la collection", systemImage: "trash")
+                                    .foregroundStyle(Color.brickDanger)
                             }
                         } label: {
                             if isPerformingBulkAction {
@@ -315,10 +343,13 @@ struct CollectionView: View {
                         if isSelecting {
                             Text("Terminé")
                         } else {
-                            Image(systemName: "square.and.pencil")
+                            // `square.and.pencil` (compose/edit) + "Actions" said neither "select"
+                            // nor "multiple" (#151).
+                            Image(systemName: "checklist")
                         }
                     }
-                    .accessibilityLabel(isSelecting ? "Terminé" : "Actions")
+                    .disabled(isSelecting && isPerformingBulkAction)
+                    .accessibilityLabel(isSelecting ? "Terminé" : "Sélectionner plusieurs sets")
                 }
             }
         }
@@ -360,6 +391,11 @@ struct CollectionView: View {
                 showsOwnedFilter: false,
                 themeName: { ThemeNameStore.shared.displayName(forThemeId: $0) }
             )
+        }
+        .sheet(isPresented: $showSettings, onDismiss: {
+            viewModel?.load()
+        }) {
+            SettingsView()
         }
         .onChange(of: SetPriceIndex.Version(allCachedPrices), initial: true) { _, _ in
             pricesBySetNum = SetPriceIndex.pricesBySetNum(allCachedPrices)

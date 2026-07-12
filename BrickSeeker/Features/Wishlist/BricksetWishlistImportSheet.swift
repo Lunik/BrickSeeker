@@ -12,7 +12,7 @@ struct BricksetWishlistImportSheet: View {
                 Section {
                     BricksetWishlistImportSection()
                 } footer: {
-                    Text("Sur la page de ta custom list Rebrickable, onglet Sets, télécharge le CSV puis choisis-le ici pour ajouter tous ses sets à ta liste cadeaux Brickset.")
+                    Text("Sur la page de votre custom list Rebrickable, onglet Sets, téléchargez le CSV puis choisissez-le ici pour ajouter tous ses sets à votre liste cadeaux Brickset.")
                 }
             }
             .navigationTitle("Importer depuis Rebrickable")

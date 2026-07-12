@@ -30,3 +30,11 @@ enum UserMessage {
         String(localized: "Clé API Rebrickable manquante. Ajoutez-la dans les réglages pour identifier ce set.")
     }
 }
+
+/// Builds a French-correct singular/plural sentence for a bulk set count (#155) — several bulk
+/// actions (History/Collection/Wishlist/batch scan) used to interpolate a literal "set(s)" and a
+/// plural verb even when `count == 1`, e.g. "1 set(s) n'ont pas pu être ajoutés". `singular`/
+/// `plural` are the rest of the sentence after "1 set …" / "N sets …".
+func setsCountSentence(_ count: Int, singular: String, plural: String) -> String {
+    count == 1 ? String(localized: "1 set \(singular)") : String(localized: "\(count) sets \(plural)")
+}
