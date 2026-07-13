@@ -1,10 +1,13 @@
 {
   "sourceLanguage" : "fr",
   "strings" : {
+    "" : {
+
+    },
     " " : {
 
     },
-    "« %@ » restera dans ta Collection, mais disparaîtra de l'Historique." : {
+    "« %@ » restera dans votre Collection, mais disparaîtra de l'Historique." : {
 
     },
     "%" : {
@@ -49,6 +52,9 @@
         }
       }
     },
+    "%lld exemplaires" : {
+
+    },
     "%lld minifigs" : {
 
     },
@@ -62,9 +68,6 @@
         }
       }
     },
-    "%lld set(s) n'ont pas pu être ajoutés à la collection. Vérifiez votre connexion." : {
-
-    },
     "%lld set(s) n'ont pas pu être ajoutés à la liste cadeaux. Vérifiez votre connexion." : {
 
     },
@@ -74,20 +77,24 @@
     "%lld set(s) n'ont pas pu être déplacés. Vérifiez votre connexion." : {
 
     },
-    "%lld set(s) n'ont pas pu être retirés de la liste cadeaux." : {
-
-    },
     "%lld set(s) n'ont pas pu être retirés. Vérifiez votre connexion." : {
 
     },
     "%lld set(s) seront retirés de votre collection Rebrickable." : {
 
     },
-    "%lld set(s) seront retirés de votre liste cadeaux." : {
-
-    },
     "%lld sets" : {
 
+    },
+    "%lld sets %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld sets %2$@"
+          }
+        }
+      }
     },
     "•" : {
 
@@ -105,6 +112,9 @@
 
     },
     "0,12" : {
+
+    },
+    "1 set %@" : {
 
     },
     "Accès caméra refusé" : {
@@ -125,10 +135,10 @@
     "Activé" : {
 
     },
-    "Active la localisation des scans dans les paramètres, puis scanne un set en magasin." : {
+    "Activée" : {
 
     },
-    "Activée" : {
+    "Activez « Enregistrer la position des scans » dans les Réglages, puis scannez un set en magasin." : {
 
     },
     "Activité" : {
@@ -152,9 +162,6 @@
     "Afficher les identifiants" : {
 
     },
-    "Ajoute un set à ta liste cadeaux depuis sa fiche, ou importe une liste Rebrickable publique." : {
-
-    },
     "Ajouter à la collection" : {
 
     },
@@ -167,13 +174,16 @@
     "Ajouter à ma liste de cadeaux" : {
 
     },
-    "Ajouter à ta liste cadeaux" : {
-
-    },
     "Ajouter à une liste" : {
 
     },
+    "Ajouter à votre liste cadeaux" : {
+
+    },
     "Ajouter un set" : {
+
+    },
+    "Ajoutez un set à votre liste cadeaux depuis sa fiche, ou importez le CSV d'une liste Rebrickable avec le bouton en haut." : {
 
     },
     "Alimente la galerie « Mes minifigs » de l'accueil (~15 000 minifigs). Téléchargé depuis Rebrickable ; utilise aussi le catalogue de sets ci-dessus pour déterminer année/thème, et le télécharge d'abord si besoin. Les prix restent toujours en cache/en ligne, jamais chargés en masse ici." : {
@@ -191,13 +201,7 @@
     "API BrickLink configurée" : {
 
     },
-    "API Key" : {
-
-    },
     "API Key invalide" : {
-
-    },
-    "API Key Rebrickable non configurée" : {
 
     },
     "API Key Rebrickable, clé/identifiants Brickset et identifiants API BrickLink (OAuth) : dans le Keychain iOS" : {
@@ -242,6 +246,9 @@
     "Aucune liste" : {
 
     },
+    "Aucune liste sur votre compte. Créez-en une ci-dessous." : {
+
+    },
     "Aucune statistique" : {
 
     },
@@ -263,7 +270,10 @@
     "Brickset : votre liste cadeaux, avec vos identifiants Brickset (si vous liez votre compte)" : {
 
     },
-    "Capture la position (approximative) au moment d'un scan caméra, pour retrouver le magasin où tu as vu le meilleur prix. Stockée uniquement sur l'appareil, et supprimée dès que le set rejoint ta collection." : {
+    "Cache vidé" : {
+
+    },
+    "Capture la position (approximative) au moment d'un scan caméra, pour retrouver le magasin où vous avez vu le meilleur prix. Stockée uniquement sur l'appareil, et supprimée dès que le set rejoint votre collection." : {
 
     },
     "Carte des scans" : {
@@ -314,7 +324,13 @@
     "Cible €/pièce" : {
 
     },
+    "Clé API" : {
+
+    },
     "Clé API Rebrickable manquante. Ajoutez-la dans les réglages pour identifier ce set." : {
+
+    },
+    "Clé API Rebrickable non configurée" : {
 
     },
     "Clé API Rebrickable non configurée — recherche limitée au catalogue hors-ligne" : {
@@ -365,6 +381,9 @@
     "Créer une nouvelle liste" : {
 
     },
+    "Croissant" : {
+
+    },
     "Dans ta liste cadeaux" : {
 
     },
@@ -374,13 +393,28 @@
     "Dans votre liste « %@ »" : {
 
     },
+    "Dans votre liste cadeaux" : {
+
+    },
     "Date" : {
+
+    },
+    "Décroissant" : {
 
     },
     "Déjà un compte ?" : {
 
     },
+    "Délier" : {
+
+    },
     "Délier mon compte" : {
+
+    },
+    "Délier votre compte Brickset ?" : {
+
+    },
+    "Délier votre compte Rebrickable ?" : {
 
     },
     "Déplacer vers une liste" : {
@@ -434,6 +468,9 @@
     "Essayez de modifier la recherche." : {
 
     },
+    "et %lld minifigs supplémentaires" : {
+
+    },
     "et %lld scans plus anciens" : {
 
     },
@@ -441,6 +478,19 @@
 
     },
     "Évolution des prix" : {
+
+    },
+    "Évolution des prix, %lld source%@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Évolution des prix, %1$lld source%2$@"
+          }
+        }
+      }
+    },
+    "Export impossible" : {
 
     },
     "Exporter" : {
@@ -455,25 +505,19 @@
     "Fermer" : {
 
     },
+    "Fermer le message d'erreur" : {
+
+    },
     "Fermer le scanner" : {
 
     },
     "Filtres" : {
 
     },
-    "Génère ces 4 valeurs sur bricklink.com/v3/api.page (section \"Register a Consumer\", puis \"Manage a Consumer\" → génère un jeton). Utilisé pour afficher les prix neuf/occasion BrickLink officiels ; nécessaire uniquement pour cette fonctionnalité." : {
+    "Générez ces 4 valeurs sur bricklink.com/v3/api.page (section « Register a Consumer », puis « Manage a Consumer » → générez un jeton) — les noms de champs ci-dessus reprennent ceux du site BrickLink. Utilisé pour afficher les prix neuf/occasion BrickLink officiels ; nécessaire uniquement pour cette fonctionnalité." : {
 
     },
-    "Génère ta clé sur rebrickable.com/profile, dans la section API Key. Nécessaire pour voir et gérer votre collection. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session." : {
-
-    },
-    "Gérer votre API Key sur BrickLink" : {
-
-    },
-    "Gérer votre API Key sur Brickset" : {
-
-    },
-    "Gérer votre API Key sur Rebrickable" : {
+    "Générez votre clé sur rebrickable.com/profile, dans la section « API Key ». Nécessaire pour voir et gérer votre collection. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session." : {
 
     },
     "Historique" : {
@@ -504,6 +548,12 @@
 
     },
     "Impossible de créer la liste. Vérifiez votre réseau." : {
+
+    },
+    "Impossible de créer le fichier CSV. Vérifiez l'espace disponible sur l'appareil." : {
+
+    },
+    "Impossible de créer le fichier PDF. Vérifiez l'espace disponible sur l'appareil." : {
 
     },
     "Impossible de lire le fichier." : {
@@ -539,10 +589,7 @@
     "Les sets encore dans votre Collection y resteront, mais disparaîtront de l'Historique." : {
 
     },
-    "Les sets que tu scannes apparaîtront ici." : {
-
-    },
-    "Lie d'abord ton compte Brickset ci-dessus." : {
+    "Les sets que vous scannez apparaîtront ici." : {
 
     },
     "Lie ton compte Brickset dans Réglages pour utiliser la liste cadeaux." : {
@@ -551,13 +598,16 @@
     "Lier mon compte" : {
 
     },
+    "Liez d'abord votre compte Brickset ci-dessus." : {
+
+    },
+    "Liez votre compte Brickset dans Réglages pour utiliser la liste cadeaux." : {
+
+    },
     "Liez votre compte Rebrickable et synchronisez depuis l'accueil." : {
 
     },
     "Liez votre compte Rebrickable, Brickset ou BrickLink pour voir votre collection et des prix personnalisés." : {
-
-    },
-    "Lire la politique de confidentialité" : {
 
     },
     "Liste" : {
@@ -594,6 +644,9 @@
 
     },
     "Mes minifigs" : {
+
+    },
+    "Minifigs de ce set" : {
 
     },
     "Mise à jour en cours…" : {
@@ -645,6 +698,12 @@
 
     },
     "OK" : {
+
+    },
+    "Ordre de tri" : {
+
+    },
+    "Ouvrir les Réglages" : {
 
     },
     "Ouvrir les réglages iOS" : {
@@ -710,6 +769,9 @@
     "Prix mis à jour" : {
 
     },
+    "Prix vu : %@" : {
+
+    },
     "Purger le catalogue" : {
 
     },
@@ -762,6 +824,12 @@
 
     },
     "Renseignez les 4 valeurs pour activer les prix BrickLink." : {
+
+    },
+    "Répartition des sets par année" : {
+
+    },
+    "Répartition des sets par thème" : {
 
     },
     "Répartition par année" : {
@@ -827,7 +895,13 @@
     "Scannez la boîte d'un set pour l'identifier, puis comparez les prix neuf/occasion en un instant." : {
 
     },
+    "Sélectionné" : {
+
+    },
     "Sélectionner le type de liste" : {
+
+    },
+    "Sélectionner plusieurs sets" : {
 
     },
     "Services contactés par l'app" : {
@@ -875,7 +949,7 @@
     "Supprimer ce scan ?" : {
 
     },
-    "Sur la page de ta custom list Rebrickable, onglet Sets, télécharge le CSV puis choisis-le ici pour ajouter tous ses sets à ta liste cadeaux Brickset." : {
+    "Sur la page de votre custom list Rebrickable, onglet Sets, téléchargez le CSV puis choisissez-le ici pour ajouter tous ses sets à votre liste cadeaux Brickset." : {
 
     },
     "Synchronisation…" : {
@@ -950,6 +1024,9 @@
     "Trop de requêtes, veuillez réessayer plus tard" : {
 
     },
+    "Types de listes (neuf/occasion)" : {
+
+    },
     "Une actualisation des prix de la collection est déjà en cours ou en attente de reprise. Terminez-la avant d'actualiser une sélection." : {
 
     },
@@ -963,6 +1040,9 @@
 
     },
     "Valeur estimée" : {
+
+    },
+    "Valeur invalide — la dernière valeur valide est conservée." : {
 
     },
     "Verdict" : {
@@ -1002,6 +1082,9 @@
 
     },
     "Vos mots de passe Rebrickable et Brickset ne sont jamais stockés : ils servent une seule fois à obtenir un jeton de session" : {
+
+    },
+    "Vous devrez ressaisir votre mot de passe pour relier ce compte." : {
 
     },
     "Vous gardez le contrôle" : {
