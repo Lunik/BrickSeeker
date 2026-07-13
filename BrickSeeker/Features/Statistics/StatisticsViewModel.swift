@@ -110,21 +110,24 @@ final class StatisticsViewModel {
 
     var setsForExport: [CachedSet] { ownedSets }
 
-    /// The price used for collection valuation and exports. Source depends on the `ListCondition`
-    /// annotated on the set's current list (see issue #47):
+    /// The price used for collection valuation and exports — the same `resolveCollectionPrice`
+    /// the CollectionView row uses, so the list and the stats total always agree (issue #194).
+    /// The set's list `ListCondition` picks the primary source, with a used↔new cross-fallback as
+    /// last resort (see #47/#87/#194 in `resolveCollectionPrice`):
     ///
-    /// - `.newSet` (default): lego.com → Amazon → BrickLink new
-    /// - `.used`: BrickLink used only — nil when unavailable so occasion sets aren't
-    ///   over-valued by a retail proxy.
+    /// - `.newSet` (default): lego.com → Amazon/Cdiscount → BrickLink new → BrickLink used
+    /// - `.used`: BrickLink used → lego.com → Amazon/Cdiscount → BrickLink new
+    ///
+    /// `nil` only when no source has a price at all.
     func effectivePriceEUR(for set: CachedSet) -> Double? {
         let condition = set.currentListId.flatMap { conditionByListId[$0] }
         let quotes = localRepository.cachedPrices(setNum: set.setNum)
-        return effectiveValuationPrice(storePriceEUR: set.storePriceEUR, condition: condition, quotes: quotes)
+        return resolveCollectionPrice(storePriceEUR: set.storePriceEUR, condition: condition, quotes: quotes)
     }
 
     /// - Parameters:
-    ///   - priceByNum: precomputed by `load()` via `effectivePriceEUR(for:)` — the lego.com →
-    ///     Amazon → BrickLink-used fallback chain — since this function stays pure/static and has
+    ///   - priceByNum: precomputed by `load()` via `effectivePriceEUR(for:)` — the
+    ///     `resolveCollectionPrice` fallback chain — since this function stays pure/static and has
     ///     no repository access of its own.
     ///   - themeName: display-name resolver, used to group `themeBreakdown` by name rather than
     ///     raw `themeId` (see `ThemeBreakdown`'s doc for why).

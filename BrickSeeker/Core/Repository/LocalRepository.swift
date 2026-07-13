@@ -172,6 +172,16 @@ final class LocalRepository {
         try? modelContext.save()
     }
 
+    /// Records that the price batch (`CollectionPriceUpdater`) has fully processed this set — the
+    /// caller stamps this after fetching *every* source, whether or not a price was found, so a set
+    /// that still has no resolvable price afterwards is treated as "prix introuvable" rather than
+    /// re-offered forever by "Compléter les prix manquants" (issue #194). No-ops if no row exists.
+    func markPricesFetched(setNum: String) {
+        guard let existing = cachedSet(setNum: setNum) else { return }
+        existing.pricesFetchedAt = Date()
+        try? modelContext.save()
+    }
+
     func lastFullSyncAt() -> Date? {
         (try? modelContext.fetch(FetchDescriptor<CollectionSyncState>()).first)?.lastFullSyncAt
     }

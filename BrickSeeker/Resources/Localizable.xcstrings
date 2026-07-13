@@ -1,9 +1,6 @@
 {
   "sourceLanguage" : "fr",
   "strings" : {
-    "" : {
-
-    },
     " " : {
 
     },
@@ -23,6 +20,26 @@
         }
       }
     },
+    "%@ · %@ pièces" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@ pièces"
+          }
+        }
+      }
+    },
+    "%@ / %@ sets" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ / %2$@ sets"
+          }
+        }
+      }
+    },
     "%@ %@" : {
       "localizations" : {
         "fr" : {
@@ -33,65 +50,41 @@
         }
       }
     },
-    "%@%lld%%" : {
-
-    },
-    "%lld · %lld pièces" : {
-
-    },
-    "%lld / %lld sets" : {
-
-    },
-    "%lld ajouté%@, %lld déjà dans la liste cadeaux" : {
+    "%@ ajouté%@, %@ déjà dans la liste cadeaux" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "%1$lld ajouté%2$@, %3$lld déjà dans la liste cadeaux"
+            "value" : "%1$@ ajouté%2$@, %3$@ déjà dans la liste cadeaux"
           }
         }
       }
     },
-    "%lld exemplaires" : {
+    "%@ minifigs" : {
 
     },
-    "%lld minifigs" : {
-
-    },
-    "%lld scan%@" : {
+    "%@ scan%@" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "%1$lld scan%2$@"
+            "value" : "%1$@ scan%2$@"
           }
         }
       }
     },
-    "%lld set(s) n'ont pas pu être ajoutés à la liste cadeaux. Vérifiez votre connexion." : {
+    "%@ set(s) seront retirés de votre collection Rebrickable." : {
 
     },
-    "%lld set(s) n'ont pas pu être ajoutés à la liste. Vérifiez votre connexion." : {
+    "%@ sets" : {
 
     },
-    "%lld set(s) n'ont pas pu être déplacés. Vérifiez votre connexion." : {
-
-    },
-    "%lld set(s) n'ont pas pu être retirés. Vérifiez votre connexion." : {
-
-    },
-    "%lld set(s) seront retirés de votre collection Rebrickable." : {
-
-    },
-    "%lld sets" : {
-
-    },
-    "%lld sets %@" : {
+    "%@%@%%" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "%1$lld sets %2$@"
+            "value" : "%1$@%2$@%%"
           }
         }
       }
@@ -99,43 +92,10 @@
     "•" : {
 
     },
-    "×%lld" : {
+    "×%@" : {
 
     },
     "€" : {
-
-    },
-    "0" : {
-
-    },
-    "0,00" : {
-
-    },
-    "0,12" : {
-
-    },
-    "1 set %@" : {
-
-    },
-    "Accès caméra refusé" : {
-
-    },
-    "Actifs" : {
-
-    },
-    "Action impossible" : {
-
-    },
-    "Actions" : {
-
-    },
-    "Actions (%lld)" : {
-
-    },
-    "Activé" : {
-
-    },
-    "Activée" : {
 
     },
     "Activez « Enregistrer la position des scans » dans les Réglages, puis scannez un set en magasin." : {
@@ -144,70 +104,16 @@
     "Activité" : {
 
     },
-    "Actualiser les prix" : {
-
-    },
-    "Actualiser les prix (%lld)" : {
-
-    },
-    "Actualiser les prix de la collection" : {
-
-    },
-    "Afficher la clé API" : {
-
-    },
-    "Afficher la clé API Brickset" : {
-
-    },
-    "Afficher les identifiants" : {
-
-    },
-    "Ajouter à la collection" : {
-
-    },
-    "Ajouter à la liste cadeau" : {
-
-    },
-    "Ajouter à la liste cadeaux" : {
-
-    },
-    "Ajouter à ma liste de cadeaux" : {
-
-    },
-    "Ajouter à une liste" : {
-
-    },
-    "Ajouter à votre liste cadeaux" : {
-
-    },
-    "Ajouter un set" : {
-
-    },
     "Ajoutez un set à votre liste cadeaux depuis sa fiche, ou importez le CSV d'une liste Rebrickable avec le bouton en haut." : {
 
     },
     "Alimente la galerie « Mes minifigs » de l'accueil (~15 000 minifigs). Téléchargé depuis Rebrickable ; utilise aussi le catalogue de sets ci-dessus pour déterminer année/thème, et le télécharge d'abord si besoin. Les prix restent toujours en cache/en ligne, jamais chargés en masse ici." : {
 
     },
-    "Année" : {
-
-    },
-    "Annuler" : {
-
-    },
     "API BrickLink" : {
 
     },
-    "API BrickLink configurée" : {
-
-    },
-    "API Key invalide" : {
-
-    },
     "API Key Rebrickable, clé/identifiants Brickset et identifiants API BrickLink (OAuth) : dans le Keychain iOS" : {
-
-    },
-    "Apparence" : {
 
     },
     "Apple (service de localisation) : conversion de la position en ville approximative, si l'enregistrement de position est activé" : {
@@ -216,47 +122,24 @@
     "Aucun catalogue téléchargé" : {
 
     },
-    "Aucun numéro de set trouvé dans ce fichier." : {
-
-    },
-    "Aucun résultat" : {
-
-    },
-    "Aucun scan localisé" : {
-
-    },
     "Aucun set connu pour cette minifig" : {
-
-    },
-    "Aucun set dans votre collection." : {
-
-    },
-    "Aucun set LEGO trouvé pour %@." : {
-
-    },
-    "Aucun set possédé" : {
-
-    },
-    "Aucun set scanné" : {
-
-    },
-    "Aucune clé API Rebrickable configurée. Ouvre BrickSeeker et renseigne-la dans Réglages." : {
-
-    },
-    "Aucune liste" : {
 
     },
     "Aucune liste sur votre compte. Créez-en une ci-dessous." : {
 
     },
-    "Aucune statistique" : {
-
-    },
     "Autorise la caméra dans les réglages iOS, ou saisis un numéro / choisis une photo." : {
 
     },
-    "Basée sur %lld / %lld sets dont le prix est connu" : {
-
+    "Basée sur %@ / %@ sets dont le prix est connu" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Basée sur %1$@ / %2$@ sets dont le prix est connu"
+          }
+        }
+      }
     },
     "Bienvenue dans BrickSeeker" : {
 
@@ -270,16 +153,7 @@
     "Brickset : votre liste cadeaux, avec vos identifiants Brickset (si vous liez votre compte)" : {
 
     },
-    "Cache vidé" : {
-
-    },
     "Capture la position (approximative) au moment d'un scan caméra, pour retrouver le magasin où vous avez vu le meilleur prix. Stockée uniquement sur l'appareil, et supprimée dès que le set rejoint votre collection." : {
-
-    },
-    "Carte des scans" : {
-
-    },
-    "Carte des scans de ce set" : {
 
     },
     "Catalogue hors-ligne" : {
@@ -291,43 +165,10 @@
     "Catalogue minifigs non téléchargé" : {
 
     },
-    "Catalogue téléchargé (%lld sets)" : {
-
-    },
-    "Ce qui est stocké" : {
-
-    },
-    "Ce set n'est plus sur lego.com" : {
-
-    },
-    "Changer de liste" : {
-
-    },
-    "Chargement du catalogue…" : {
-
-    },
-    "Choisir un fichier CSV" : {
-
-    },
-    "Choisir un set" : {
-
-    },
-    "Choisir une liste" : {
-
-    },
-    "Choisir une photo" : {
-
-    },
     "Choisissez la couleur de marque et l'apparence claire/sombre de l'application." : {
 
     },
     "Cible €/pièce" : {
-
-    },
-    "Clé API" : {
-
-    },
-    "Clé API Rebrickable manquante. Ajoutez-la dans les réglages pour identifier ce set." : {
 
     },
     "Clé API Rebrickable non configurée" : {
@@ -339,16 +180,7 @@
     "Collection" : {
 
     },
-    "Comment BrickSeeker protège vos données" : {
-
-    },
-    "Compléter les prix manquants (%lld)" : {
-
-    },
     "Compte Brickset" : {
-
-    },
-    "Compte Brickset lié" : {
 
     },
     "Compte non lié — ouvrez Réglages pour lier votre compte Brickset." : {
@@ -360,64 +192,13 @@
     "Compte Rebrickable" : {
 
     },
-    "Compte Rebrickable lié" : {
-
-    },
     "Confidentialité & données" : {
 
     },
     "Configurer le type (neuf/occasion) des listes" : {
 
     },
-    "Connexion impossible. Vérifiez votre réseau." : {
-
-    },
-    "Consumer Key" : {
-
-    },
-    "Consumer Secret" : {
-
-    },
-    "Créer une nouvelle liste" : {
-
-    },
-    "Croissant" : {
-
-    },
-    "Dans ta liste cadeaux" : {
-
-    },
-    "Dans votre collection" : {
-
-    },
-    "Dans votre liste « %@ »" : {
-
-    },
-    "Dans votre liste cadeaux" : {
-
-    },
-    "Date" : {
-
-    },
-    "Décroissant" : {
-
-    },
     "Déjà un compte ?" : {
-
-    },
-    "Délier" : {
-
-    },
-    "Délier mon compte" : {
-
-    },
-    "Délier votre compte Brickset ?" : {
-
-    },
-    "Délier votre compte Rebrickable ?" : {
-
-    },
-    "Déplacer vers une liste" : {
 
     },
     "Dernière actualisation : %@" : {
@@ -426,40 +207,10 @@
     "Dernière synchronisation : %@" : {
 
     },
-    "Désactivé" : {
-
-    },
-    "Désactivée" : {
-
-    },
-    "Disponible à l'achat" : {
-
-    },
     "Données fournies par Rebrickable, Brickset et BrickLink." : {
 
     },
     "Enregistrer" : {
-
-    },
-    "Enregistrer la position des scans" : {
-
-    },
-    "Erreur" : {
-
-    },
-    "Erreur BrickLink : %@" : {
-
-    },
-    "Erreur Brickset : %@" : {
-
-    },
-    "Erreur inconnue" : {
-
-    },
-    "Erreur lors du traitement de la réponse" : {
-
-    },
-    "Erreur serveur (%lld)" : {
 
     },
     "Essayez de modifier la recherche ou les filtres." : {
@@ -468,50 +219,19 @@
     "Essayez de modifier la recherche." : {
 
     },
-    "et %lld minifigs supplémentaires" : {
+    "et %@ minifigs supplémentaires" : {
 
     },
-    "et %lld scans plus anciens" : {
+    "et %@ scans plus anciens" : {
 
     },
-    "et %lld sets supplémentaires" : {
+    "et %@ sets supplémentaires" : {
 
     },
     "Évolution des prix" : {
 
     },
-    "Évolution des prix, %lld source%@" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Évolution des prix, %1$lld source%2$@"
-          }
-        }
-      }
-    },
-    "Export impossible" : {
-
-    },
     "Exporter" : {
-
-    },
-    "Exporter en CSV" : {
-
-    },
-    "Exporter en PDF" : {
-
-    },
-    "Fermer" : {
-
-    },
-    "Fermer le message d'erreur" : {
-
-    },
-    "Fermer le scanner" : {
-
-    },
-    "Filtres" : {
 
     },
     "Générez ces 4 valeurs sur bricklink.com/v3/api.page (section « Register a Consumer », puis « Manage a Consumer » → générez un jeton) — les noms de champs ci-dessus reprennent ceux du site BrickLink. Utilisé pour afficher les prix neuf/occasion BrickLink officiels ; nécessaire uniquement pour cette fonctionnalité." : {
@@ -520,46 +240,7 @@
     "Générez votre clé sur rebrickable.com/profile, dans la section « API Key ». Nécessaire pour voir et gérer votre collection. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session." : {
 
     },
-    "Historique" : {
-
-    },
     "Hors-ligne" : {
-
-    },
-    "Hors-ligne — statut collection à rafraîchir une fois reconnecté" : {
-
-    },
-    "Hors-ligne — statut collection et prix à rafraîchir une fois reconnecté" : {
-
-    },
-    "Identifiants manquants" : {
-
-    },
-    "Import en cours…" : {
-
-    },
-    "Import impossible. Vérifiez votre réseau." : {
-
-    },
-    "Importer depuis Rebrickable" : {
-
-    },
-    "Impossible de charger vos listes. Vérifiez votre réseau." : {
-
-    },
-    "Impossible de créer la liste. Vérifiez votre réseau." : {
-
-    },
-    "Impossible de créer le fichier CSV. Vérifiez l'espace disponible sur l'appareil." : {
-
-    },
-    "Impossible de créer le fichier PDF. Vérifiez l'espace disponible sur l'appareil." : {
-
-    },
-    "Impossible de lire le fichier." : {
-
-    },
-    "Inactifs" : {
 
     },
     "Indisponible" : {
@@ -580,28 +261,13 @@
     "lego.com, amazon.fr et cdiscount.com : consultés pour afficher les prix du marché, sans identifiant transmis" : {
 
     },
-    "Les prix de %lld set de votre collection ont été actualisés." : {
-
-    },
-    "Les prix de %lld sets de votre collection ont été actualisés." : {
-
-    },
     "Les sets encore dans votre Collection y resteront, mais disparaîtront de l'Historique." : {
 
     },
     "Les sets que vous scannez apparaîtront ici." : {
 
     },
-    "Lie ton compte Brickset dans Réglages pour utiliser la liste cadeaux." : {
-
-    },
     "Lier mon compte" : {
-
-    },
-    "Liez d'abord votre compte Brickset ci-dessus." : {
-
-    },
-    "Liez votre compte Brickset dans Réglages pour utiliser la liste cadeaux." : {
 
     },
     "Liez votre compte Rebrickable et synchronisez depuis l'accueil." : {
@@ -610,79 +276,16 @@
     "Liez votre compte Rebrickable, Brickset ou BrickLink pour voir votre collection et des prix personnalisés." : {
 
     },
-    "Liste" : {
-
-    },
     "Liste cadeaux" : {
-
-    },
-    "Liste cadeaux vide" : {
-
-    },
-    "Listes" : {
 
     },
     "Localisation des scans" : {
 
     },
-    "Ma collection" : {
-
-    },
-    "Masquer la clé API" : {
-
-    },
-    "Masquer la clé API Brickset" : {
-
-    },
-    "Masquer les identifiants" : {
-
-    },
-    "Meilleur prix" : {
-
-    },
-    "Meilleur prix vu ici" : {
-
-    },
-    "Mes minifigs" : {
-
-    },
     "Minifigs de ce set" : {
 
     },
-    "Mise à jour en cours…" : {
-
-    },
-    "Mode de saisie" : {
-
-    },
-    "Mode lot" : {
-
-    },
-    "Mode lot actif" : {
-
-    },
-    "Mot de passe" : {
-
-    },
     "Nécessaire pour gérer votre liste cadeaux. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session." : {
-
-    },
-    "Nom d'utilisateur" : {
-
-    },
-    "Nom d'utilisateur ou email" : {
-
-    },
-    "Nom d'utilisateur ou mot de passe incorrect" : {
-
-    },
-    "Nom de la nouvelle liste" : {
-
-    },
-    "Nom ou identifiant" : {
-
-    },
-    "Nom ou numéro de set" : {
 
     },
     "Non possédés" : {
@@ -691,46 +294,10 @@
     "Notice de montage" : {
 
     },
-    "Numéro de set" : {
-
-    },
-    "Numéro de set, ex. 42143" : {
-
-    },
-    "OK" : {
-
-    },
-    "Ordre de tri" : {
-
-    },
-    "Ouvrir les Réglages" : {
-
-    },
-    "Ouvrir les réglages iOS" : {
-
-    },
-    "Page lego.com indisponible" : {
-
-    },
-    "Paramètres" : {
-
-    },
-    "Pas dans votre collection" : {
-
-    },
-    "Passer" : {
-
-    },
-    "Période" : {
-
-    },
     "Permet d'identifier un set déjà connu même sans réseau. Téléchargé depuis Rebrickable (~25 000 sets) ; le statut collection et les prix restent toujours en ligne." : {
 
     },
     "Peut être trouvé dans les sets" : {
-
-    },
-    "Plusieurs sets correspondent à %@, ouvre BrickSeeker pour préciser." : {
 
     },
     "Pointez la caméra vers le numéro de set" : {
@@ -739,13 +306,7 @@
     "Position des scans (si activée dans les paramètres) : approximative, sur l'appareil uniquement, supprimée dès qu'un set rejoint votre collection ou que l'historique est purgé" : {
 
     },
-    "Possédées seulement" : {
-
-    },
     "Possédés" : {
-
-    },
-    "Possession" : {
 
     },
     "Prix" : {
@@ -754,31 +315,13 @@
     "Prix calculé" : {
 
     },
-    "Prix d'un set LEGO" : {
-
-    },
     "Prix de la collection" : {
 
     },
     "Prix indisponible" : {
 
     },
-    "Prix indisponible (lego.com n'a pas répondu)" : {
-
-    },
-    "Prix mis à jour" : {
-
-    },
-    "Prix vu : %@" : {
-
-    },
-    "Purger le catalogue" : {
-
-    },
-    "Quantité : ×%lld" : {
-
-    },
-    "Quel prix as-tu vu ?" : {
+    "Quantité : ×%@" : {
 
     },
     "Rebrickable : catalogue des sets, votre collection (si vous liez votre compte)" : {
@@ -787,34 +330,10 @@
     "Recherche de sets sans compte ni clé API." : {
 
     },
-    "Recherche le prix d'un set LEGO sur lego.com, BrickLink, Amazon et Cdiscount sans ouvrir BrickSeeker." : {
-
-    },
-    "Rechercher" : {
-
-    },
     "Récupère les prix lego.com/Amazon/BrickLink de tous les sets de votre collection, un par un pour ne pas surcharger ces sites. Peut prendre longtemps sur une grande collection — l'app doit rester ouverte au premier plan ; si vous quittez l'app, la mise à jour se met en pause et reprendra où elle s'est arrêtée. Une notification vous prévient à la fin." : {
 
     },
     "Réduction (%)" : {
-
-    },
-    "Réessayer" : {
-
-    },
-    "Réglages" : {
-
-    },
-    "Réinitialiser" : {
-
-    },
-    "Réinitialiser BrickSeeker" : {
-
-    },
-    "Réinitialiser BrickSeeker ?" : {
-
-    },
-    "Réinitialiser les filtres" : {
 
     },
     "Renseigne le prix affiché en magasin pour ce scan — il sert à repérer le meilleur prix vu, et sur quel lieu." : {
@@ -826,109 +345,25 @@
     "Renseignez les 4 valeurs pour activer les prix BrickLink." : {
 
     },
-    "Répartition des sets par année" : {
-
-    },
-    "Répartition des sets par thème" : {
-
-    },
     "Répartition par année" : {
 
     },
     "Répartition par thème" : {
 
     },
-    "Reprendre (%lld restants)" : {
-
-    },
-    "Reprendre l'import (%lld restants)" : {
-
-    },
-    "Ressource introuvable" : {
-
-    },
-    "Résultat hors-ligne — identification depuis le catalogue embarqué" : {
-
-    },
-    "Retiré de la vente" : {
-
-    },
-    "Retirer" : {
-
-    },
-    "Retirer ces sets de l'Historique ?" : {
-
-    },
-    "Retirer de l'Historique ?" : {
-
-    },
-    "Retirer de la collection" : {
-
-    },
-    "Retirer de la collection ?" : {
-
-    },
-    "Retirer de la liste cadeaux" : {
-
-    },
-    "Retirer de la liste cadeaux ?" : {
-
-    },
-    "Retirer le scan" : {
-
-    },
-    "Retirer tous les scans" : {
-
-    },
-    "Rupture de stock" : {
-
-    },
-    "Saisir un numéro" : {
-
-    },
     "Scanne plusieurs sets en mode lot pour les comparer ici." : {
-
-    },
-    "Scanner un set" : {
 
     },
     "Scannez la boîte d'un set pour l'identifier, puis comparez les prix neuf/occasion en un instant." : {
 
     },
-    "Sélectionné" : {
-
-    },
     "Sélectionner le type de liste" : {
-
-    },
-    "Sélectionner plusieurs sets" : {
-
-    },
-    "Services contactés par l'app" : {
-
-    },
-    "Session de scan" : {
-
-    },
-    "Sets" : {
 
     },
     "Sets scannés récemment et cache de votre collection : dans la base SwiftData locale, sur l'appareil uniquement" : {
 
     },
     "Seuil de €/pièce en dessous duquel un set est considéré comme un bon rapport qualité-prix. Affiché en vert sur la fiche set si le prix lego.com est inférieur à cette valeur, en rouge au-dessus." : {
-
-    },
-    "Source" : {
-
-    },
-    "Statistiques" : {
-
-    },
-    "Statut de collection inconnu" : {
-
-    },
-    "Statut inconnu : %@" : {
 
     },
     "Superlatifs" : {
@@ -943,12 +378,6 @@
     "Supprime les images, prix et listes mis en cache. Votre clé API, votre compte et l'historique des prix sont conservés." : {
 
     },
-    "Supprimer" : {
-
-    },
-    "Supprimer ce scan ?" : {
-
-    },
     "Sur la page de votre custom list Rebrickable, onglet Sets, téléchargez le CSV puis choisissez-le ici pour ajouter tous ses sets à votre liste cadeaux Brickset." : {
 
     },
@@ -959,18 +388,6 @@
 
     },
     "Télécharge le catalogue Rebrickable (~15 000 minifigs) pour parcourir ta collection. Peut aussi se faire depuis Réglages." : {
-
-    },
-    "Téléchargement impossible. Vérifiez votre réseau." : {
-
-    },
-    "Téléchargement impossible. Vous pourrez réessayer plus tard depuis Réglages." : {
-
-    },
-    "Téléchargement interrompu — il reprendra où il s'est arrêté à la prochaine ouverture." : {
-
-    },
-    "Télécharger le catalogue" : {
 
     },
     "Télécharger le catalogue hors-ligne" : {
@@ -985,15 +402,6 @@
     "Thème" : {
 
     },
-    "Token Secret" : {
-
-    },
-    "Token Value" : {
-
-    },
-    "Torche" : {
-
-    },
     "Totaux" : {
 
     },
@@ -1003,37 +411,7 @@
     "Tous les scans de « %@ » seront supprimés." : {
 
     },
-    "Tout désélectionner" : {
-
-    },
-    "Tout sélectionner" : {
-
-    },
     "Toutes" : {
-
-    },
-    "Tri" : {
-
-    },
-    "Trier par" : {
-
-    },
-    "Trop de requêtes, réessaie dans un instant." : {
-
-    },
-    "Trop de requêtes, veuillez réessayer plus tard" : {
-
-    },
-    "Types de listes (neuf/occasion)" : {
-
-    },
-    "Une actualisation des prix de la collection est déjà en cours ou en attente de reprise. Terminez-la avant d'actualiser une sélection." : {
-
-    },
-    "Une erreur est survenue" : {
-
-    },
-    "Une erreur inconnue est survenue" : {
 
     },
     "Valeur cible" : {
@@ -1042,37 +420,13 @@
     "Valeur estimée" : {
 
     },
-    "Valeur invalide — la dernière valeur valide est conservée." : {
-
-    },
     "Verdict" : {
-
-    },
-    "Vérifier le prix d'un set LEGO" : {
-
-    },
-    "Vérifier le prix du set LEGO ${setNumber}" : {
-
-    },
-    "Vérifier un prix vu en magasin" : {
-
-    },
-    "Vider" : {
 
     },
     "Vider le cache" : {
 
     },
-    "Vider le cache ?" : {
-
-    },
-    "Voir la session (%lld)" : {
-
-    },
     "Voir le détail" : {
-
-    },
-    "Voir le set" : {
 
     },
     "Voir sur Rebrickable" : {
@@ -1085,9 +439,6 @@
 
     },
     "Vous devrez ressaisir votre mot de passe pour relier ce compte." : {
-
-    },
-    "Vous gardez le contrôle" : {
 
     }
   },
