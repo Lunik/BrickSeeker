@@ -714,29 +714,74 @@ struct SetDetailView: View {
     /// Rebrickable's live `/lego/sets/…` endpoints — `ScannerViewModel.resolveSet` only succeeds
     /// for one already cached (same "cache-first scan resolution" rule as everywhere else, see
     /// AGENTS.md), exactly the problem `MinifigGalleryView.openDetail` already works around by
-    /// seeding a `CachedSet` row first. Only seeds when no row exists yet, so a minifig already
-    /// tracked (owned, in a list) never has its real state clobbered by this gallery's more
-    /// limited data (no theme/year, no ownership info).
+    /// seeding a `CachedSet` row first.
+    ///
+    /// Crucially, that seed must carry the *derived* ownership (issue #193): a minifig is owned
+    /// when an owned set contains it, exactly as the "Mes minifigs" gallery derives it (#170/#177).
+    /// Seeding a flat `isInCollection: false` here (as this did originally) made every minifig
+    /// opened from a set's gallery read "non possédée" even when its host set was owned — and the
+    /// live sets endpoint can't correct it afterwards (it 404s on a `fig-…`, so `resolveSet` keeps
+    /// the cached status as-is), so the wrong seed stuck. `CachedSet.asCollectionStatus()` then
+    /// synthesises the `UserSet` from `isInCollection` + `quantity`, the same path the gallery
+    /// relies on — no minifig-specific `CollectionStatus` case needed.
+    ///
+    /// An already-tracked row (e.g. seeded richer by the gallery, with real theme/year) is only
+    /// ever *upgraded* to owned here, never downgraded and never re-written with this gallery's
+    /// thinner data: `derivedOwnedMinifigQuantity` can be scope-limited (offline catalogue absent →
+    /// host set only), so a locally-derived "0" must not clobber a correct "owned via another set".
     private func openMinifigDetail(_ entry: SetMinifigEntry) {
-        let repository = LocalRepository(modelContext: modelContext)
-        if repository.cachedSet(setNum: entry.setNum) == nil {
-            repository.cacheSet(
-                LegoSet(
-                    setNum: entry.setNum,
-                    name: entry.name,
-                    year: 0,
-                    themeId: 0,
-                    numParts: 0,
-                    setImgUrl: entry.setImgUrl,
-                    setUrl: nil
-                ),
-                isInCollection: false,
-                listId: nil,
-                listName: nil,
-                markAsScanned: false
-            )
+        Task { @MainActor in
+            let repository = LocalRepository(modelContext: modelContext)
+            let ownedQuantity = await derivedOwnedMinifigQuantity(entry, repository: repository)
+            if repository.cachedSet(setNum: entry.setNum) == nil {
+                repository.cacheSet(
+                    LegoSet(
+                        setNum: entry.setNum,
+                        name: entry.name,
+                        year: 0,
+                        themeId: 0,
+                        numParts: 0,
+                        setImgUrl: entry.setImgUrl,
+                        setUrl: nil
+                    ),
+                    isInCollection: ownedQuantity > 0,
+                    listId: nil,
+                    listName: nil,
+                    markAsScanned: false
+                )
+                if ownedQuantity > 0 {
+                    repository.setQuantity(setNum: entry.setNum, quantity: ownedQuantity)
+                }
+            } else if ownedQuantity > 0 {
+                repository.setCollectionStatus(setNum: entry.setNum, isInCollection: true, listId: nil, listName: nil)
+                repository.setQuantity(setNum: entry.setNum, quantity: ownedQuantity)
+            }
+            relatedSetLookupViewModel.lookupSetNumber(entry.setNum, source: .listReopen)
         }
-        relatedSetLookupViewModel.lookupSetNumber(entry.setNum, source: .listReopen)
+    }
+
+    /// How many copies of the tapped minifig the user owns, derived exactly like the "Mes minifigs"
+    /// gallery (#170/#177, `MinifigGalleryView.ownedQuantityByFigNum`): summed across every owned
+    /// set that contains it (`quantityPerSet × ` that set's own owned quantity), 0 if none does.
+    /// Reads the offline minifig catalogue for the full set↔minifig join when it's downloaded;
+    /// falls back to the set currently being viewed otherwise — this gallery (#184) is a live API
+    /// call and shows without the catalogue, yet we still know this minifig sits in the host set
+    /// `entry.quantity` times. A 0 from the fallback only means "not owned via *this* set", which is
+    /// why `openMinifigDetail` never downgrades an already-tracked row on it.
+    private func derivedOwnedMinifigQuantity(_ entry: SetMinifigEntry, repository: LocalRepository) async -> Int {
+        let ownedQuantityBySetNum = Dictionary(
+            repository.ownedSets().map { ($0.setNum, $0.quantity) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        guard !ownedQuantityBySetNum.isEmpty else { return 0 }
+        if let catalogEntry = await OfflineMinifigCatalogStore.shared.lookup(figNum: entry.setNum) {
+            return catalogEntry.containingSets.reduce(into: 0) { total, containingSet in
+                guard let ownedQuantity = ownedQuantityBySetNum[containingSet.setNum] else { return }
+                total += containingSet.quantityPerSet * ownedQuantity
+            }
+        }
+        guard let hostOwnedQuantity = ownedQuantityBySetNum[viewModel.legoSet.setNum] else { return 0 }
+        return (entry.quantity ?? 1) * hostOwnedQuantity
     }
 
     private static let minifigInSetCardWidth: CGFloat = 110
