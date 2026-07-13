@@ -13,9 +13,12 @@ settings:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     ENABLE_PREVIEWS: YES
-    # Extract Swift string literals into the String Catalog on build (Xcode keeps
-    # Localizable.xcstrings in sync automatically once this is on).
-    SWIFT_EMIT_LOC_STRINGS: YES
+    # Do NOT auto-extract Swift string literals into the String Catalog on build.
+    # With this on, Xcode rewrites Localizable.xcstrings on every build (reordering
+    # entries, adding empty/"new"-state keys), which permanently dirties git status
+    # for no benefit on a French-only, single-language app (see #189). The catalog
+    # still compiles and works at runtime; new keys are added manually.
+    SWIFT_EMIT_LOC_STRINGS: NO
 
 targets:
   BrickSeeker:
