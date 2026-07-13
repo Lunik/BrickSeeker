@@ -161,6 +161,9 @@ final class CollectionPriceUpdater {
             if let storePrice {
                 repo.cacheStorePrice(setNum: legoSet.setNum, price: storePrice)
             }
+            // Stamp "every source tried" even on an empty result, so a set that stays unpriced
+            // drops out of "Compléter les prix manquants" instead of looping forever (#194).
+            repo.markPricesFetched(setNum: legoSet.setNum)
         }
     }
 

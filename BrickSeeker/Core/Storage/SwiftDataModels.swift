@@ -22,6 +22,13 @@ final class CachedSet {
     var storePriceEUR: Double?
     var storeAvailability: String?
     var storePriceFetchedAt: Date?
+    /// When the collection price *batch* (`CollectionPriceUpdater`) last processed this set,
+    /// regardless of whether any price was actually found — stamped even on a fully empty result.
+    /// Distinct from `storePriceFetchedAt` (lego.com only, never set for minifigs or sets absent
+    /// from the store): this is the "we have already tried every source for this set" flag that
+    /// tells the "Compléter les prix manquants" button a still-unpriced set is *definitively*
+    /// unfindable rather than merely not-yet-fetched, so it stops looping on it (issue #194).
+    var pricesFetchedAt: Date?
     /// Mirrors Brickset's `wanted` flag (see `BricksetRepository`) — deliberately independent of
     /// `isInCollection`: a set can be wishlisted, owned, both, or neither.
     var isInWishlist: Bool = false

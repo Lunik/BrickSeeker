@@ -119,8 +119,8 @@ func resolveNewPrice(storePriceEUR: Double?, quotes: [PriceQuote]) -> Double? {
 }
 
 /// Same chain as `resolveNewPrice`, but takes the pricier of Amazon/Cdiscount rather than the
-/// cheaper (issue #124) — collection valuation (`resolveCollectionPrice`/`effectiveValuationPrice`)
-/// shouldn't under-value a set based on which marketplace happened to be cheaper that day.
+/// cheaper (issue #124) — collection valuation (`resolveCollectionPrice`) shouldn't under-value a
+/// set based on which marketplace happened to be cheaper that day.
 private func resolveNewPriceForValuation(storePriceEUR: Double?, quotes: [PriceQuote]) -> Double? {
     if let retail = storePriceEUR { return retail }
     if let amazonOrCdiscount = mostExpensiveAmazonOrCdiscountPrice(in: quotes) { return amazonOrCdiscount }
@@ -130,9 +130,21 @@ private func resolveNewPriceForValuation(storePriceEUR: Double?, quotes: [PriceQ
     return nil
 }
 
-/// Price resolution for a single owned set in CollectionView.
+/// The single source of truth for what one owned set is worth — used both for the CollectionView
+/// row price **and** for collection valuation (`StatisticsViewModel`'s total / coverage counter
+/// and `CollectionPriceUpdateSection`'s "prix manquants"), so the list and the stats total can
+/// never disagree about a set's price (issue #194). The list condition stays the *primary* source,
+/// with a cross-fallback to the other condition only as a last resort:
 /// - `.newSet` (or no list): new-price chain first, then BrickLink used as last resort.
-/// - `.used`: BrickLink used first, then new-price chain as last resort.
+/// - `.used`: BrickLink used first, then the new-price chain as last resort.
+///
+/// The used↔new cross-fallback deliberately reverses the earlier "honest valuation" decision of
+/// #47/#87 (which returned `nil` rather than value an occasion set off a retail proxy): #194 found
+/// that dropping such sets from the total both under-counted the collection value and left the
+/// "Compléter les prix manquants" button looping on sets a re-fetch could never fix. The fallback
+/// is strictly last-resort and does **not** reorder the new-price precedence (lego.com > Amazon/
+/// Cdiscount > BrickLink new, see #124). `nil` still means "no price at any source" — genuinely
+/// unfindable, not merely un-fetched.
 func resolveCollectionPrice(
     storePriceEUR: Double?,
     condition: ListCondition?,
@@ -160,24 +172,4 @@ func resolveWishlistPrice(storePriceEUR: Double?, quotes: [PriceQuote]) -> Doubl
         }
     }
     return nil
-}
-
-/// Price resolution used for collection **valuation** (total estimated value / coverage counter,
-/// see issue #47/#87) — unlike `resolveCollectionPrice`, it does NOT cross-fall-back between new
-/// and used sources: an occasion set with no BrickLink-used quote stays priceless rather than
-/// being valued off a retail proxy, and vice versa. Shared by `StatisticsViewModel` (the "X / Y
-/// sets" coverage counter) and `CollectionPriceUpdateSection` (the "compléter les prix manquants"
-/// button) so both agree on what counts as "missing".
-func effectiveValuationPrice(
-    storePriceEUR: Double?,
-    condition: ListCondition?,
-    quotes: [PriceQuote]
-) -> Double? {
-    switch condition ?? .newSet {
-    case .newSet:
-        return resolveNewPriceForValuation(storePriceEUR: storePriceEUR, quotes: quotes)
-    case .used:
-        return quotes.first(where: { $0.source == .bricklinkUsed })
-            .map { ($0.amount as NSDecimalNumber).doubleValue }
-    }
 }

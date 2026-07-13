@@ -56,16 +56,27 @@ struct CollectionPriceUpdateSection: View {
         }
     }
 
-    /// Sets missing from the "valeur estimée" coverage counter (see `StatisticsViewModel
-    /// .effectivePriceEUR`) — not just `storePriceEUR == nil`, since a set can already be valued
-    /// via an Amazon/BrickLink fallback quote even with no lego.com price cached.
+    /// Owned sets that are both unpriced **and** still worth re-fetching — the actionable half of
+    /// "missing" (issue #194). A set counts here only when:
+    /// - `resolveCollectionPrice` finds no price at any source (even after the new↔used
+    ///   cross-fallback) — not just `storePriceEUR == nil`, since an Amazon/BrickLink quote can
+    ///   already value it with no lego.com price cached; **and**
+    /// - the batch updater has never processed it (`pricesFetchedAt == nil`).
+    ///
+    /// A set the updater has *already* fetched from every source yet still can't price is
+    /// "definitively introuvable", not "missing": re-fetching can never conjure a price that
+    /// doesn't exist, so it's excluded here — otherwise "Compléter les prix manquants (N)" would
+    /// keep advertising it and the user would click forever with N never reaching 0 (#194). The
+    /// full "Actualiser les prix de la collection" button re-fetches *everything* regardless, so
+    /// such a set can still be revisited if its price ever appears.
     private func setsMissingPrice() -> [CachedSet] {
         let repository = LocalRepository(modelContext: modelContext)
         let conditionByListId = repository.conditionByListId()
         return repository.ownedSets().filter { set in
+            guard set.pricesFetchedAt == nil else { return false }
             let condition = set.currentListId.flatMap { conditionByListId[$0] }
             let quotes = repository.cachedPrices(setNum: set.setNum)
-            return effectiveValuationPrice(storePriceEUR: set.storePriceEUR, condition: condition, quotes: quotes) == nil
+            return resolveCollectionPrice(storePriceEUR: set.storePriceEUR, condition: condition, quotes: quotes) == nil
         }
     }
 

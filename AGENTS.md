@@ -551,10 +551,11 @@ lego.com price.
   the user wants to see both), but everywhere else they collapse into one comparison point — see
   `bestAmazonOrCdiscountPrice`/`mostExpensiveAmazonOrCdiscountPrice` in `SetRowView.swift`:
   History/Wishlist's resolved price takes the **cheaper** of the two (best deal to buy at), while
-  collection valuation (`resolveCollectionPrice`/`effectiveValuationPrice`) takes the **pricier**
-  of the two (don't under-value the collection based on which marketplace happened to be cheaper
-  that day). Don't merge them into a single `SetDetailView` row, and don't split the History/
-  Wishlist/valuation chains back into independent fallback steps, without re-checking that intent.
+  collection valuation (`resolveCollectionPrice`, the single function shared by the CollectionView
+  row and the stats total since #194) takes the **pricier** of the two (don't under-value the
+  collection based on which marketplace happened to be cheaper that day). Don't merge them into a
+  single `SetDetailView` row, and don't split the History/Wishlist/valuation chains back into
+  independent fallback steps, without re-checking that intent.
 
 ## PR scope — file adjacent issues, don't fix them inline
 
