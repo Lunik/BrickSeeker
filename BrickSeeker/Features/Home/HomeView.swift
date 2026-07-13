@@ -35,6 +35,15 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
+            // The cluster floats over the content as a `ZStack` overlay with *no* backing of its
+            // own — no scrim, no colour fill. Earlier takes each traded one flaw for another: a
+            // fixed-width gradient scrim rendered as a parasitic translucent box (#192); giving the
+            // cluster its own `VStack` row instead left a dead strip of window background (white in
+            // light mode, black in dark) permanently filling the bottom of the screen behind the
+            // buttons. With a bare overlay there's nothing painted behind the buttons at all — the
+            // scrolling content (or, past it, the plain background) shows through the gaps. The
+            // ScrollView's generous `.bottom` padding is what keeps the last card reachable clear
+            // of the buttons: it can always be scrolled up above them.
             ZStack(alignment: .bottom) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
@@ -51,7 +60,7 @@ struct HomeView: View {
                         wishlistSection(viewModel)
                     }
                     .padding(.horizontal)
-                    .padding(.bottom, 140)
+                    .padding(.bottom, 120)
                 }
                 .refreshable {
                     // SwiftUI can cancel .refreshable's own task mid-flight (a known quirk, e.g.
@@ -355,20 +364,6 @@ struct HomeView: View {
             }
         }
         .padding(.bottom, 32)
-        .background {
-            // Scrolled text used to show straight through the satellite buttons' `.thinMaterial`
-            // with nothing behind them (#156) — a bottom-anchored fade so content dims out before
-            // it reaches the cluster instead of bleeding through it.
-            LinearGradient(
-                colors: [Color(.systemBackground).opacity(0), Color(.systemBackground).opacity(0.9)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 160)
-            .frame(maxWidth: .infinity)
-            .allowsHitTesting(false)
-            .ignoresSafeArea(edges: .bottom)
-        }
     }
 
     private var scanButton: some View {
