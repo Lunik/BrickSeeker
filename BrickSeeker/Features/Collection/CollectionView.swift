@@ -389,7 +389,8 @@ struct CollectionView: View {
                 availableYears: viewModel?.availableYears ?? [],
                 availableListNames: viewModel?.availableListNames ?? [],
                 showsOwnedFilter: false,
-                themeName: { ThemeNameStore.shared.displayName(forThemeId: $0) }
+                themeName: { ThemeNameStore.shared.displayName(forThemeId: $0) },
+                excludedSortOptions: [.dateAdded]
             )
         }
         .sheet(isPresented: $showSettings, onDismiss: {

@@ -15,8 +15,23 @@ import Foundation
 /// are deliberately NOT part of this snapshot and stay live-only, same as everywhere else in the
 /// app (see AGENTS.md).
 ///
-/// `@unchecked Sendable` because `snapshotLoad`/`metadata` are only mutated from `@MainActor`
-/// members (`lookup`/`warmUp`/`download()`/`purge()`); there's no concurrent mutation.
+/// Also tracks, per `set_num`, the instant *this device* first saw it in a downloaded snapshot
+/// (`allFirstSeenAt()`) — Rebrickable itself exposes no "date added to catalogue" field (checked
+/// against the live OpenAPI spec, issue #185), so `download()` diffs each fresh parse against the
+/// previous one and stamps only the genuinely new set_nums, letting `NewSetsView` sort by a real
+/// "newly appeared" signal instead of the far coarser `LegoSet.year`.
+///
+/// `initialSyncAt` is the instant of this device's very first-ever download — every set_num is
+/// necessarily "new" on that download (there's nothing earlier to diff against), which would
+/// otherwise flood `NewSetsView` with the entire ~27k-set catalogue on day one. `NewSetsViewModel`
+/// only ever treats a set as genuinely new if its `firstSeenAt` is *strictly after* `initialSyncAt`
+/// — since the first download stamps both with the exact same instant, that comparison excludes
+/// the whole initial import, and the list is deliberately empty until a later sync finds something
+/// actually added to Rebrickable's catalogue since.
+///
+/// `@unchecked Sendable` because `snapshotLoad`/`firstSeenLoad`/`metadata`/`initialSyncAt` are only
+/// mutated from `@MainActor` members (`lookup`/`warmUp`/`download()`/`purge()`); there's no
+/// concurrent mutation.
 final class OfflineCatalogStore: @unchecked Sendable {
     static let shared = OfflineCatalogStore()
 
@@ -30,6 +45,8 @@ final class OfflineCatalogStore: @unchecked Sendable {
     private let snapshotURL: URL
     private let metadataURL: URL
     private let resumeDataURL: URL
+    private let firstSeenURL: URL
+    private let initialSyncAtURL: URL
 
     /// Holds the in-flight download's `URLSession`/task/delegate alive for the duration of the
     /// download (a `URLSession` doesn't keep its own delegate or tasks alive on its own) and lets
@@ -45,19 +62,34 @@ final class OfflineCatalogStore: @unchecked Sendable {
     private var snapshotLoad: Task<[String: LegoSet], Never>?
     private(set) var metadata: Metadata?
 
+    /// Decodes the on-disk `set_num → firstSeenAt` map — same lazy `Task.detached` treatment as
+    /// `snapshotLoad` (see `firstSeenLoadTask()`), since it's a similar order of magnitude of JSON.
+    private var firstSeenLoad: Task<[String: Date], Never>?
+
+    /// See the type doc. A single `Date` — tiny, loaded synchronously in `init` like `metadata`.
+    /// `nil` until this device's first-ever `download()` completes; never overwritten afterward.
+    private(set) var initialSyncAt: Date?
+
     init() {
         let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         self.snapshotURL = directory.appendingPathComponent("OfflineCatalogSnapshot.json")
         self.metadataURL = directory.appendingPathComponent("OfflineCatalogMetadata.json")
         self.resumeDataURL = directory.appendingPathComponent("OfflineCatalogResumeData")
+        self.firstSeenURL = directory.appendingPathComponent("OfflineCatalogFirstSeenAt.json")
+        self.initialSyncAtURL = directory.appendingPathComponent("OfflineCatalogInitialSyncAt.json")
 
-        // Metadata is a few bytes — fine to keep loading synchronously. The snapshot itself is
-        // deliberately NOT loaded here; see `snapshotLoad`.
+        // Metadata/initialSyncAt are a few bytes — fine to keep loading synchronously. The
+        // snapshot/first-seen map are deliberately NOT loaded here; see `snapshotLoad`/`firstSeenLoad`.
         if let data = try? Data(contentsOf: metadataURL) {
             self.metadata = try? JSONDecoder(dateDecodingStrategy: .iso8601).decode(Metadata.self, from: data)
         } else {
             self.metadata = nil
+        }
+        if let data = try? Data(contentsOf: initialSyncAtURL) {
+            self.initialSyncAt = try? JSONDecoder(dateDecodingStrategy: .iso8601).decode(Date.self, from: data)
+        } else {
+            self.initialSyncAt = nil
         }
     }
 
@@ -82,6 +114,7 @@ final class OfflineCatalogStore: @unchecked Sendable {
     @MainActor
     func warmUp() {
         _ = snapshotLoadTask()
+        _ = firstSeenLoadTask()
     }
 
     /// Exposes the decoded `set_num → LegoSet` table for callers that need to join against it
@@ -90,6 +123,43 @@ final class OfflineCatalogStore: @unchecked Sendable {
     @MainActor
     func currentSnapshot() async -> [String: LegoSet] {
         await snapshotLoadTask().value
+    }
+
+    /// Every set in the snapshot, for callers browsing the whole catalogue rather than resolving
+    /// one `setNum` at a time (e.g. `NewSetsView`, mirroring `OfflineMinifigCatalogStore
+    /// .allEntries()`). Empty before the user's first download, same as everywhere else here.
+    @MainActor
+    func allSets() async -> [LegoSet] {
+        Array(await snapshotLoadTask().value.values)
+    }
+
+    @MainActor
+    private func firstSeenLoadTask() -> Task<[String: Date], Never> {
+        if let firstSeenLoad { return firstSeenLoad }
+        let firstSeenURL = self.firstSeenURL
+        let task = Task.detached(priority: .userInitiated) { () -> [String: Date] in
+            guard let data = try? Data(contentsOf: firstSeenURL),
+                  let decoded = try? JSONDecoder(dateDecodingStrategy: .iso8601).decode([String: Date].self, from: data)
+            else { return [:] }
+            return decoded
+        }
+        firstSeenLoad = task
+        return task
+    }
+
+    /// When this device's downloaded snapshot *first* contained a given `set_num` — a genuine
+    /// "newly appeared in my catalogue" signal, unlike `LegoSet.year` (the set's real-world release
+    /// year, which is far too coarse: hundreds of sets share one value, see `NewSetsView`'s own
+    /// doc). Built by `download()` diffing each fresh parse against the previous snapshot — see its
+    /// doc for exactly how. Absent for a `setNum` never seen in any download so far (including the
+    /// common case where the offline catalogue hasn't been downloaded at all).
+    ///
+    /// This is bounded by how often the user re-syncs, and the very first-ever download stamps
+    /// every set with the same instant (there's no earlier snapshot to diff against) — it only
+    /// starts meaningfully differentiating "new" sets from the second sync onward.
+    @MainActor
+    func allFirstSeenAt() async -> [String: Date] {
+        await firstSeenLoadTask().value
     }
 
     /// Mirrors `RebrickableRepository.resolveSet`'s two-suffix lookup order: most set numbers
@@ -127,9 +197,17 @@ final class OfflineCatalogStore: @unchecked Sendable {
         let downloadedFileURL = try await runDownloadTask(progress: progress)
         defer { try? FileManager.default.removeItem(at: downloadedFileURL) }
 
+        // Read before this download's snapshot/first-seen/initial-sync files get overwritten below
+        // — this is the "previous state" the diff needs to tell genuinely new set_nums apart from
+        // ones already seen in an earlier sync, and to know whether this is the first sync ever.
+        let previousFirstSeen = await firstSeenLoadTask().value
+        let previousInitialSyncAt = self.initialSyncAt
+
         let snapshotURL = self.snapshotURL
         let metadataURL = self.metadataURL
-        let (setsByNum, newMetadata) = try await Task.detached(priority: .userInitiated) {
+        let firstSeenURL = self.firstSeenURL
+        let initialSyncAtURL = self.initialSyncAtURL
+        let (setsByNum, newMetadata, newFirstSeen, newInitialSyncAt) = try await Task.detached(priority: .userInitiated) {
             let compressedData = try Data(contentsOf: downloadedFileURL)
             let csv = try Self.gunzip(compressedData)
             let sets = try Self.parseCSV(csv)
@@ -137,18 +215,46 @@ final class OfflineCatalogStore: @unchecked Sendable {
             let snapshotData = try JSONEncoder().encode(sets)
             try snapshotData.write(to: snapshotURL, options: .atomic)
 
-            let newMetadata = Metadata(setCount: sets.count, downloadedAt: Date())
+            // Shared by every stamp below so the first-ever download's `initialSyncAt` is *exactly*
+            // equal to that same download's `firstSeenAt` entries — the strict `>` comparison
+            // `NewSetsViewModel` applies against `initialSyncAt` depends on that equality to
+            // exclude the whole initial import, not just most of it.
+            let now = Date()
+
+            let newMetadata = Metadata(setCount: sets.count, downloadedAt: now)
             let metadataData = try JSONEncoder(dateEncodingStrategy: .iso8601).encode(newMetadata)
             try metadataData.write(to: metadataURL, options: .atomic)
 
+            // Every set_num already in `previousFirstSeen` keeps its originally recorded instant;
+            // only set_nums that never appeared in any earlier download get stamped with `now`. On
+            // the very first-ever download `previousFirstSeen` is empty, so everything is stamped
+            // at once — matching `now` (below) exactly, since neither one has "real" new items yet.
+            var firstSeen = previousFirstSeen
+            for legoSet in sets where firstSeen[legoSet.setNum] == nil {
+                firstSeen[legoSet.setNum] = now
+            }
+            let firstSeenData = try JSONEncoder(dateEncodingStrategy: .iso8601).encode(firstSeen)
+            try firstSeenData.write(to: firstSeenURL, options: .atomic)
+
+            // Set once, on the first download this device ever performs, and never touched again
+            // afterward — see the type doc for why this baseline is what keeps the initial ~27k-set
+            // import out of `NewSetsView`.
+            let newInitialSyncAt = previousInitialSyncAt ?? now
+            if previousInitialSyncAt == nil {
+                let initialSyncData = try JSONEncoder(dateEncodingStrategy: .iso8601).encode(newInitialSyncAt)
+                try initialSyncData.write(to: initialSyncAtURL, options: .atomic)
+            }
+
             let setsByNum = Dictionary(sets.map { ($0.setNum, $0) }, uniquingKeysWith: { first, _ in first })
-            return (setsByNum, newMetadata)
+            return (setsByNum, newMetadata, firstSeen, newInitialSyncAt)
         }.value
 
         // Replace any pending/completed lazy load with the freshly-built table (already
         // completed — awaiting it is immediate).
         snapshotLoad = Task { setsByNum }
         metadata = newMetadata
+        firstSeenLoad = Task { newFirstSeen }
+        initialSyncAt = newInitialSyncAt
     }
 
     /// Stops the in-flight download without losing progress: `URLSessionTask.cancel(byProducingResumeData:)`
@@ -168,15 +274,22 @@ final class OfflineCatalogStore: @unchecked Sendable {
     }
 
     /// Deletes the downloaded snapshot and any in-progress resume data, reverting to "no offline
-    /// fallback available" until the user downloads it again.
+    /// fallback available" until the user downloads it again. Also clears `initialSyncAt` — a
+    /// purge-then-redownload is a genuine fresh start, so it should re-establish a new baseline
+    /// and go back to an empty `NewSetsView` rather than treating the next download as a "later"
+    /// sync against a baseline that no longer has a snapshot behind it.
     @MainActor
     func purge() {
         cancelActiveDownloadPreservingProgress()
         try? FileManager.default.removeItem(at: snapshotURL)
         try? FileManager.default.removeItem(at: metadataURL)
+        try? FileManager.default.removeItem(at: firstSeenURL)
+        try? FileManager.default.removeItem(at: initialSyncAtURL)
         clearResumeData()
         snapshotLoad = Task { [:] }
+        firstSeenLoad = Task { [:] }
         metadata = nil
+        initialSyncAt = nil
     }
 
     // MARK: - Download task plumbing

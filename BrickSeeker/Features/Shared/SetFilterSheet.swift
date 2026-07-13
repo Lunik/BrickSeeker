@@ -12,6 +12,14 @@ struct SetFilterSheet: View {
     let availableListNames: [String]
     let showsOwnedFilter: Bool
     let themeName: (Int) -> String
+    /// Hides sort options that don't make sense for a given screen — e.g. `.dateScanned` for
+    /// `NewSetsView`'s catalogue browse, which has no scan history to sort by. Empty by default so
+    /// Collection/History (which show every option) are unaffected.
+    var excludedSortOptions: Set<SetSortOption> = []
+
+    private var availableSortOptions: [SetSortOption] {
+        SetSortOption.allCases.filter { !excludedSortOptions.contains($0) }
+    }
 
     /// "Tous" stays pinned first (it's the no-filter row, not a real theme). The actual rows are
     /// deduplicated by display name rather than one per `themeId` — Rebrickable's theme table is
@@ -27,7 +35,7 @@ struct SetFilterSheet: View {
                 Section("Tri") {
                     HStack {
                         Picker("Trier par", selection: $filter.sort) {
-                            ForEach(SetSortOption.allCases) { option in
+                            ForEach(availableSortOptions) { option in
                                 Text(option.label).tag(option)
                             }
                         }
