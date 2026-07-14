@@ -165,6 +165,9 @@
     "Catalogue minifigs non téléchargé" : {
 
     },
+    "Catalogue non téléchargé" : {
+
+    },
     "Choisissez la couleur de marque et l'apparence claire/sombre de l'application." : {
 
     },
@@ -209,6 +212,16 @@
     },
     "Données fournies par Rebrickable, Brickset et BrickLink." : {
 
+    },
+    "En attente (%@/%@)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "En attente (%1$@/%2$@)"
+          }
+        }
+      }
     },
     "Enregistrer" : {
 
@@ -261,6 +274,12 @@
     "lego.com, amazon.fr et cdiscount.com : consultés pour afficher les prix du marché, sans identifiant transmis" : {
 
     },
+    "Les prochains scans seront ajoutés à une session, sans ouvrir la fiche du set." : {
+
+    },
+    "Les sets ajoutés au catalogue Rebrickable depuis votre dernière synchronisation apparaîtront ici." : {
+
+    },
     "Les sets encore dans votre Collection y resteront, mais disparaîtront de l'Historique." : {
 
     },
@@ -283,6 +302,9 @@
 
     },
     "Minifigs de ce set" : {
+
+    },
+    "Mode lot actif — scanne un set pour commencer" : {
 
     },
     "Nécessaire pour gérer votre liste cadeaux. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session." : {
@@ -328,6 +350,9 @@
 
     },
     "Recherche de sets sans compte ni clé API." : {
+
+    },
+    "Recherche..." : {
 
     },
     "Récupère les prix lego.com/Amazon/BrickLink de tous les sets de votre collection, un par un pour ne pas surcharger ces sites. Peut prendre longtemps sur une grande collection — l'app doit rester ouverte au premier plan ; si vous quittez l'app, la mise à jour se met en pause et reprendra où elle s'est arrêtée. Une notification vous prévient à la fin." : {
@@ -393,6 +418,9 @@
     "Télécharger le catalogue hors-ligne" : {
 
     },
+    "Téléchargez le catalogue Rebrickable (~27 000 sets) pour découvrir les nouveautés. Peut aussi se faire depuis Réglages." : {
+
+    },
     "Terminé" : {
 
     },
@@ -424,6 +452,9 @@
 
     },
     "Vider le cache" : {
+
+    },
+    "Voir la session (%@)" : {
 
     },
     "Voir le détail" : {
