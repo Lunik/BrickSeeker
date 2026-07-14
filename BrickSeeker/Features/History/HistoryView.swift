@@ -205,6 +205,7 @@ struct HistoryView: View {
                                 name: cached.name,
                                 setImgUrl: cached.setImgUrl,
                                 resolvedPrice: resolvedPrice(for: cached),
+                                priceLabel: "Neuf",
                                 isInWishlist: cached.isInWishlist
                             ) {
                                 if cached.isInCollection {

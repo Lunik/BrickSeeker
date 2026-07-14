@@ -69,6 +69,18 @@ struct CollectionView: View {
         )
     }
 
+    /// "Neuf"/"Occasion" caption for the row price (issue #157) — the condition that actually
+    /// resolved `resolvedPrice(for:)`'s number, not necessarily the list's own nominal condition
+    /// (see `resolveCollectionPriceCondition`'s doc comment on the #194 cross-fallback).
+    private func priceLabel(for cached: CachedSet) -> String? {
+        let condition = cached.currentListId.flatMap { conditionByListId[$0] }
+        return resolveCollectionPriceCondition(
+            storePriceEUR: cached.storePriceEUR,
+            condition: condition,
+            quotes: pricesBySetNum[cached.setNum] ?? []
+        )?.displayName
+    }
+
     private var selectedCachedSets: [CachedSet] {
         guard let viewModel else { return [] }
         return viewModel.cachedSets.filter { selectedSetNums.contains($0.setNum) }
@@ -208,6 +220,7 @@ struct CollectionView: View {
                                     setImgUrl: cached.setImgUrl,
                                     subtitle: cached.currentListName,
                                     resolvedPrice: resolvedPrice(for: cached),
+                                    priceLabel: priceLabel(for: cached),
                                     isInWishlist: cached.isInWishlist,
                                     quantity: cached.quantity
                                 ) {

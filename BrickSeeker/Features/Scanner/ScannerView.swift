@@ -7,6 +7,12 @@ struct ScannerView: View {
     @State private var viewModel = ScannerViewModel()
     @State private var hasAPIKey = KeychainService.shared.hasAPIKey
     @State private var showBatchSummary = false
+    @State private var showBatchModeConfirmation = false
+    /// Persists across app launches (issue #157) — the explanation alert only needs to show once,
+    /// ever; `ScannerViewModel`/`isBatchModeEnabled` are recreated fresh every time the scanner is
+    /// (re)entered (`BrickSeekerApp`'s root is a real `if isScanning {...}` branch), so a per-session
+    /// flag would re-nag on every re-entry. Mirrors `BrickSeekerApp`'s `hasSeenOnboarding`.
+    @AppStorage("hasSeenBatchModeIntro") private var hasSeenBatchModeIntro = false
     @State private var showManualEntry = false
     @State private var showPhotoPicker = false
     @State private var selectedPhotoItem: PhotosPickerItem?
@@ -66,7 +72,18 @@ struct ScannerView: View {
                 if !isCameraBlocked {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {
-                            viewModel.isBatchModeEnabled.toggle()
+                            // Turning off is the safe direction (nothing lost, easily flipped back
+                            // on) — no confirmation needed. Turning on redirects every subsequent
+                            // scan into a session instead of opening the detail sheet, which is
+                            // explained once via `showBatchModeConfirmation` (issue #157) and never
+                            // again after `hasSeenBatchModeIntro` is set.
+                            if viewModel.isBatchModeEnabled {
+                                viewModel.isBatchModeEnabled = false
+                            } else if hasSeenBatchModeIntro {
+                                viewModel.isBatchModeEnabled = true
+                            } else {
+                                showBatchModeConfirmation = true
+                            }
                         } label: {
                             Image(systemName: viewModel.isBatchModeEnabled ? "square.stack.3d.up.fill" : "square.stack.3d.up")
                         }
@@ -116,6 +133,15 @@ struct ScannerView: View {
             }) {
                 SettingsView()
             }
+            .alert("Activer le mode lot ?", isPresented: $showBatchModeConfirmation) {
+                Button("Activer") {
+                    viewModel.isBatchModeEnabled = true
+                    hasSeenBatchModeIntro = true
+                }
+                Button("Annuler", role: .cancel) {}
+            } message: {
+                Text("Les prochains scans seront ajoutés à une session, sans ouvrir la fiche du set.")
+            }
             .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItem, matching: .images)
             .onChange(of: selectedPhotoItem) { _, newItem in
                 guard let newItem else { return }
@@ -161,7 +187,7 @@ struct ScannerView: View {
     }
 
     private var isMenuOpen: Bool {
-        viewModel.isPresentingLookupResult || showBatchSummary || showManualEntry || showPhotoPicker || showSettings
+        viewModel.isPresentingLookupResult || showBatchSummary || showManualEntry || showPhotoPicker || showSettings || showBatchModeConfirmation
     }
 
     private var isCameraBlocked: Bool {
@@ -175,25 +201,44 @@ struct ScannerView: View {
         }
     }
 
+    /// Empty session: a plain status row, not a `Button` — it used to be tappable and open
+    /// `BatchSessionSummaryView`'s own empty state, a dead end with nothing to do there (issue
+    /// #157). Non-empty: unchanged tappable row into the real session.
     private var batchSessionButton: some View {
         VStack {
             Spacer()
-            Button {
-                showBatchSummary = true
-            } label: {
+            if viewModel.batchSession.isEmpty {
                 HStack {
                     Image(systemName: "square.stack.3d.up.fill")
-                    Text(viewModel.batchSession.isEmpty ? "Mode lot actif" : "Voir la session (\(viewModel.batchSession.items.count))")
+                        .accessibilityHidden(true)
+                    Text("Mode lot actif — scanne un set pour commencer")
                     Spacer()
-                    Image(systemName: "chevron.right")
                 }
                 .font(.footnote.bold())
                 .padding(12)
                 .background(.thinMaterial)
-                .foregroundStyle(.primary)
+                .foregroundStyle(.secondary)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .padding(.horizontal, 16)
                 .padding(.bottom, 8)
+            } else {
+                Button {
+                    showBatchSummary = true
+                } label: {
+                    HStack {
+                        Image(systemName: "square.stack.3d.up.fill")
+                        Text("Voir la session (\(viewModel.batchSession.items.count))")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                    }
+                    .font(.footnote.bold())
+                    .padding(12)
+                    .background(.thinMaterial)
+                    .foregroundStyle(.primary)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+                }
             }
         }
     }

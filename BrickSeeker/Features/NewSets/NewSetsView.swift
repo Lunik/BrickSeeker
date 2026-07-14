@@ -272,6 +272,7 @@ struct NewSetsView: View {
                                     name: legoSet.name,
                                     setImgUrl: legoSet.setImgUrl,
                                     resolvedPrice: resolvedPrice(for: legoSet),
+                                    priceLabel: "Neuf",
                                     isInWishlist: cachedByNum[legoSet.setNum]?.isInWishlist ?? false
                                 ) {
                                     if cachedByNum[legoSet.setNum]?.isInCollection == true {

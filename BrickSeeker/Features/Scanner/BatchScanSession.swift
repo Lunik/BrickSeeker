@@ -9,21 +9,45 @@ struct BatchScanItem: Identifiable, Equatable {
     var priceQuotes: [PriceQuote] = []
     var isLoadingPrice = true
 
-    /// Best (most negative) percentage gap between a scraped market price and the official
-    /// lego.com price — the same "± vs store" comparison `SetDetailView` shows per-row
-    /// (`PriceComparison.percentVsStore`), used here to pick the single number that ranks a set
-    /// across a whole batch session. `nil` until both the store price and at least one
-    /// matching-currency quote are in.
-    var dealPercent: Int? {
-        priceQuotes.compactMap { quote in
-            PriceComparison.percentVsStore(
-                amount: quote.amount,
-                currency: quote.currency,
-                storeAmount: storePrice?.amount,
-                storeCurrency: storePrice?.currency
-            )
-        }.min()
+    /// The best (most negative) "± vs store" gap (`PriceComparison.percentVsStore`, same
+    /// comparison `SetDetailView` shows per-row) and which source produced it. Shared behind
+    /// `dealPercent`/`dealSource` so the two can never disagree about which quote won.
+    ///
+    /// Neuf sources are preferred outright, falling back to the BrickLink-occasion quote only
+    /// when no neuf source has one — a used listing being cheaper than lego.com retail isn't a
+    /// "deal" the way a discounted new one is, so letting it silently win the ranking whenever it
+    /// happened to be more negative made the badge conflate two different comparisons.
+    ///
+    /// Surfacing the source also matters because BrickLink/Amazon/Cdiscount are live, time-
+    /// sensitive scrapes fetched independently here and again when `SetDetailView` opens (its own
+    /// `loadPricesIfNeeded` deliberately never trusts a cached "found" value for a source that
+    /// might have gone unavailable since) — a quote this batch fetch found can simply fail to
+    /// reproduce moments later, leaving the detail page showing "Indisponible" for the very
+    /// source that produced this percentage. Without a label, that made the number look like it
+    /// corresponded to nothing (issue #157 follow-up); with one, it's still explained even if the
+    /// source itself is no longer reachable.
+    private var bestDeal: (percent: Int, source: PriceSource)? {
+        func best(in quotes: [PriceQuote]) -> (percent: Int, source: PriceSource)? {
+            quotes.compactMap { quote -> (percent: Int, source: PriceSource)? in
+                guard let percent = PriceComparison.percentVsStore(
+                    amount: quote.amount,
+                    currency: quote.currency,
+                    storeAmount: storePrice?.amount,
+                    storeCurrency: storePrice?.currency
+                ) else { return nil }
+                return (percent, quote.source)
+            }.min(by: { $0.percent < $1.percent })
+        }
+        let newQuotes = priceQuotes.filter { !$0.source.isUsed }
+        let usedQuotes = priceQuotes.filter(\.source.isUsed)
+        return best(in: newQuotes) ?? best(in: usedQuotes)
     }
+
+    /// `nil` until both the store price and at least one matching-currency quote are in.
+    var dealPercent: Int? { bestDeal?.percent }
+
+    /// Which source produced `dealPercent` — see `bestDeal`'s doc comment.
+    var dealSource: PriceSource? { bestDeal?.source }
 }
 
 /// Holds the sets accumulated while "mode lot" is active in `ScannerView` — scanning a set adds
@@ -77,6 +101,17 @@ final class BatchScanSession {
     func clear() {
         items = []
         pendingSetNums = []
+    }
+
+    /// 1-based position in the fetch queue for a still-loading item (issue #157) — 1 while
+    /// actively being fetched, 2 for the next one waiting, etc. `nil` once resolved either way
+    /// (`isLoadingPrice == false`). The item being fetched right now has already been removed
+    /// from `pendingSetNums` by `processQueue()` before its `await` starts, so it's the one
+    /// loading item absent from that list; everything else is still in it, in wait order.
+    func queuePosition(for setNum: String) -> Int? {
+        guard let item = items.first(where: { $0.id == setNum }), item.isLoadingPrice else { return nil }
+        if let pendingIndex = pendingSetNums.firstIndex(of: setNum) { return pendingIndex + 2 }
+        return 1
     }
 
     private func processQueueIfNeeded() {
