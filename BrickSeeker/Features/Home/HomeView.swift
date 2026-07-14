@@ -25,6 +25,7 @@ struct HomeView: View {
         case wishlist
         case history
         case minifigs
+        case newSets
 
         var id: Self { self }
     }
@@ -96,6 +97,8 @@ struct HomeView: View {
                     }
                 case .minifigs:
                     MinifigGalleryView(lookupViewModel: lookupViewModel)
+                case .newSets:
+                    NewSetsView(lookupViewModel: lookupViewModel)
                 }
             }
             .sheet(isPresented: $showManualEntry) {
@@ -224,27 +227,41 @@ struct HomeView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
-                HStack(spacing: 12) {
-                    Button {
-                        destination = .statistics
-                    } label: {
-                        statCardLink(title: "Statistiques", icon: "chart.bar")
-                    }
-                    .buttonStyle(.plain)
+                // Two rows of two rather than one row of four (#185) — a fourth tile in a single
+                // `HStack` left every title cramped enough to truncate (even "Statistiques", which
+                // already clipped to "Sta-tist…" at three).
+                VStack(spacing: 12) {
+                    HStack(spacing: 12) {
+                        Button {
+                            destination = .statistics
+                        } label: {
+                            statCardLink(title: "Statistiques", icon: "chart.bar")
+                        }
+                        .buttonStyle(.plain)
 
-                    Button {
-                        destination = .collection
-                    } label: {
-                        StatCard(title: "Sets possédés", value: "\(viewModel.ownedSetsCount)", icon: "shippingbox", isLink: true)
+                        Button {
+                            destination = .collection
+                        } label: {
+                            StatCard(title: "Sets possédés", value: "\(viewModel.ownedSetsCount)", icon: "shippingbox", isLink: true)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
 
-                    Button {
-                        destination = .minifigs
-                    } label: {
-                        StatCard(title: "Mes minifigs", value: "\(viewModel.ownedMinifigsCount)", icon: "person.fill", isLink: true)
+                    HStack(spacing: 12) {
+                        Button {
+                            destination = .minifigs
+                        } label: {
+                            StatCard(title: "Mes minifigs", value: "\(viewModel.ownedMinifigsCount)", icon: "person.fill", isLink: true)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            destination = .newSets
+                        } label: {
+                            statCardLink(title: "Nouveaux sets", icon: "sparkles")
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
 
                 // Every branch renders exactly one line (including the blank placeholder), so the
@@ -328,9 +345,17 @@ struct HomeView: View {
     /// rather than displaying a count.
     private func statCardLink(title: String, icon: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(.tint)
+            HStack {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundStyle(.tint)
+                Spacer()
+                // Was missing here (#185 feedback) — every other `isLink` tile (`StatCard(isLink:
+                // true)`) already shows this trailing chevron as the "this navigates" signal.
+                Image(systemName: "chevron.right")
+                    .font(.caption.bold())
+                    .foregroundStyle(.tertiary)
+            }
             // Matches `StatCard`'s reserved 2-line height (see its doc) so this card doesn't grow
             // taller than its `StatCard` neighbours in the same row just because its title wraps.
             Text(title)

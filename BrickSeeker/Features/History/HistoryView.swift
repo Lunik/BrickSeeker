@@ -415,7 +415,8 @@ struct HistoryView: View {
                 availableYears: availableYears,
                 availableListNames: [],
                 showsOwnedFilter: true,
-                themeName: { ThemeNameStore.shared.displayName(forThemeId: $0) }
+                themeName: { ThemeNameStore.shared.displayName(forThemeId: $0) },
+                excludedSortOptions: [.dateAdded]
             )
         }
         .task {

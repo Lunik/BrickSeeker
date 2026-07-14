@@ -371,7 +371,9 @@ struct MinifigGalleryView: View {
                         if isSelecting {
                             Text("Terminé")
                         } else {
-                            Image(systemName: "square.and.pencil")
+                            // Matches History/Collection/Wishlist/NewSets' multi-select toggle —
+                            // was `square.and.pencil` here only, an inconsistency (#185 feedback).
+                            Image(systemName: "checklist")
                         }
                     }
                     .accessibilityLabel(isSelecting ? "Terminé" : "Actions")
