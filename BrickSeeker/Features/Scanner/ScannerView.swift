@@ -50,7 +50,11 @@ struct ScannerView: View {
                         recoveryActionCluster
                     }
 
-                    if viewModel.isBatchModeEnabled {
+                    // Stays visible after batch mode is turned off as long as the session still
+                    // has items — disabling the toggle doesn't clear `batchSession`, so hiding the
+                    // pill here would strand it with no way back to `BatchSessionSummaryView` until
+                    // the user re-enables batch mode (#200).
+                    if viewModel.isBatchModeEnabled || !viewModel.batchSession.isEmpty {
                         batchSessionButton
                     }
                 }
@@ -101,23 +105,15 @@ struct ScannerView: View {
                     }
                 }
             }
-            // `isGated: showManualEntry` — ManualSetEntryView nests its own copy of this same
-            // modifier (see its doc comment), so this ungated copy must stand down while it's up,
-            // exactly like HomeView's, to avoid a race between the two presenters on `.found`/
-            // `.ambiguous`.
-            .lookupResultSheets(for: viewModel, isGated: showManualEntry)
+            // `isGated: showManualEntry || showBatchSummary` — both ManualSetEntryView and
+            // BatchSessionSummaryView nest their own copy of this same modifier (see their doc
+            // comments), so this ungated copy must stand down while either is up, exactly like
+            // HomeView's, to avoid a race between two presenters on `.found`/`.ambiguous`.
+            .lookupResultSheets(for: viewModel, isGated: showManualEntry || showBatchSummary)
             .sheet(isPresented: $showBatchSummary) {
                 BatchSessionSummaryView(
                     session: viewModel.batchSession,
-                    onSelect: { setNum in
-                        // Dismiss this sheet first, then ask the viewModel to resolve for detail
-                        // on the next runloop tick — presenting the detail sheet in the same
-                        // transaction as dismissing this one is unreliable in SwiftUI.
-                        showBatchSummary = false
-                        DispatchQueue.main.async {
-                            viewModel.lookupSetForDetail(setNum)
-                        }
-                    },
+                    lookupViewModel: viewModel,
                     onClearSession: {
                         viewModel.batchSession.clear()
                     }
