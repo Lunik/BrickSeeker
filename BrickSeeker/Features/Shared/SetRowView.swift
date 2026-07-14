@@ -24,6 +24,10 @@ struct SetRowView<Trailing: View>: View {
     let setImgUrl: String?
     var subtitle: String? = nil
     var resolvedPrice: Double? = nil
+    /// What kind of price `resolvedPrice` is (issue #157) — "Neuf"/"Occasion"/"Meilleure offre",
+    /// resolved per-screen since the same bold € amount means different things depending on which
+    /// list is rendering it. `nil` renders no caption (never shown without a price either way).
+    var priceLabel: String? = nil
     var isInWishlist: Bool = false
     /// Copies owned (issue #115) — only ever passed > 1 by CollectionView, so the "×N" badge
     /// stays invisible everywhere else (History/Wishlist rows aren't about owned copies).
@@ -69,6 +73,11 @@ struct SetRowView<Trailing: View>: View {
                     Text(price, format: .currency(code: "EUR"))
                         .font(.subheadline.bold())
                         .foregroundStyle(.primary)
+                    if let priceLabel {
+                        Text(priceLabel)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 trailingContent()
             }
@@ -150,13 +159,41 @@ func resolveCollectionPrice(
     condition: ListCondition?,
     quotes: [PriceQuote]
 ) -> Double? {
+    resolveCollectionPriceDetailed(storePriceEUR: storePriceEUR, condition: condition, quotes: quotes)?.amount
+}
+
+/// Which `ListCondition` actually produced `resolveCollectionPrice`'s number (issue #157) —
+/// usually matches the list's own condition, but differs when the #194 cross-fallback kicked in
+/// (e.g. a `.used` list with no BrickLink used quote yet, priced off the new-price chain
+/// instead). Lets `CollectionView` label its row price honestly rather than trusting the list's
+/// nominal condition.
+func resolveCollectionPriceCondition(
+    storePriceEUR: Double?,
+    condition: ListCondition?,
+    quotes: [PriceQuote]
+) -> ListCondition? {
+    resolveCollectionPriceDetailed(storePriceEUR: storePriceEUR, condition: condition, quotes: quotes)?.condition
+}
+
+/// Shared branching behind `resolveCollectionPrice`/`resolveCollectionPriceCondition` — a single
+/// source of truth so the amount and its label can never drift apart.
+private func resolveCollectionPriceDetailed(
+    storePriceEUR: Double?,
+    condition: ListCondition?,
+    quotes: [PriceQuote]
+) -> (amount: Double, condition: ListCondition)? {
     let usedPrice = quotes.first(where: { $0.source == .bricklinkUsed })
         .map { ($0.amount as NSDecimalNumber).doubleValue }
+    let newPrice = resolveNewPriceForValuation(storePriceEUR: storePriceEUR, quotes: quotes)
     switch condition ?? .newSet {
     case .newSet:
-        return resolveNewPriceForValuation(storePriceEUR: storePriceEUR, quotes: quotes) ?? usedPrice
+        if let newPrice { return (newPrice, .newSet) }
+        if let usedPrice { return (usedPrice, .used) }
+        return nil
     case .used:
-        return usedPrice ?? resolveNewPriceForValuation(storePriceEUR: storePriceEUR, quotes: quotes)
+        if let usedPrice { return (usedPrice, .used) }
+        if let newPrice { return (newPrice, .newSet) }
+        return nil
     }
 }
 
@@ -164,12 +201,25 @@ func resolveCollectionPrice(
 /// retail → BrickLink new → BrickLink used — Amazon/Cdiscount before lego.com, reversed from
 /// `resolveNewPrice`'s order, per request on the wishlist specifically.
 func resolveWishlistPrice(storePriceEUR: Double?, quotes: [PriceQuote]) -> Double? {
-    if let amazonOrCdiscount = bestAmazonOrCdiscountPrice(in: quotes) { return amazonOrCdiscount }
-    if let retail = storePriceEUR { return retail }
-    for source in [PriceSource.bricklinkNew, .bricklinkUsed] {
-        if let q = quotes.first(where: { $0.source == source }) {
-            return (q.amount as NSDecimalNumber).doubleValue
-        }
+    resolveWishlistPriceDetailed(storePriceEUR: storePriceEUR, quotes: quotes)?.amount
+}
+
+/// Which `ListCondition` `resolveWishlistPrice`'s number actually represents (issue #157) — the
+/// chain's first three steps are always new, but the final BrickLink-used fallback means a
+/// wishlisted set with no surviving new-price source (common for retired/hard-to-find sets, the
+/// exact profile a wishlist skews toward) can silently resolve to a used price.
+func resolveWishlistPriceCondition(storePriceEUR: Double?, quotes: [PriceQuote]) -> ListCondition? {
+    resolveWishlistPriceDetailed(storePriceEUR: storePriceEUR, quotes: quotes)?.condition
+}
+
+private func resolveWishlistPriceDetailed(storePriceEUR: Double?, quotes: [PriceQuote]) -> (amount: Double, condition: ListCondition)? {
+    if let amazonOrCdiscount = bestAmazonOrCdiscountPrice(in: quotes) { return (amazonOrCdiscount, .newSet) }
+    if let retail = storePriceEUR { return (retail, .newSet) }
+    if let newQuote = quotes.first(where: { $0.source == .bricklinkNew }) {
+        return ((newQuote.amount as NSDecimalNumber).doubleValue, .newSet)
+    }
+    if let usedQuote = quotes.first(where: { $0.source == .bricklinkUsed }) {
+        return ((usedQuote.amount as NSDecimalNumber).doubleValue, .used)
     }
     return nil
 }

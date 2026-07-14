@@ -72,6 +72,17 @@ struct WishlistView: View {
         )
     }
 
+    /// Caption for the row price (issue #157) — "Meilleure offre" covers the common case, but a
+    /// wishlist skews toward retired/hard-to-find sets where `resolveWishlistPrice` can silently
+    /// fall through to a BrickLink used price (see `resolveWishlistPriceCondition`'s doc comment).
+    private func priceLabel(for cached: CachedSet) -> String? {
+        switch resolveWishlistPriceCondition(storePriceEUR: cached.storePriceEUR, quotes: pricesBySetNum[cached.setNum] ?? []) {
+        case .newSet: return "Meilleure offre"
+        case .used: return "Meilleure offre (occasion)"
+        case nil: return nil
+        }
+    }
+
     private var selectedCachedSets: [CachedSet] {
         cachedSets.filter { selectedSetNums.contains($0.setNum) }
     }
@@ -211,7 +222,8 @@ struct WishlistView: View {
                                 setNum: cached.setNum,
                                 name: cached.name,
                                 setImgUrl: cached.setImgUrl,
-                                resolvedPrice: resolvedPrice(for: cached)
+                                resolvedPrice: resolvedPrice(for: cached),
+                                priceLabel: priceLabel(for: cached)
                             ) {
                                 if cached.isInCollection {
                                     Image(systemName: "checkmark.circle.fill")
