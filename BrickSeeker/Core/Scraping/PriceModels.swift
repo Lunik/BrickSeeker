@@ -29,6 +29,11 @@ enum PriceSource: String, Codable, CaseIterable {
     /// `bestAmazonOrCdiscountPrice`/`mostExpensiveAmazonOrCdiscountPrice`).
     case cdiscount
 
+    /// True for the one source that quotes a used/second-hand price — every other case is neuf.
+    var isUsed: Bool {
+        self == .bricklinkUsed
+    }
+
     var displayName: String {
         switch self {
         case .bricklinkUsed: return "BrickLink (occasion)"

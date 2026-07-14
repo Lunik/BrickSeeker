@@ -23,6 +23,19 @@ struct BatchSessionSummaryView: View {
         !session.items.isEmpty && session.items.allSatisfy { selectedSetNums.contains($0.id) }
     }
 
+    /// Shared by the title and every loading row (issue #157) so both read from the same count
+    /// rather than each re-deriving it.
+    private var loadingCount: Int {
+        session.items.count(where: \.isLoadingPrice)
+    }
+
+    /// Static title once every price has resolved; otherwise shows overall progress so a long
+    /// queue doesn't read as frozen (issue #157).
+    private var navigationTitleText: String {
+        guard loadingCount > 0 else { return "Session de scan" }
+        return "Session de scan (\(session.items.count - loadingCount)/\(session.items.count))"
+    }
+
     private func toggleSelection(_ setNum: String) {
         if selectedSetNums.contains(setNum) {
             selectedSetNums.remove(setNum)
@@ -131,7 +144,7 @@ struct BatchSessionSummaryView: View {
                     }
                 }
             }
-            .navigationTitle("Session de scan")
+            .navigationTitle(navigationTitleText)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if !session.items.isEmpty {
@@ -234,7 +247,25 @@ struct BatchSessionSummaryView: View {
                         .font(.subheadline.bold())
                         .foregroundStyle(.primary)
                 } else if item.isLoadingPrice {
-                    ProgressView().controlSize(.small)
+                    // Position 1 = actively being fetched right now (real spinner); anything
+                    // behind it is genuinely idle, not just slow — a still-spinning spinner there
+                    // would be part of why the queue used to look frozen, so it gets a static
+                    // clock + its position instead (issue #157).
+                    if session.queuePosition(for: item.id) == 1 {
+                        HStack(spacing: 4) {
+                            ProgressView().controlSize(.small)
+                            Text("Recherche...")
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    } else {
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock")
+                            Text("En attente (\(session.queuePosition(for: item.id) ?? 1)/\(loadingCount))")
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    }
                 } else {
                     Text("Prix indisponible")
                         .font(.caption)
@@ -251,6 +282,14 @@ struct BatchSessionSummaryView: View {
                     }
                     .font(.caption2.bold())
                     .foregroundStyle(dealPercent < 0 ? .green : .red)
+                    if let dealSource = item.dealSource {
+                        // Without naming the source, this % looked like it corresponded to
+                        // nothing once the detail page's own live re-fetch didn't reproduce the
+                        // same quote (issue #157 follow-up) — see `bestDeal`'s doc comment.
+                        Text(dealSource.displayName)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }
