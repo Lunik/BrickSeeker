@@ -6,11 +6,11 @@ import SwiftUI
 /// same entry point `HistoryView` uses for `lookupViewModel.lookupSetNumber`.
 struct BatchSessionSummaryView: View {
     let session: BatchScanSession
+    let lookupViewModel: ScannerViewModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     var rebrickableRepository: RebrickableRepositoryProtocol = RebrickableRepository()
     var bricksetRepository: BricksetRepositoryProtocol = BricksetRepository()
-    let onSelect: (String) -> Void
     let onClearSession: () -> Void
 
     @State private var isSelecting = false
@@ -130,7 +130,7 @@ struct BatchSessionSummaryView: View {
                             if isSelecting {
                                 toggleSelection(item.id)
                             } else {
-                                onSelect(item.id)
+                                lookupViewModel.lookupSetForDetail(item.id)
                             }
                         } label: {
                             HStack(spacing: 12) {
@@ -222,6 +222,12 @@ struct BatchSessionSummaryView: View {
             } message: {
                 Text(selectionActionError ?? "")
             }
+            // Nested rather than a sibling sheet on the presenter — same reasoning as
+            // ManualSetEntryView: SwiftUI can't cleanly close this sheet while opening another
+            // from the same parent at once (see the presenter's gated lookupResultSheets).
+            // Nesting here means closing the result reveals this view again, not the camera
+            // behind it (#200).
+            .lookupResultSheets(for: lookupViewModel)
         }
     }
 
