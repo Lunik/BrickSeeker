@@ -32,6 +32,10 @@ struct ScanPriceEntryView: View {
 
     @State private var mode: EntryMode = .price
     @State private var percentText = ""
+    /// Starts compact; forced to `.large` the moment a verdict appears so the 🟢🟡🔴 section — the
+    /// whole point of this sheet — can't end up below the fold under the keyboard (issue #157).
+    /// Only ever grows, never auto-shrinks, so it doesn't fight a manual drag back down afterward.
+    @State private var detent: PresentationDetent = .medium
     @FocusState private var isInputFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
@@ -156,7 +160,17 @@ struct ScanPriceEntryView: View {
                 }
             }
             .onAppear { isInputFocused = true }
+            // Watches the verdict's nil-ness (always `Equatable`, unlike `DealVerdictResult`
+            // itself) rather than `priceForVerdict` — that would also re-fire on every keystroke
+            // once a verdict already exists, and would wrongly expand even when there's a typed
+            // price but zero reference data to compare it against (no Verdict section to show).
+            .onChange(of: verdictResult != nil) { _, hasVerdict in
+                if hasVerdict { detent = .large }
+            }
         }
-        .presentationDetents([.medium])
+        // The app's other multi-detent sheets (`SetFilterSheet`/`MinifigFilterSheet`) leave the
+        // detent entirely to the user; this is deliberately the first sheet that drives it
+        // programmatically, to guarantee the verdict's visibility rather than merely allow it.
+        .presentationDetents([.medium, .large], selection: $detent)
     }
 }
