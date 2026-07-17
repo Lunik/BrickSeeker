@@ -42,7 +42,6 @@ struct SetDetailView: View {
     /// Sets "similar" to this one (issue #188) — same theme + a comparable part count, only ever
     /// populated for a real set, see `similarSetsSection`.
     @State private var similarSets: [LegoSet] = []
-    @State private var similarSetsTotalCount = 0
     @State private var isLoadingSimilarSets = false
     @State private var similarSetsErrorMessage: String?
     /// Cache-only resolved "new" price per set number (issue #188) — same convention as
@@ -313,7 +312,6 @@ struct SetDetailView: View {
             await loadMinifigsInSetIfNeeded()
         }
         .task {
-            await ThemeNameStore.shared.refreshIfNeeded()
             await loadSimilarSetsIfNeeded()
         }
     }
@@ -846,9 +844,6 @@ struct SetDetailView: View {
                 .filter { $0.setNum != currentSetNum }
                 .sorted { abs($0.numParts - currentNumParts) < abs($1.numParts - currentNumParts) }
             similarSets = results
-            // The reference set always matches its own filter, so it's always counted once in
-            // `count` even though it's excluded from `results` above.
-            similarSetsTotalCount = max(0, response.count - 1)
             let repository = LocalRepository(modelContext: modelContext)
             var prices: [String: Double] = [:]
             for entry in results {
@@ -895,11 +890,6 @@ struct SetDetailView: View {
                         }
                         .padding(.horizontal, 1)
                     }
-                    if similarSetsTotalCount > similarSets.count {
-                        Text("et \(similarSetsTotalCount - similarSets.count) sets supplémentaires")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -916,10 +906,6 @@ struct SetDetailView: View {
             VStack(spacing: 2) {
                 Text(entry.setNum.baseSetNum)
                     .font(.caption.bold())
-                Text(ThemeNameStore.shared.displayName(forThemeId: entry.themeId))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
                 if let price = priceBySetNumInSimilarSetsGallery[entry.setNum] {
                     Text(Decimal(price).formatted(.currency(code: "EUR")))
                         .font(.caption2.bold())
