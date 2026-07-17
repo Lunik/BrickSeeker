@@ -15,6 +15,7 @@ protocol RebrickableRepositoryProtocol: Sendable {
     func createSetList(name: String) async throws -> SetList
     func fetchSetsContainingMinifig(figNum: String, pageSize: Int) async throws -> PaginatedResponse<MinifigSetEntry>
     func fetchMinifigsInSet(setNum: String, pageSize: Int) async throws -> PaginatedResponse<SetMinifigEntry>
+    func fetchSimilarSets(to legoSet: LegoSet, pageSize: Int) async throws -> PaginatedResponse<LegoSet>
 }
 
 enum SetResolution {
@@ -209,6 +210,35 @@ final class RebrickableRepository: RebrickableRepositoryProtocol, @unchecked Sen
             path: RebrickableEndpoint.setMinifigsPath(setNum: setNum),
             queryItems: [URLQueryItem(name: "page_size", value: String(pageSize))]
         )
+    }
+
+    // Endpoint 13
+    // Rebrickable has no dedicated "similar sets" endpoint (issue #188; `/lego/sets/{set_num}/alternates/`
+    // is MOC alternate builds, a different concept) — derived instead from the same `/lego/sets/`
+    // list endpoint `searchSets` already uses, filtered to the reference set's own theme plus a
+    // parts-count window around its `numParts` (`theme_id`/`min_parts`/`max_parts`/`ordering` all
+    // confirmed as real query parameters on this path against the community-maintained OpenAPI
+    // spec, per the check-rebrickable-endpoint skill). The parts window is skipped when `numParts`
+    // is 0 (a handful of catalog entries carry no part count) rather than filtering to
+    // `min_parts=max_parts=0`, which would only match other zero-part entries. `ordering=-year`
+    // just decides which sets land in this single page when a theme/size combination matches more
+    // than `pageSize` — the caller re-sorts by actual size proximity for display, since Rebrickable
+    // has no "closest to N parts" ordering. The reference set always matches its own filter (same
+    // theme, and its own numParts always falls inside a window derived from itself) and must be
+    // excluded by the caller; this method returns Rebrickable's raw result set.
+    func fetchSimilarSets(to legoSet: LegoSet, pageSize: Int = 20) async throws -> PaginatedResponse<LegoSet> {
+        var queryItems = [
+            URLQueryItem(name: "theme_id", value: String(legoSet.themeId)),
+            URLQueryItem(name: "page_size", value: String(pageSize)),
+            URLQueryItem(name: "ordering", value: "-year")
+        ]
+        if legoSet.numParts > 0 {
+            let minParts = Int((Double(legoSet.numParts) * 0.6).rounded(.down))
+            let maxParts = Int((Double(legoSet.numParts) * 1.4).rounded(.up))
+            queryItems.append(URLQueryItem(name: "min_parts", value: String(minParts)))
+            queryItems.append(URLQueryItem(name: "max_parts", value: String(maxParts)))
+        }
+        return try await client.get(path: RebrickableEndpoint.searchSetsPath, queryItems: queryItems)
     }
 
     // MARK: - User token retry on 403
