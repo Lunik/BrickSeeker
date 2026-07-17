@@ -41,6 +41,7 @@ struct MinifigGalleryView: View {
 
     @Query(filter: #Predicate<CachedSet> { $0.isInCollection }) private var ownedCachedSets: [CachedSet]
     @Query private var allCachedPrices: [CachedSetPrice]
+    @Query private var allCachedSetLists: [CachedSetList]
     @State private var pricesByFigNum: [String: [PriceQuote]] = [:]
 
     private static let pageSize = 60
@@ -68,9 +69,36 @@ struct MinifigGalleryView: View {
         let items: [OfflineMinifigCatalogStore.MinifigCatalogEntry]
     }
 
-    private func resolvedPrice(figNum: String, prices: [String: [PriceQuote]]) -> Double? {
-        guard let quote = prices[figNum]?.first(where: { $0.source == .bricklinkUsed }) else { return nil }
-        return (quote.amount as NSDecimalNumber).doubleValue
+    /// Mirrors `CollectionView.conditionByListId` — the same `CachedSetList.condition` lookup, one
+    /// dictionary build per body evaluation rather than per tile.
+    private var conditionByListId: [Int: ListCondition] {
+        Dictionary(allCachedSetLists.map { ($0.listId, $0.condition) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    private func resolvedPrice(figNum: String, prices: [String: [PriceQuote]], condition: ListCondition?) -> Double? {
+        resolveMinifigPrice(condition: condition, quotes: prices[figNum] ?? [])
+    }
+
+    /// The `ListCondition` behind `resolvedPrice`'s condition-aware pick (issue #203) — derived
+    /// from the minifig's *first owned* containing set. `containingSets` is already first-
+    /// occurrence order (built by the CSV join in `OfflineMinifigCatalogStore`); reusing "first
+    /// wins" here matches that store's own doc comment on the identical ambiguity ("no attempt to
+    /// pick the most representative" set) rather than inventing a second rule for when a minifig is
+    /// owned via several sets of different conditions. `nil` when no containing set is owned (a
+    /// silhouette) — `resolveMinifigPrice` defaults that case to `.used`.
+    private static func conditionByFigNum(
+        entries: [OfflineMinifigCatalogStore.MinifigCatalogEntry],
+        ownedCachedSets: [CachedSet],
+        conditionByListId: [Int: ListCondition]
+    ) -> [String: ListCondition] {
+        guard !ownedCachedSets.isEmpty else { return [:] }
+        let ownedSetBySetNum = Dictionary(ownedCachedSets.map { ($0.setNum, $0) }, uniquingKeysWith: { first, _ in first })
+        var result: [String: ListCondition] = [:]
+        for entry in entries {
+            guard let firstOwnedSet = entry.containingSets.lazy.compactMap({ ownedSetBySetNum[$0.setNum] }).first else { continue }
+            result[entry.figNum] = firstOwnedSet.currentListId.flatMap { conditionByListId[$0] } ?? .newSet
+        }
+        return result
     }
 
     /// How many copies of each minifig the user owns — summed across every owned set it appears
@@ -222,11 +250,14 @@ struct MinifigGalleryView: View {
         // re-derived per grid cell — this walks the whole catalogue, which must not happen once
         // per visible tile.
         let ownedQuantityByFigNum = Self.ownedQuantityByFigNum(entries: viewModel.allEntries, ownedCachedSets: ownedCachedSets)
+        let conditionByFigNum = Self.conditionByFigNum(
+            entries: viewModel.allEntries, ownedCachedSets: ownedCachedSets, conditionByListId: conditionByListId
+        )
         let prices = pricesByFigNum
         let filteredSorted = viewModel.allEntries.filteredAndSorted(
             by: filter,
             owned: { ownedQuantityByFigNum[$0, default: 0] > 0 },
-            resolvedPrice: { resolvedPrice(figNum: $0, prices: prices) },
+            resolvedPrice: { resolvedPrice(figNum: $0, prices: prices, condition: conditionByFigNum[$0]) },
             themeName: { ThemeNameStore.shared.displayName(forThemeId: $0) }
         )
         let windowed = Array(filteredSorted.prefix(displayedCount))
@@ -265,7 +296,7 @@ struct MinifigGalleryView: View {
                                             MinifigThumbnailView(
                                                 entry: entry,
                                                 ownedQuantity: ownedQuantityByFigNum[entry.figNum, default: 0],
-                                                price: resolvedPrice(figNum: entry.figNum, prices: prices)
+                                                price: resolvedPrice(figNum: entry.figNum, prices: prices, condition: conditionByFigNum[entry.figNum])
                                             )
                                             .overlay(alignment: .topTrailing) {
                                                 if isSelecting {
