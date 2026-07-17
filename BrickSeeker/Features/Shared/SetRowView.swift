@@ -197,6 +197,27 @@ private func resolveCollectionPriceDetailed(
     }
 }
 
+/// BrickLink-only price resolution for a minifig (issue #203) — a minifig only ever has BrickLink
+/// new/used quotes (#175: `PriceRepository.fetchPrices` special-cases `isMinifig`, no retail/
+/// Amazon/Cdiscount scrape), so this reduces to a condition-aware pick with a last-resort fallback
+/// to the other condition — the same "primary source, cross-fallback as last resort" shape as
+/// `resolveCollectionPriceDetailed`'s used↔new fallback (#194), minus the new-price chain (no
+/// `storePriceEUR`/Amazon/Cdiscount for a minifig). `condition` is the `ListCondition` of the
+/// minifig's owned containing set(s) (`MinifigGalleryView.conditionByFigNum`); `nil` — a minifig
+/// with no owned containing set, i.e. a silhouette — defaults to `.used` rather than
+/// `resolveCollectionPriceDetailed`'s `.newSet` default, matching this resolver's pre-#203 primary
+/// (and, until now, only) source.
+func resolveMinifigPrice(condition: ListCondition?, quotes: [PriceQuote]) -> Double? {
+    let usedPrice = quotes.first(where: { $0.source == .bricklinkUsed })
+        .map { ($0.amount as NSDecimalNumber).doubleValue }
+    let newPrice = quotes.first(where: { $0.source == .bricklinkNew })
+        .map { ($0.amount as NSDecimalNumber).doubleValue }
+    switch condition ?? .used {
+    case .used: return usedPrice ?? newPrice
+    case .newSet: return newPrice ?? usedPrice
+    }
+}
+
 /// Price resolution for `WishlistView` (issue #109/#121): best(Amazon, Cdiscount) → lego.com
 /// retail → BrickLink new → BrickLink used — Amazon/Cdiscount before lego.com, reversed from
 /// `resolveNewPrice`'s order, per request on the wishlist specifically.

@@ -76,7 +76,8 @@ extension Array where Element == OfflineMinifigCatalogStore.MinifigCatalogEntry 
     /// - Parameters:
     ///   - owned: which fig_nums count as owned (`CachedSet.isInCollection` cross-referenced
     ///     against `containingSets` — computed once by the caller, not per-element here).
-    ///   - resolvedPrice: cache-only BrickLink-used price lookup, used only for `.price` sort.
+    ///   - resolvedPrice: cache-only, condition-aware BrickLink price lookup (`resolveMinifigPrice`,
+    ///     issue #203), used only for `.price` sort.
     ///   - themeName: display-name resolver, used only for `.theme` sort (grouping/ordering by the
     ///     same string `MinifigGalleryView`'s section headers show, not the raw `themeId`).
     @MainActor
