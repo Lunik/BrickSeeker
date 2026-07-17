@@ -39,6 +39,15 @@ struct SetDetailView: View {
     /// convention `MinifigGalleryView.resolvedPrice` uses for a minifig card, since lego.com/
     /// Amazon/Cdiscount never sell one individually (issue #175).
     @State private var priceByFigNumInSetGallery: [String: Double] = [:]
+    /// Sets "similar" to this one (issue #188) — same theme + a comparable part count, only ever
+    /// populated for a real set, see `similarSetsSection`.
+    @State private var similarSets: [LegoSet] = []
+    @State private var similarSetsTotalCount = 0
+    @State private var isLoadingSimilarSets = false
+    @State private var similarSetsErrorMessage: String?
+    /// Cache-only resolved "new" price per set number (issue #188) — same convention as
+    /// `priceBySetNumInMinifigGallery`.
+    @State private var priceBySetNumInSimilarSetsGallery: [String: Double] = [:]
     /// Own, independent `ScannerViewModel` (issue #178) — deliberately NOT the presenting
     /// screen's shared instance. `SetDetailView` is always presented as the leaf content of an
     /// outer `.lookupResultSheets(for:)` (see that type's doc); reusing that same view model here
@@ -150,6 +159,8 @@ struct SetDetailView: View {
                     setsContainingMinifigSection
 
                     minifigsInSetSection
+
+                    similarSetsSection
 
                     if viewModel.isLoading {
                         ProgressView()
@@ -300,6 +311,10 @@ struct SetDetailView: View {
         }
         .task {
             await loadMinifigsInSetIfNeeded()
+        }
+        .task {
+            await ThemeNameStore.shared.refreshIfNeeded()
+            await loadSimilarSetsIfNeeded()
         }
     }
 
@@ -807,6 +822,111 @@ struct SetDetailView: View {
             }
         }
         .frame(width: Self.minifigInSetCardWidth)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(entry.name)
+    }
+
+    /// Loads sets "similar" to this one (issue #188) — Rebrickable has no dedicated endpoint for
+    /// this, so it's derived via `RebrickableRepository.fetchSimilarSets` (same theme + a parts
+    /// window around this set's own `numParts`). That filter always matches the reference set
+    /// itself, so it's excluded here, client-side, then the page is re-sorted by actual part-count
+    /// proximity (the server has no "closest to N parts" ordering). Runs once per view identity
+    /// (guarded on `similarSets.isEmpty`); pricing for each result is resolved from the existing
+    /// price cache only, same "never a live per-card fetch" rule as `loadSetsContainingMinifigIfNeeded`
+    /// (#178).
+    private func loadSimilarSetsIfNeeded() async {
+        guard !isMinifig, similarSets.isEmpty, !isLoadingSimilarSets else { return }
+        isLoadingSimilarSets = true
+        defer { isLoadingSimilarSets = false }
+        do {
+            let response = try await rebrickableRepository.fetchSimilarSets(to: viewModel.legoSet, pageSize: 20)
+            let currentSetNum = viewModel.legoSet.setNum
+            let currentNumParts = viewModel.legoSet.numParts
+            let results = response.results
+                .filter { $0.setNum != currentSetNum }
+                .sorted { abs($0.numParts - currentNumParts) < abs($1.numParts - currentNumParts) }
+            similarSets = results
+            // The reference set always matches its own filter, so it's always counted once in
+            // `count` even though it's excluded from `results` above.
+            similarSetsTotalCount = max(0, response.count - 1)
+            let repository = LocalRepository(modelContext: modelContext)
+            var prices: [String: Double] = [:]
+            for entry in results {
+                let storePriceEUR = repository.cachedSet(setNum: entry.setNum)?.storePriceEUR
+                let quotes = repository.cachedPrices(setNum: entry.setNum)
+                prices[entry.setNum] = resolveNewPrice(storePriceEUR: storePriceEUR, quotes: quotes)
+            }
+            priceBySetNumInSimilarSetsGallery = prices
+        } catch {
+            similarSetsErrorMessage = UserMessage.unknownError
+        }
+    }
+
+    /// "Sets similaires" gallery (issue #188) — same visual pattern as `setsContainingMinifigSection`
+    /// (#178)/`minifigsInSetSection` (#184), shown only for a real set. Collapses to nothing once
+    /// loaded if no similar set was found (same reasoning as `minifigsInSetSection`: a niche theme/
+    /// size combination genuinely having none is the common case, unlike a minifig appearing in zero
+    /// sets), rather than a persistent empty-state line.
+    @ViewBuilder
+    private var similarSetsSection: some View {
+        if !isMinifig, isLoadingSimilarSets || similarSetsErrorMessage != nil || !similarSets.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Sets similaires")
+                    .font(.subheadline.bold())
+
+                if isLoadingSimilarSets, similarSets.isEmpty {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                } else if let errorMessage = similarSetsErrorMessage, similarSets.isEmpty {
+                    Text(errorMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(similarSets) { entry in
+                                Button {
+                                    relatedSetLookupViewModel.lookupSetNumber(entry.setNum, source: .listReopen)
+                                } label: {
+                                    similarSetCard(entry)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 1)
+                    }
+                    if similarSetsTotalCount > similarSets.count {
+                        Text("et \(similarSetsTotalCount - similarSets.count) sets supplémentaires")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardStyle(padding: 12)
+        }
+    }
+
+    private static let similarSetCardWidth: CGFloat = 110
+
+    private func similarSetCard(_ entry: LegoSet) -> some View {
+        VStack(spacing: 6) {
+            SetThumbnailView(imageUrl: entry.setImgUrl, size: Self.similarSetCardWidth)
+
+            VStack(spacing: 2) {
+                Text(entry.setNum.baseSetNum)
+                    .font(.caption.bold())
+                Text(ThemeNameStore.shared.displayName(forThemeId: entry.themeId))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                if let price = priceBySetNumInSimilarSetsGallery[entry.setNum] {
+                    Text(Decimal(price).formatted(.currency(code: "EUR")))
+                        .font(.caption2.bold())
+                }
+            }
+        }
+        .frame(width: Self.similarSetCardWidth)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(entry.name)
     }
