@@ -546,7 +546,17 @@ lego.com price.
   `"239,99 €-8%219,99 €"`) — so the extractor takes the *last* price match in the card, not the
   first, or it silently returns the pre-discount price. Don't "fix" either of these back to the
   Amazon-style approach without re-testing on-device; both were only caught by an actual on-device
-  run, not by reading the markup.
+  run, not by reading the markup. Third bug from the same root cause (**#207**): with no dedicated
+  price element, the reference and price share one flattened `.textContent` with no reliable
+  delimiter between them — confirmed live on set 30368, whose card text is literally
+  `"...- 303685,99 €Ajouter"` (`30368` + `5,99 €`, zero separator), which a loose price regex read
+  as one number. Not fixable by tightening the regex's shape: also confirmed live, Cdiscount
+  doesn't consistently thousands-separate its own prices (`10307`'s promo card renders `"1174,00
+  €"`, four digits, no separator) — indistinguishable by shape from a glued-on reference. Fixed by
+  stripping the known reference substring from the card text before the price regex runs, plus a
+  plausibility ceiling (`plausibleMaxAmount`) on the decoded amount as a backstop. Same rule as the
+  other two: don't loosen either without re-testing on-device/live, the failure modes here aren't
+  visible from a static read of the markup.
   `SetDetailView` shows Amazon and Cdiscount as two separate rows (per-set price *comparison* —
   the user wants to see both), but everywhere else they collapse into one comparison point — see
   `bestAmazonOrCdiscountPrice`/`mostExpensiveAmazonOrCdiscountPrice` in `SetRowView.swift`:
