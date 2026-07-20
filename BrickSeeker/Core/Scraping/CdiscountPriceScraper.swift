@@ -18,11 +18,30 @@ import Foundation
 /// contains **two** prices back to back — the crossed-out original, then the "-N%" badge, then the
 /// actual current price (e.g. `"239,99 €-8%219,99 €"`) — so this takes the *last* price match in
 /// the card, not the first, or it silently returns the pre-discount price.
+///
+/// Reading the whole card's `.textContent` (title + reference + price, no dedicated price element
+/// to hook like Amazon's `.a-price .a-offscreen`) has a third failure mode (#207): when the set
+/// reference sits directly against the price digits with no separator in the flattened text (e.g.
+/// `"...30368" + "5,99 €..."`), a loose price regex reads straight through the boundary and
+/// matches `"303685,99 €"` as one number — confirmed live (set 30368's card text is literally
+/// `"...- 303685,99 €Ajouter"`, no separator at all). The regex itself can't be tightened to
+/// reject this shape: Cdiscount doesn't consistently thousands-separate its own prices (also
+/// confirmed live — a promo card for set 10307 renders `"1174,00 €"`, four digits, no separator),
+/// which is the exact same shape as a glued-on reference. So the fix isolates instead of
+/// pattern-matching harder: the reference substring is stripped from the card text before the
+/// price regex runs, and a decoded amount implausible for a retail LEGO set is rejected as a
+/// backstop rather than returned.
 struct CdiscountPriceScraper: Sendable {
     private struct RawResult: Decodable {
         let price: String
         let url: String?
     }
+
+    // No standard retail LEGO set is priced anywhere near this. A decoded amount above it means
+    // the extractor read something other than a genuine price (#207 — the classic case is the set
+    // number itself bleeding into the digits) — better to surface the source as unavailable than a
+    // fabricated price.
+    private static let plausibleMaxAmount: Decimal = 5000
 
     // Not defaulted to `.shared` here for the same reason as `AmazonPriceScraper`: that's a
     // main-actor-isolated static property, and a default argument value must be evaluable in this
@@ -56,7 +75,8 @@ struct CdiscountPriceScraper: Sendable {
         )
         guard let data = json.data(using: .utf8),
               let raw = try? JSONDecoder().decode(RawResult.self, from: data),
-              let amount = PriceParsing.amount(from: raw.price) else {
+              let amount = PriceParsing.amount(from: raw.price),
+              amount <= Self.plausibleMaxAmount else {
             throw ScrapeError.parsingFailed
         }
 
@@ -96,7 +116,11 @@ struct CdiscountPriceScraper: Sendable {
                 if (cardText.toLowerCase().indexOf('lego') === -1) continue;
                 if (cardText.indexOf('\(setDigits)') === -1) continue;
                 if (reject.test(cardText)) continue;
-                var matches = cardText.match(priceRegex);
+                // Strip the set reference before matching (#207) — title/reference/price all live
+                // in one flattened `.textContent` string with no reliable delimiter between them,
+                // so the reference digits can sit directly against the price digits.
+                var priceText = cardText.split('\(setDigits)').join(' ');
+                var matches = priceText.match(priceRegex);
                 if (!matches || !matches.length) continue;
                 // A promo card lists the crossed-out original price first, then the "-N%" badge,
                 // then the actual current price — the last match is always the one to buy at.
