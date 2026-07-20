@@ -8,7 +8,9 @@ struct WishlistView: View {
     private var cachedSets: [CachedSet]
     @Query private var allCachedPrices: [CachedSetPrice]
     @Environment(\.modelContext) private var modelContext
+    @Bindable private var filter = WishlistFilterState.shared
     @State private var showImportSheet = false
+    @State private var showFilters = false
     @State private var errorMessage: String?
     var bricksetRepository: BricksetRepositoryProtocol = BricksetRepository()
     var rebrickableRepository: RebrickableRepositoryProtocol = RebrickableRepository()
@@ -23,22 +25,14 @@ struct WishlistView: View {
     @State private var selectionActionError: String?
     @State private var showAddToListPicker = false
     @State private var showRemoveConfirmation = false
-    @State private var searchText = ""
     /// Sets targeted by the next `showAddToListPicker`/`showRemoveConfirmation` flow — either the
     /// current multi-select checkbox selection, or the single row long-pressed for a context menu
     /// action (#172), set right before presenting the sheet/alert.
     @State private var pendingActionTargets: [CachedSet] = []
 
-    /// Wishlist has no full `SetFilterState` like Collection/History — just a name/number search,
-    /// matched the same way as the shared `filteredAndSorted` (case-insensitive, name or set number).
-    private var filteredSets: [CachedSet] {
-        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return cachedSets }
-        return cachedSets.filter {
-            $0.name.localizedCaseInsensitiveContains(trimmed) ||
-                $0.setNum.localizedCaseInsensitiveContains(trimmed)
-        }
-    }
+    private var filteredSets: [CachedSet] { cachedSets.filteredAndSorted(by: filter, resolvedPrice: resolvedPrice) }
+    private var availableThemeIds: [Int] { Set(cachedSets.map(\.themeId)).sorted() }
+    private var availableYears: [Int] { Set(cachedSets.map(\.year)).sorted(by: >) }
 
     private var areAllFilteredSelected: Bool {
         !filteredSets.isEmpty && filteredSets.allSatisfy { selectedSetNums.contains($0.setNum) }
@@ -52,8 +46,8 @@ struct WishlistView: View {
         }
     }
 
-    /// Selects/deselects only the sets currently visible under the active search (#164) — never
-    /// the whole wishlist.
+    /// Selects/deselects only the sets currently visible under the active filters/search (#164) —
+    /// never the whole wishlist.
     private func toggleSelectAll() {
         if areAllFilteredSelected {
             selectedSetNums.subtract(filteredSets.map(\.setNum))
@@ -200,11 +194,16 @@ struct WishlistView: View {
                     description: Text("Ajoutez un set à votre liste cadeaux depuis sa fiche, ou importez le CSV d'une liste Rebrickable avec le bouton en haut.")
                 )
             } else if filteredSets.isEmpty {
-                ContentUnavailableView(
-                    "Aucun résultat",
-                    systemImage: "magnifyingglass",
-                    description: Text("Essayez de modifier la recherche.")
-                )
+                ContentUnavailableView {
+                    Label("Aucun résultat", systemImage: "magnifyingglass")
+                } description: {
+                    Text("Essayez de modifier la recherche ou les filtres.")
+                } actions: {
+                    Button("Réinitialiser les filtres") {
+                        filter.resetFilters()
+                        filter.searchText = ""
+                    }
+                }
             } else {
                 // No `List(selection:)` binding — its native circle can't be moved off the
                 // leading edge (#161), so selection is homemade: the row's own tap either
@@ -278,7 +277,7 @@ struct WishlistView: View {
                 .contentMargins(.top, 0, for: .scrollContent)
             }
         }
-        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Nom ou numéro de set")
+        .searchable(text: $filter.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Nom ou numéro de set")
         .navigationTitle("Liste cadeaux")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -288,6 +287,15 @@ struct WishlistView: View {
                     Image(systemName: "square.and.arrow.down")
                 }
                 .accessibilityLabel("Importer depuis Rebrickable")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showFilters = true
+                } label: {
+                    Image(systemName: filter.isFilterActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                }
+                .accessibilityLabel("Filtres")
+                .accessibilityValue(filter.isFilterActive ? "Actifs" : "Inactifs")
             }
             // Pinned to the bottom bar rather than the top-trailing spot, matching Collection/
             // History (#141) — kept consistent across all three even though Wishlist has no
@@ -361,6 +369,17 @@ struct WishlistView: View {
         .sheet(isPresented: $showImportSheet) {
             BricksetWishlistImportSheet()
         }
+        .sheet(isPresented: $showFilters) {
+            SetFilterSheet(
+                filter: filter,
+                availableThemeIds: availableThemeIds,
+                availableYears: availableYears,
+                availableListNames: [],
+                showsOwnedFilter: false,
+                themeName: { ThemeNameStore.shared.displayName(forThemeId: $0) },
+                excludedSortOptions: [.dateAdded]
+            )
+        }
         .sheet(isPresented: $showAddToListPicker) {
             ListPickerView(repository: rebrickableRepository) { listId, listName in
                 Task { await addToCollection(pendingActionTargets, listId: listId, listName: listName) }
@@ -377,6 +396,9 @@ struct WishlistView: View {
                 singular: "sera retiré de votre liste cadeaux.",
                 plural: "seront retirés de votre liste cadeaux."
             ))
+        }
+        .task {
+            await ThemeNameStore.shared.refreshIfNeeded()
         }
         .onChange(of: SetPriceIndex.Version(allCachedPrices), initial: true) { _, _ in
             pricesBySetNum = SetPriceIndex.pricesBySetNum(allCachedPrices)

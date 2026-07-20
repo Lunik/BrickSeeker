@@ -102,6 +102,12 @@ enum HistoryFilterState {
     static let shared = SetFilterState()
 }
 
+/// Separate singleton, same reasoning as `CollectionFilterState`/`HistoryFilterState` (#206).
+@MainActor
+enum WishlistFilterState {
+    static let shared = SetFilterState()
+}
+
 /// Separate singleton, same reasoning as `CollectionFilterState`/`HistoryFilterState`. Defaults to
 /// `.dateAdded` (newest-seen first, see `OfflineCatalogStore.allFirstSeenAt()`) instead of
 /// `SetFilterState`'s own `.dateScanned` default — catalogue entries were never scanned, so that
