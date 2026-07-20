@@ -388,6 +388,9 @@
     "Sets scannés récemment et cache de votre collection : dans la base SwiftData locale, sur l'appareil uniquement" : {
 
     },
+    "Sets similaires" : {
+
+    },
     "Seuil de €/pièce en dessous duquel un set est considéré comme un bon rapport qualité-prix. Affiché en vert sur la fiche set si le prix lego.com est inférieur à cette valeur, en rouge au-dessus." : {
 
     },
