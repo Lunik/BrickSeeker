@@ -97,6 +97,36 @@ final class ScanEvent {
     }
 }
 
+/// What the user actually paid for a set they own — the local equivalent of BrickEconomy's
+/// `paid_price`, and the preferred basis for the growth figure shown on `SetDetailView`.
+///
+/// Deliberately **not** a field on `CachedSet`, even though it is 1:1 with one: `CachedSet` rows
+/// are destroyed by two routine paths — `LocalRepository.clearAll()` ("vider le cache") and
+/// `syncCollection`'s cleanup of sets that dropped out of the collection — so a set temporarily
+/// removed from a Rebrickable list, or a cache clear, would silently destroy a number the user
+/// typed by hand and cannot recover. Same doctrine that already keeps `ScanEvent`/
+/// `PriceHistoryEntry` out of `clearAll`: anything hand-entered outlives the caches.
+///
+/// Seeded automatically from the in-store price of the most recent priced `ScanEvent` when a set
+/// enters the collection (see `LocalRepository.seedPaidPriceFromScanIfNeeded`), and editable
+/// afterwards from the set's detail screen.
+@Model
+final class SetPurchaseRecord {
+    @Attribute(.unique) var setNum: String
+    var paidPriceEUR: Double
+    var currency: String = "EUR"
+    /// When this price was recorded — lets the UI distinguish a value seeded from a scan from one
+    /// the user typed later, and is the tiebreaker if a future migration ever needs one.
+    var recordedAt: Date
+
+    init(setNum: String, paidPriceEUR: Double, currency: String = "EUR", recordedAt: Date = Date()) {
+        self.setNum = setNum
+        self.paidPriceEUR = paidPriceEUR
+        self.currency = currency
+        self.recordedAt = recordedAt
+    }
+}
+
 @Model
 final class CollectionSyncState {
     var lastFullSyncAt: Date?

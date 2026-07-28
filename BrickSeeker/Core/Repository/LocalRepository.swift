@@ -47,6 +47,7 @@ final class LocalRepository {
         }
         if isInCollection {
             stripScanLocations(setNums: [legoSet.setNum])
+            seedPaidPriceFromScanIfNeeded(setNum: legoSet.setNum)
         }
         try? modelContext.save()
     }
@@ -112,7 +113,77 @@ final class LocalRepository {
         existing.isInCollection = isInCollection
         existing.currentListId = listId
         existing.currentListName = listName
+        if isInCollection {
+            seedPaidPriceFromScanIfNeeded(setNum: setNum)
+        }
         try? modelContext.save()
+    }
+
+    // MARK: - Paid price (`SetPurchaseRecord`)
+
+    /// The price the user paid for this set, if recorded. Unlike the `CachedSet` setters above this
+    /// never needs an existing `CachedSet` row — the purchase record is deliberately independent of
+    /// the caches (see `SetPurchaseRecord`).
+    func paidPrice(setNum: String) -> Double? {
+        purchaseRecord(setNum: setNum)?.paidPriceEUR
+    }
+
+    /// Batch form for the collection-wide screens (Statistics), so they don't issue one fetch per
+    /// set — same shape and intent as `conditionByListId()`.
+    func paidPriceBySetNum() -> [String: Double] {
+        let records = (try? modelContext.fetch(FetchDescriptor<SetPurchaseRecord>())) ?? []
+        return Dictionary(records.map { ($0.setNum, $0.paidPriceEUR) }, uniquingKeysWith: { _, latest in latest })
+    }
+
+    /// Records (or overwrites) what the user paid. Passing `nil` clears the record, so the growth
+    /// figure falls back to the retail basis rather than keeping a stale number.
+    func setPaidPrice(setNum: String, paidPriceEUR: Double?) {
+        let existing = purchaseRecord(setNum: setNum)
+        guard let paidPriceEUR, paidPriceEUR > 0 else {
+            if let existing { modelContext.delete(existing) }
+            try? modelContext.save()
+            return
+        }
+        if let existing {
+            existing.paidPriceEUR = paidPriceEUR
+            existing.recordedAt = Date()
+        } else {
+            modelContext.insert(SetPurchaseRecord(setNum: setNum, paidPriceEUR: paidPriceEUR))
+        }
+        try? modelContext.save()
+    }
+
+    /// Copies the in-store price the user typed at scan time into a purchase record, the moment a
+    /// set enters the collection — "I saw it at 39,99 € and bought it" is by far the common case,
+    /// and re-typing the same number would be busywork.
+    ///
+    /// Called from the two choke points every add-to-collection path funnels through (`cacheSet`
+    /// and `setCollectionStatus`) rather than from the six UI call sites (`SetDetailViewModel`,
+    /// `CollectionView`, `HistoryView`, `WishlistView`, `NewSetsView`, `BatchSessionSummaryView`),
+    /// which would be six chances to forget one.
+    ///
+    /// **Idempotent**: never overwrites an existing record, so a price the user edited by hand
+    /// survives a later re-add or collection sync. Picks the **most recent** priced scan (the
+    /// purchase follows the last time they looked at the shelf) — deliberately *not*
+    /// `SetDetailView.bestPriceScanID`'s "cheapest scan" rule, which answers a different question
+    /// ("where was it cheapest?"). Safe against `stripScanLocations`, which clears coordinates only
+    /// and never `priceSeenEUR`.
+    func seedPaidPriceFromScanIfNeeded(setNum: String) {
+        guard purchaseRecord(setNum: setNum) == nil else { return }
+        var descriptor = FetchDescriptor<ScanEvent>(
+            predicate: #Predicate { $0.setNum == setNum && $0.priceSeenEUR != nil },
+            sortBy: [SortDescriptor(\.scannedAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = 1
+        guard let price = (try? modelContext.fetch(descriptor))?.first?.priceSeenEUR, price > 0 else { return }
+        modelContext.insert(SetPurchaseRecord(setNum: setNum, paidPriceEUR: price))
+        try? modelContext.save()
+    }
+
+    private func purchaseRecord(setNum: String) -> SetPurchaseRecord? {
+        try? modelContext.fetch(
+            FetchDescriptor<SetPurchaseRecord>(predicate: #Predicate { $0.setNum == setNum })
+        ).first
     }
 
     /// No-ops if no CachedSet row exists yet, mirroring `setWishlistStatus` — `cacheSet` never
@@ -286,6 +357,8 @@ final class LocalRepository {
     /// prices), not a history the app can't get back by re-fetching. `ScanEvent` rows are
     /// kept for the same reason (they're the "when did I scan this" history), but their
     /// location fields are stripped: purging the history revokes the "where" (issue #46).
+    /// `SetPurchaseRecord` is kept too, and for the strongest version of that reason: a paid
+    /// price is typed by hand and cannot be re-fetched from anywhere.
     func clearAll() {
         stripScanLocations(setNums: nil)
         if let sets = try? modelContext.fetch(FetchDescriptor<CachedSet>()) {
@@ -309,6 +382,14 @@ final class LocalRepository {
             FetchDescriptor<CachedSetPrice>(predicate: #Predicate { $0.setNum == setNum })
         )) ?? []
         return cached.filter { !$0.isExpired }.compactMap(\.quote)
+    }
+
+    /// Every cached price row in one fetch, for callers that need quotes for *many* sets at once
+    /// (collection-wide valuation). Pair with `SetPriceIndex.pricesBySetNum` — calling
+    /// `cachedPrices(setNum:)` in a loop issues one SwiftData fetch per set, which on a several-
+    /// hundred-set collection is the difference between one query and hundreds per recompute.
+    func allCachedPrices() -> [CachedSetPrice] {
+        (try? modelContext.fetch(FetchDescriptor<CachedSetPrice>())) ?? []
     }
 
     /// `reconcile` should only be `true` when `quotes` comes from a genuine live fetch attempt

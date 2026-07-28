@@ -24,7 +24,7 @@ struct BrickSeekerApp: App {
     @State private var showOnboarding = false
 
     var modelContainer: ModelContainer = {
-        let schema = Schema([CachedSet.self, CachedSetList.self, CollectionSyncState.self, CachedSetPrice.self, PriceHistoryEntry.self, ScanEvent.self])
+        let schema = Schema([CachedSet.self, CachedSetList.self, CollectionSyncState.self, CachedSetPrice.self, PriceHistoryEntry.self, ScanEvent.self, SetPurchaseRecord.self])
         let configuration = ModelConfiguration(schema: schema)
         return try! ModelContainer(for: schema, configurations: [configuration])
     }()
