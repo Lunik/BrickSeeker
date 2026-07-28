@@ -11,6 +11,15 @@ struct SetDetailView: View {
     @State private var showSettings = false
     @State private var showScanMap = false
     @State private var priceHistory: [PriceHistoryEntry] = []
+    /// Current value + growth shown in the header (`valuationCard`), recomputed locally from the
+    /// cached quotes/retail price/paid price — never fetched. Reloaded everywhere `priceHistory`
+    /// is, since it is derived from exactly the same inputs.
+    @State private var valuation: SetValuation = .empty
+    @State private var paidPriceEUR: Double?
+    /// The owning list's condition, needed to value the set the way Collection/Statistics do.
+    @State private var listCondition: ListCondition?
+    @State private var showPaidPricePrompt = false
+    @State private var paidPriceInputText = ""
     /// Seeded once from `pendingPriceScanEvent` — see the `init` doc. `@State`'s initial value is
     /// only applied the first time this view identity is created, so later re-inits triggered by
     /// unrelated `viewModel` changes (e.g. a silent collection-status reconcile) don't lose track
@@ -149,6 +158,8 @@ struct SetDetailView: View {
 
                     wishlistRow
 
+                    valuationCard
+
                     priceSection
 
                     priceHistoryChart
@@ -275,11 +286,26 @@ struct SetDetailView: View {
                     onSave: savePricePrompt
                 )
             }
+            .sheet(isPresented: $showPaidPricePrompt) {
+                ScanPriceEntryView(
+                    setNum: viewModel.legoSet.setNum,
+                    setName: viewModel.legoSet.name,
+                    referencePriceEUR: viewModel.storePrice?.amount,
+                    referenceCurrency: viewModel.storePrice?.currency ?? "EUR",
+                    quotes: viewModel.priceQuotes,
+                    priceText: $paidPriceInputText,
+                    purpose: .paidPrice,
+                    onSave: savePaidPrice
+                )
+            }
             .toast($viewModel.toastMessage)
             // Nested, not the presenter's shared instance — see `relatedSetLookupViewModel`'s doc.
             .lookupResultSheets(for: relatedSetLookupViewModel)
         }
-        .onChange(of: viewModel.collectionStatus) { _, _ in syncCache() }
+        .onChange(of: viewModel.collectionStatus) { _, _ in
+            syncCache()
+            reloadValuation()
+        }
         .onChange(of: viewModel.collectionListName) { _, _ in syncCache() }
         .onChange(of: viewModel.storePriceFetchedAt) { _, _ in syncStorePriceCache() }
         .onChange(of: viewModel.isInWishlist) { _, isInWishlist in
@@ -300,6 +326,7 @@ struct SetDetailView: View {
         }
         .task {
             reloadPriceHistory()
+            reloadValuation()
         }
         .task {
             relatedSetLookupViewModel.localRepository = LocalRepository(modelContext: modelContext)
@@ -341,6 +368,7 @@ struct SetDetailView: View {
         guard let storePrice = viewModel.storePrice, viewModel.storePriceFetchedAt != nil else { return }
         LocalRepository(modelContext: modelContext).cacheStorePrice(setNum: viewModel.legoSet.setNum, price: storePrice)
         reloadPriceHistory()
+        reloadValuation()
     }
 
     private func refreshPrices() async {
@@ -349,6 +377,7 @@ struct SetDetailView: View {
             viewModel.priceQuotes, setNum: viewModel.legoSet.setNum, reconcile: true
         )
         reloadPriceHistory()
+        reloadValuation()
     }
 
     private func refreshPricesIfNeeded() async {
@@ -357,10 +386,165 @@ struct SetDetailView: View {
             viewModel.priceQuotes, setNum: viewModel.legoSet.setNum, reconcile: didFetch
         )
         reloadPriceHistory()
+        reloadValuation()
     }
 
     private func reloadPriceHistory() {
         priceHistory = LocalRepository(modelContext: modelContext).priceHistory(setNum: viewModel.legoSet.setNum)
+    }
+
+    /// Recomputes the header's value/growth from local data only (cached quotes, lego.com retail,
+    /// the paid price and the owning list's condition). Called from the same places as
+    /// `reloadPriceHistory()` — they're derived from the same inputs, so they can't be allowed to
+    /// drift apart.
+    private func reloadValuation() {
+        let repository = LocalRepository(modelContext: modelContext)
+        let setNum = viewModel.legoSet.setNum
+        paidPriceEUR = repository.paidPrice(setNum: setNum)
+        listCondition = collectionListId.flatMap { repository.conditionByListId()[$0] }
+        valuation = SetValuationCalculator.make(
+            setNum: setNum,
+            storePriceEUR: viewModel.storePrice?.amount ?? repository.cachedSet(setNum: setNum)?.storePriceEUR,
+            paidPriceEUR: paidPriceEUR,
+            condition: listCondition,
+            quotes: viewModel.priceQuotes
+        )
+    }
+
+    /// The list this set currently sits in, when it's owned — the input the valuation needs to know
+    /// whether to price it as new or used.
+    private var collectionListId: Int? {
+        guard case .inCollection(let userSet) = viewModel.collectionStatus else { return nil }
+        return userSet.listId
+    }
+
+    private func openPaidPricePrompt() {
+        if let paidPriceEUR {
+            paidPriceInputText = String(format: "%.2f", paidPriceEUR).replacingOccurrences(of: ".", with: ",")
+        } else {
+            paidPriceInputText = ""
+        }
+        showPaidPricePrompt = true
+    }
+
+    private func savePaidPrice() {
+        let normalised = paidPriceInputText.replacingOccurrences(of: ",", with: ".")
+        guard let value = Double(normalised), value > 0 else { return }
+        LocalRepository(modelContext: modelContext).setPaidPrice(setNum: viewModel.legoSet.setNum, paidPriceEUR: value)
+        reloadValuation()
+    }
+
+    /// "Valeur estimée / Évolution" — the local stand-in for BrickEconomy's `current_value` +
+    /// `growth`, computed by `SetValuationCalculator` from data already on the device. The growth
+    /// is measured against what the user paid when that's known, and against the lego.com retail
+    /// price otherwise; the caption always says which, so the number is never ambiguous.
+    ///
+    /// When no source has a price yet, the card deliberately still renders (as "—") with a refresh
+    /// action rather than disappearing: an absent value is itself information, and hiding the card
+    /// would leave no affordance to go get one.
+    @ViewBuilder
+    private var valuationCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Valeur estimée")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if let currentValue = valuation.currentValueEUR {
+                        Text(Decimal(currentValue).formatted(.currency(code: "EUR")))
+                            .font(.title2.bold())
+                            .contentTransition(.numericText(value: currentValue))
+                    } else {
+                        Text("—")
+                            .font(.title2.bold())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Évolution")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if let growth = valuation.growthPercent {
+                        Text("\(growth >= 0 ? "+" : "")\(Int(growth.rounded())) %")
+                            .font(.title2.bold())
+                            .foregroundStyle(growth >= 0 ? .green : Color.brickDanger)
+                    } else {
+                        Text("—")
+                            .font(.title2.bold())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            Text(valuationBasisCaption)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if !valuation.hasValue {
+                Button {
+                    Task { await refreshAllPrices() }
+                } label: {
+                    if pricesBusy {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Label("Actualiser", systemImage: "arrow.clockwise").font(.footnote)
+                    }
+                }
+                .disabled(pricesBusy)
+            }
+
+            // Owned sets only: the paid price is what makes the growth a real gain/loss rather
+            // than a market delta. Deliberately not the `storePriceCheckFAB`, which means the
+            // opposite thing ("is this shelf price a good deal on a set I don't own yet?").
+            if viewModel.isInCollection {
+                Button(action: openPaidPricePrompt) {
+                    HStack {
+                        Text(paidPriceEUR == nil
+                             ? "Renseigner le prix payé"
+                             : "Prix payé : \(Decimal(paidPriceEUR ?? 0).formatted(.currency(code: "EUR")))")
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption)
+                    }
+                    .font(.footnote)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tint)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle(padding: 12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(valuationAccessibilityLabel)
+    }
+
+    /// Names the reference the growth is measured against — without it, "+12 %" is meaningless.
+    private var valuationBasisCaption: String {
+        guard let basisEUR = valuation.basisEUR else {
+            return "Prix payé et prix retail inconnus — évolution indisponible"
+        }
+        let formatted = Decimal(basisEUR).formatted(.currency(code: "EUR"))
+        switch valuation.basis {
+        case .paid: return "vs prix payé \(formatted)"
+        case .retail: return "vs prix retail \(formatted)"
+        case .unknown: return "Référence inconnue"
+        }
+    }
+
+    private var valuationAccessibilityLabel: String {
+        var parts: [String] = []
+        if let currentValue = valuation.currentValueEUR {
+            parts.append("Valeur estimée \(Decimal(currentValue).formatted(.currency(code: "EUR")))")
+        } else {
+            parts.append("Valeur estimée inconnue")
+        }
+        if let growth = valuation.growthPercent {
+            parts.append("évolution \(growth >= 0 ? "plus" : "moins") \(abs(Int(growth.rounded()))) pour cent")
+        }
+        parts.append(valuationBasisCaption)
+        return parts.joined(separator: ", ")
     }
 
     /// Line chart of every recorded price reading (one per source), shown only once there's more
