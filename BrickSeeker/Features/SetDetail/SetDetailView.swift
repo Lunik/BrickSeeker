@@ -427,10 +427,23 @@ struct SetDetailView: View {
         showPaidPricePrompt = true
     }
 
+    /// An emptied field **clears** the record rather than being ignored: the paid price can be
+    /// seeded automatically from a scan (`seedPaidPriceFromScanIfNeeded`), and that guess can be
+    /// wrong — seen at 39,99 € in the aisle, not bought, received as a gift later — so there has to
+    /// be a way back out. Only an empty field clears; an unparseable one is left alone, since
+    /// destroying the number on a typo would be the worse failure.
     private func savePaidPrice() {
-        let normalised = paidPriceInputText.replacingOccurrences(of: ",", with: ".")
-        guard let value = Double(normalised), value > 0 else { return }
-        LocalRepository(modelContext: modelContext).setPaidPrice(setNum: viewModel.legoSet.setNum, paidPriceEUR: value)
+        let normalised = paidPriceInputText
+            .replacingOccurrences(of: ",", with: ".")
+            .trimmingCharacters(in: .whitespaces)
+        let repository = LocalRepository(modelContext: modelContext)
+        if normalised.isEmpty {
+            repository.setPaidPrice(setNum: viewModel.legoSet.setNum, paidPriceEUR: nil)
+        } else {
+            // `setPaidPrice` treats a non-positive amount as a clear, so "0" erases too.
+            guard let value = Double(normalised), value >= 0 else { return }
+            repository.setPaidPrice(setNum: viewModel.legoSet.setNum, paidPriceEUR: value)
+        }
         reloadValuation()
     }
 
@@ -442,46 +455,58 @@ struct SetDetailView: View {
     /// When no source has a price yet, the card deliberately still renders (as "—") with a refresh
     /// action rather than disappearing: an absent value is itself information, and hiding the card
     /// would leave no affordance to go get one.
+    ///
+    /// Only the value/growth block is an `.accessibilityElement(children: .combine)`: the two
+    /// buttons stay separate elements. Combining them into the card would fold their labels into
+    /// `valuationAccessibilityLabel` and leave VoiceOver announcing the figures with two unnamed
+    /// custom actions attached.
     @ViewBuilder
     private var valuationCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Valeur estimée")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    if let currentValue = valuation.currentValueEUR {
-                        Text(Decimal(currentValue).formatted(.currency(code: "EUR")))
-                            .font(.title2.bold())
-                            .contentTransition(.numericText(value: currentValue))
-                    } else {
-                        Text("—")
-                            .font(.title2.bold())
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        // The condition qualifies the amount (issue #157's rule, as applied to the
+                        // Collection row): 3,44 € for a minifig is an *occasion* price, and showing
+                        // it as a bare "valeur estimée" hides which market it came from.
+                        Text(valuation.valuedCondition.map { "Valeur estimée · \($0.displayName)" } ?? "Valeur estimée")
+                            .font(.caption)
                             .foregroundStyle(.secondary)
+                        if let currentValue = valuation.currentValueEUR {
+                            Text(Decimal(currentValue).formatted(.currency(code: "EUR")))
+                                .font(.title2.bold())
+                                .contentTransition(.numericText(value: currentValue))
+                        } else {
+                            Text("—")
+                                .font(.title2.bold())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Spacer()
+
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("Évolution")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        if let growth = valuation.growthPercent {
+                            Text(formattedGrowth(growth))
+                                .font(.title2.bold())
+                                .foregroundStyle(growthColor(growth))
+                        } else {
+                            Text("—")
+                                .font(.title2.bold())
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
-                Spacer()
-
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("Évolution")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    if let growth = valuation.growthPercent {
-                        Text("\(growth >= 0 ? "+" : "")\(Int(growth.rounded())) %")
-                            .font(.title2.bold())
-                            .foregroundStyle(growth >= 0 ? .green : Color.brickDanger)
-                    } else {
-                        Text("—")
-                            .font(.title2.bold())
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                Text(valuationBasisCaption)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-
-            Text(valuationBasisCaption)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(valuationAccessibilityLabel)
 
             if !valuation.hasValue {
                 Button {
@@ -494,6 +519,8 @@ struct SetDetailView: View {
                     }
                 }
                 .disabled(pricesBusy)
+                // The busy state renders a bare `ProgressView`, which carries no label of its own.
+                .accessibilityLabel("Actualiser les prix")
             }
 
             // Owned sets only: the paid price is what makes the growth a real gain/loss rather
@@ -509,6 +536,10 @@ struct SetDetailView: View {
                         Image(systemName: "chevron.right").font(.caption)
                     }
                     .font(.footnote)
+                    // Without this the `Spacer` isn't hit-testable, so only the text itself would
+                    // respond — a full-width row with a chevron that ignores taps on three quarters
+                    // of its width.
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.tint)
@@ -516,16 +547,40 @@ struct SetDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardStyle(padding: 12)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(valuationAccessibilityLabel)
     }
 
-    /// Names the reference the growth is measured against — without it, "+12 %" is meaningless.
+    /// `+12 %` / `−8 %`, with a real minus sign (U+2212) rather than a hyphen, and no sign at all
+    /// on a rounded zero — `-0,4 %` must not render as a signless "0 %" in loss red.
+    private func formattedGrowth(_ growth: Double) -> String {
+        let rounded = Int(growth.rounded())
+        if rounded > 0 { return "+\(rounded) %" }
+        if rounded < 0 { return "−\(abs(rounded)) %" }
+        return "0 %"
+    }
+
+    /// Colours the *displayed* figure, not the raw one: a value that rounds to zero reads as
+    /// neutral, since painting "0 %" green would suggest a gain the number doesn't claim.
+    private func growthColor(_ growth: Double) -> Color {
+        switch Int(growth.rounded()) {
+        case let rounded where rounded > 0: return .green
+        case let rounded where rounded < 0: return Color.brickDanger
+        default: return .secondary
+        }
+    }
+
+    /// Names the reference the growth is measured against — without it, "+12 %" is meaningless —
+    /// and, when there is no growth to show, says why rather than leaving a bare "—".
     private var valuationBasisCaption: String {
         guard let basisEUR = valuation.basisEUR else {
             return "Prix payé et prix retail inconnus — évolution indisponible"
         }
         let formatted = Decimal(basisEUR).formatted(.currency(code: "EUR"))
+        if valuation.growthUnavailability == .valuedAtBasis {
+            // See `SetValuation.GrowthUnavailability.valuedAtBasis`: value and reference are the
+            // same retail figure. The "Prix payé" row right below is the way out, so the caption
+            // states the fact and lets the affordance speak for itself.
+            return "Valeur estimée au prix retail \(formatted) — évolution non mesurable"
+        }
         switch valuation.basis {
         case .paid: return "vs prix payé \(formatted)"
         case .retail: return "vs prix retail \(formatted)"
@@ -536,12 +591,23 @@ struct SetDetailView: View {
     private var valuationAccessibilityLabel: String {
         var parts: [String] = []
         if let currentValue = valuation.currentValueEUR {
-            parts.append("Valeur estimée \(Decimal(currentValue).formatted(.currency(code: "EUR")))")
+            let amount = Decimal(currentValue).formatted(.currency(code: "EUR"))
+            // Same condition qualifier as the visible caption — "3,44 €" alone doesn't say whether
+            // it's a new or a used quote.
+            if let condition = valuation.valuedCondition {
+                parts.append("Valeur estimée \(amount) en \(condition.displayName.lowercased())")
+            } else {
+                parts.append("Valeur estimée \(amount)")
+            }
         } else {
             parts.append("Valeur estimée inconnue")
         }
         if let growth = valuation.growthPercent {
-            parts.append("évolution \(growth >= 0 ? "plus" : "moins") \(abs(Int(growth.rounded()))) pour cent")
+            switch Int(growth.rounded()) {
+            case let rounded where rounded > 0: parts.append("évolution plus \(rounded) pour cent")
+            case let rounded where rounded < 0: parts.append("évolution moins \(abs(rounded)) pour cent")
+            default: parts.append("évolution stable")
+            }
         }
         parts.append(valuationBasisCaption)
         return parts.joined(separator: ", ")

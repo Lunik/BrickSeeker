@@ -157,10 +157,15 @@ final class LocalRepository {
     /// set enters the collection — "I saw it at 39,99 € and bought it" is by far the common case,
     /// and re-typing the same number would be busywork.
     ///
-    /// Called from the two choke points every add-to-collection path funnels through (`cacheSet`
-    /// and `setCollectionStatus`) rather than from the six UI call sites (`SetDetailViewModel`,
-    /// `CollectionView`, `HistoryView`, `WishlistView`, `NewSetsView`, `BatchSessionSummaryView`),
-    /// which would be six chances to forget one.
+    /// Called from the two choke points every *in-app* add-to-collection path funnels through
+    /// (`cacheSet` and `setCollectionStatus`) rather than from the six UI call sites
+    /// (`SetDetailViewModel`, `CollectionView`, `HistoryView`, `WishlistView`, `NewSetsView`,
+    /// `BatchSessionSummaryView`), which would be six chances to forget one.
+    ///
+    /// Deliberately **not** wired into `syncCollection`: a set added from the Rebrickable website
+    /// and pulled down by a full sync gets no seed, even if a priced scan exists for it. Seeding
+    /// there would attribute a shelf price to a purchase this device never witnessed — and the
+    /// set's own detail screen seeds it on the next open anyway, via `cacheSet`.
     ///
     /// **Idempotent**: never overwrites an existing record, so a price the user edited by hand
     /// survives a later re-add or collection sync. Picks the **most recent** priced scan (the

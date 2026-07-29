@@ -29,16 +29,36 @@ struct SetValuation: Equatable {
     /// condition, since the resolvers cross-fall-back as a last resort (#194/#203). Lets the UI
     /// label the amount honestly ("valeur occasion") instead of trusting the nominal list.
     let valuedCondition: ListCondition?
-    /// `(current − basis) / basis × 100`. `nil` unless *both* values are known, so a missing price
-    /// never renders as a fake 0 %.
+    /// `(current − basis) / basis × 100`. `nil` unless both values are known *and* they come from
+    /// different sources — see `GrowthUnavailability` for the two ways this stays `nil`.
     let growthPercent: Double?
+    /// Why `growthPercent` is `nil`, so the UI can explain the "—" instead of just showing it.
+    /// `nil` exactly when `growthPercent` is non-`nil`.
+    let growthUnavailability: GrowthUnavailability?
+
+    /// The two reasons a growth figure can't be stated. Kept explicit rather than collapsing both
+    /// into a bare `nil`, because they call for opposite UI: one is "go fetch a price", the other
+    /// is "tell me what you paid".
+    enum GrowthUnavailability: Equatable {
+        /// No current value, or no basis at all — nothing to compare. A refresh may fix it.
+        case missingPrice
+        /// Both are known but they are *the same number*: with no paid price recorded the basis is
+        /// the lego.com retail price, and `resolveCollectionPrice`'s new-price chain returns that
+        /// very retail price first (`resolveNewPriceForValuation`), so the two are the same field
+        /// read twice. The percentage would then be 0 by construction rather than by measurement —
+        /// which is the misleading kind of zero, not the honest one: a retired set quoted at twice
+        /// retail on Cdiscount would still report "+0 %". Recording a paid price gives the growth a
+        /// reference genuinely independent of the value, and makes it meaningful again.
+        case valuedAtBasis
+    }
 
     static let empty = SetValuation(
         currentValueEUR: nil,
         basisEUR: nil,
         basis: .unknown,
         valuedCondition: nil,
-        growthPercent: nil
+        growthPercent: nil,
+        growthUnavailability: .missingPrice
     )
 
     var hasValue: Bool { currentValueEUR != nil }
@@ -99,11 +119,21 @@ enum SetValuationCalculator {
             basis = .unknown
         }
 
+        // Exact `Double` equality is the right test, not a tolerance: when the retail price wins
+        // the new-price chain it is returned verbatim (`resolveNewPriceForValuation` does
+        // `if let retail = storePriceEUR { return retail }`), so the two are bit-for-bit the same
+        // value read twice, not two measurements that happen to agree. A `.paid` basis is never
+        // self-referential — a paid price that equals the current value is a real, measured 0 %.
+        let isValuedAtBasis = basis == .retail && currentValue == basisEUR
+
         let growthPercent: Double?
-        if let currentValue, let basisEUR, basisEUR > 0 {
+        let growthUnavailability: SetValuation.GrowthUnavailability?
+        if let currentValue, let basisEUR, basisEUR > 0, !isValuedAtBasis {
             growthPercent = (currentValue - basisEUR) / basisEUR * 100
+            growthUnavailability = nil
         } else {
             growthPercent = nil
+            growthUnavailability = isValuedAtBasis ? .valuedAtBasis : .missingPrice
         }
 
         return SetValuation(
@@ -111,7 +141,8 @@ enum SetValuationCalculator {
             basisEUR: basisEUR,
             basis: basis,
             valuedCondition: valuedCondition,
-            growthPercent: growthPercent
+            growthPercent: growthPercent,
+            growthUnavailability: growthUnavailability
         )
     }
 }

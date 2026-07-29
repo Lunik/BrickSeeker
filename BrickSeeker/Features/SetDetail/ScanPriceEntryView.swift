@@ -56,13 +56,26 @@ struct ScanPriceEntryView: View {
     @FocusState private var isInputFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
-    /// The reference a `-X%` is applied to. `referencePriceEUR` is the lego.com retail price, which
-    /// is absent for every minifig and every set the store no longer carries — that used to kill
-    /// percentage mode entirely on exactly the items most likely to be discounted (issue #210), so
-    /// it falls back to the same new-price chain the rest of the app uses.
-    private var discountReferenceEUR: Double? {
-        referencePriceEUR ?? resolveNewPrice(storePriceEUR: nil, quotes: quotes)
+    /// The reference a `-X%` is applied to, **and the name of the source it came from**.
+    /// `referencePriceEUR` is the lego.com retail price, which is absent for every minifig and every
+    /// set the store no longer carries — that used to kill percentage mode entirely on exactly the
+    /// items most likely to be discounted (issue #210), so it falls back to the same new-price
+    /// chain the rest of the app uses.
+    ///
+    /// The name matters as much as the number: applying a shelf's "−20 %" to a marketplace quote
+    /// rather than to the retail price is an approximation, and the footer has to say which one it
+    /// just did. The winning source is recovered by matching the resolved amount back to its quote
+    /// rather than by re-running the chain here — a second chain is how these numbers drift apart.
+    private var discountReference: (amountEUR: Double, sourceName: String)? {
+        // Source names match the row labels in `SetDetailView`'s Prix card, so the user can see
+        // exactly which line the percentage was taken off.
+        if let referencePriceEUR { return (referencePriceEUR, "lego.com (officiel)") }
+        guard let amount = resolveNewPrice(storePriceEUR: nil, quotes: quotes) else { return nil }
+        let source = quotes.first { ($0.amount as NSDecimalNumber).doubleValue == amount }?.source
+        return (amount, source?.displayName ?? "prix connu")
     }
+
+    private var discountReferenceEUR: Double? { discountReference?.amountEUR }
 
     /// The price computed from `discountReferenceEUR` and the typed percentage, rounded to the
     /// nearest cent like the currency display elsewhere in `SetDetailView`.
@@ -141,10 +154,10 @@ struct ScanPriceEntryView: View {
                 } header: {
                     Text("\(setNum.baseSetNum) · \(setName)")
                 } footer: {
-                    if mode == .percentage, let reference = discountReferenceEUR {
-                        Text("Le pourcentage est appliqué au prix de référence connu (\(Decimal(reference).formatted(.currency(code: referenceCurrency)))) pour calculer le prix final.")
+                    if mode == .percentage, let reference = discountReference {
+                        Text("Le pourcentage est appliqué au prix « \(reference.sourceName) » (\(Decimal(reference.amountEUR).formatted(.currency(code: referenceCurrency)))) pour calculer le prix final.")
                     } else if purpose == .paidPrice {
-                        Text("Renseigne ce que tu as réellement payé ce set — il sert de référence pour calculer son évolution de valeur.")
+                        Text("Renseigne ce que tu as réellement payé ce set — il sert de référence pour calculer son évolution de valeur. Laisse le champ vide pour l'effacer.")
                     } else {
                         Text("Renseigne le prix affiché en magasin pour ce scan — il sert à repérer le meilleur prix vu, et sur quel lieu.")
                     }
