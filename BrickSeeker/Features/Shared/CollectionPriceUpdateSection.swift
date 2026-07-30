@@ -2,13 +2,26 @@ import SwiftUI
 import SwiftData
 
 /// The "Prix de la collection" batch-update rows, shared by Réglages (inside a `Form` `Section`)
-/// and Statistiques (inside a titled `VStack`) — last-completed date, progress, done/total
+/// and Statistiques (inside the "Valeur estimée" card) — last-completed date, progress, done/total
 /// counter, error, and the start/resume button. Observes `CollectionPriceUpdater.shared`
 /// **directly** (it's `@Observable @MainActor`), so both screens show the same live progress
 /// with no per-view-model forwarding properties; the singleton, not any view model, owns the
 /// actual job, and progress stays live even if the presenting screen is dismissed and reopened
 /// mid-run.
 struct CollectionPriceUpdateSection: View {
+    /// Which rows to render. The batch logic is identical either way — only the chrome differs,
+    /// because the two hosts frame it very differently.
+    enum Layout {
+        /// Réglages: this section *is* the whole "Prix de la collection" section, so it carries
+        /// every row.
+        case standalone
+        /// Statistiques' "Valeur estimée" card: that card's own header already carries the title,
+        /// the refresh control and the live `done / total`, so those rows are dropped here rather
+        /// than stating the same run twice in one card.
+        case embedded
+    }
+
+    var layout: Layout = .standalone
     @Environment(\.modelContext) private var modelContext
     /// Called when a run finishes to completion — Statistiques reloads its stats here.
     var onCompleted: (() -> Void)? = nil
@@ -17,22 +30,32 @@ struct CollectionPriceUpdateSection: View {
     var legoStoreRepository: LegoStoreRepositoryProtocol = LegoStoreRepository()
 
     @State private var errorMessage: String?
+    /// Cached rather than computed from `body`: `setsMissingPrice()` runs a collection-wide
+    /// `ownedSets()` + `conditionByListId()` + a price resolution per set, and `body` is
+    /// re-evaluated on every `done` tick of a batch — so reading it inline re-ran the whole scan
+    /// once per processed set. Refreshed at the points where the answer can actually change: first
+    /// appearance, a run starting or ending, and right after this view drives one itself.
+    @State private var missingPriceCount = 0
 
     private static let dateStyle = Date.FormatStyle(date: .abbreviated, time: .omitted, locale: Locale(identifier: "fr_FR"))
 
     var body: some View {
         let updater = CollectionPriceUpdater.shared
 
-        if let lastCompletedAt = updater.lastCompletedAt {
-            Text("Dernière actualisation : \(lastCompletedAt.formatted(Self.dateStyle))")
-                .foregroundStyle(.secondary)
-        }
+        // This row carries the lifecycle hooks because it's the only one rendered unconditionally
+        // in both layouts — this view's `body` returns a bare list of rows (dropped into a `Form`
+        // `Section` on Réglages, a `VStack` on Statistiques), so there's no container to hang them
+        // on, and a `.task` attached to a row that isn't rendered never fires. That's also why the
+        // label has a "jamais actualisés" fallback instead of vanishing when no run has completed.
+        lastUpdateLabel(updater)
+            .task { refreshMissingPriceCount() }
+            .onChange(of: updater.isRunning) { _, _ in refreshMissingPriceCount() }
 
         if updater.isRunning {
             ProgressView(value: Double(updater.done), total: Double(max(updater.total, 1)))
         }
 
-        if updater.isRunning || updater.hasResumableUpdate {
+        if layout == .standalone, updater.isRunning || updater.hasResumableUpdate {
             Text("\(updater.done) / \(updater.total) sets")
                 .foregroundStyle(.secondary)
         }
@@ -44,15 +67,31 @@ struct CollectionPriceUpdateSection: View {
             }
         }
 
-        Button(buttonTitle) {
-            Task { await updateAllPrices() }
+        // Embedded, the plain "Actualiser…" variant would just restate the card header's refresh
+        // button, so it's dropped — but "Reprendre (N restants)" is kept: a paused queue is the one
+        // state the header's button can't act on (it reports `.busy` instead of hijacking it).
+        if layout == .standalone || updater.hasResumableUpdate {
+            Button(buttonTitle) {
+                Task { await updateAllPrices() }
+            }
+            .disabled(updater.isRunning)
         }
-        .disabled(updater.isRunning)
 
         if !updater.isRunning && !updater.hasResumableUpdate && missingPriceCount > 0 {
             Button(String(localized: "Compléter les prix manquants (\(missingPriceCount))")) {
                 Task { await updateMissingPrices() }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func lastUpdateLabel(_ updater: CollectionPriceUpdater) -> some View {
+        if let lastCompletedAt = updater.lastCompletedAt {
+            Text("Dernière actualisation : \(lastCompletedAt.formatted(Self.dateStyle))")
+                .foregroundStyle(.secondary)
+        } else {
+            Text("Prix jamais actualisés")
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -69,19 +108,26 @@ struct CollectionPriceUpdateSection: View {
     /// keep advertising it and the user would click forever with N never reaching 0 (#194). The
     /// full "Actualiser les prix de la collection" button re-fetches *everything* regardless, so
     /// such a set can still be revisited if its price ever appears.
+    ///
+    /// Quotes come from one grouped `allCachedPrices()` fetch rather than a
+    /// `cachedPrices(setNum:)` call per set — same reason as `StatisticsViewModel.recomputeStats()`.
     private func setsMissingPrice() -> [CachedSet] {
         let repository = LocalRepository(modelContext: modelContext)
         let conditionByListId = repository.conditionByListId()
+        let quotesBySetNum = SetPriceIndex.pricesBySetNum(repository.allCachedPrices())
         return repository.ownedSets().filter { set in
             guard set.pricesFetchedAt == nil else { return false }
             let condition = set.currentListId.flatMap { conditionByListId[$0] }
-            let quotes = repository.cachedPrices(setNum: set.setNum)
-            return resolveCollectionPrice(storePriceEUR: set.storePriceEUR, condition: condition, quotes: quotes) == nil
+            return resolveCollectionPrice(
+                storePriceEUR: set.storePriceEUR,
+                condition: condition,
+                quotes: quotesBySetNum[set.setNum] ?? []
+            ) == nil
         }
     }
 
-    private var missingPriceCount: Int {
-        setsMissingPrice().count
+    private func refreshMissingPriceCount() {
+        missingPriceCount = setsMissingPrice().count
     }
 
     private var buttonTitle: String {
@@ -125,5 +171,8 @@ struct CollectionPriceUpdateSection: View {
             PriceUpdateNotifier.notifyCompleted(total: result.total)
             onCompleted?()
         }
+        // `isRunning` has already flipped back to `false` by the time this returns, so the
+        // `.onChange` hook above can't be relied on to catch a run this view started itself.
+        refreshMissingPriceCount()
     }
 }

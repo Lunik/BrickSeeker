@@ -33,12 +33,21 @@ struct YearBreakdown: Identifiable {
 
 struct CollectionStats {
     let setCount: Int
+    /// Σ `quantity` over the collection — the unit `totalValueEUR` is actually denominated in,
+    /// unlike `setCount`, which counts *distinct* sets. Both are surfaced side by side rather
+    /// than one replacing the other: the estimated-value caption used to read "basée sur X / Y
+    /// sets" while the total below it weighted every price by `quantity`, so the sentence and the
+    /// number it explained were counting different things.
+    let unitCount: Int
     let partCount: Int
     let themeCount: Int
     let themeBreakdown: [ThemeBreakdown]
     let yearBreakdown: [YearBreakdown]
     let totalValueEUR: Double
     let setsWithKnownPrice: Int
+    /// Σ `quantity` over the priced sets only — `setsWithKnownPrice`'s counterpart in the same
+    /// unit as `totalValueEUR`.
+    let pricedUnitCount: Int
     let mostExpensiveSet: CachedSet?
     /// The price actually used to pick `mostExpensiveSet` — may come from any source in the
     /// fallback chain, so it can't be read back off `mostExpensiveSet.storePriceEUR` (that's
@@ -50,12 +59,14 @@ struct CollectionStats {
     static var empty: CollectionStats {
         CollectionStats(
             setCount: 0,
+            unitCount: 0,
             partCount: 0,
             themeCount: 0,
             themeBreakdown: [],
             yearBreakdown: [],
             totalValueEUR: 0,
             setsWithKnownPrice: 0,
+            pricedUnitCount: 0,
             mostExpensiveSet: nil,
             mostExpensiveSetPriceEUR: nil,
             oldestSet: nil,
@@ -99,8 +110,18 @@ final class StatisticsViewModel {
     /// `CachedSet.storePriceEUR` write is already visible here without a re-fetch — only the
     /// derived `stats` snapshot itself needs reassigning to trigger a re-render, per the
     /// `@Observable`-only-tracks-stored-properties rule in AGENTS.md.
+    ///
+    /// Quotes come from **one** `allCachedPrices()` fetch grouped by set number, not from
+    /// `effectivePriceEUR(for:)`'s per-set fetch: this runs once per `done` increment during a
+    /// batch, so a per-set fetch made the whole run quadratic (~250 000 fetches for a 500-set
+    /// collection) and visibly froze this screen. The index is deliberately rebuilt on every call
+    /// and **not** cached between increments — each processed set inserts new `CachedSetPrice`
+    /// rows, and a stale index would pin the total to its pre-batch value.
     func recomputeStats() {
-        let priceByNum = Dictionary(uniqueKeysWithValues: ownedSets.map { ($0.setNum, effectivePriceEUR(for: $0)) })
+        let quotesBySetNum = SetPriceIndex.pricesBySetNum(localRepository.allCachedPrices())
+        let priceByNum = Dictionary(uniqueKeysWithValues: ownedSets.map { set in
+            (set.setNum, effectivePriceEUR(for: set, quotes: quotesBySetNum[set.setNum] ?? []))
+        })
         stats = Self.computeStats(
             from: ownedSets,
             priceByNum: priceByNum,
@@ -119,16 +140,28 @@ final class StatisticsViewModel {
     /// - `.used`: BrickLink used → lego.com → Amazon/Cdiscount → BrickLink new
     ///
     /// `nil` only when no source has a price at all.
+    ///
+    /// This overload fetches the set's quotes itself, so it's the right entry point for a one-shot
+    /// caller (the CSV/PDF exporters pass it as a closure). Anything iterating the whole collection
+    /// should go through the `quotes:` overload with a `SetPriceIndex`-grouped index instead — see
+    /// `recomputeStats()`.
     func effectivePriceEUR(for set: CachedSet) -> Double? {
+        effectivePriceEUR(for: set, quotes: localRepository.cachedPrices(setNum: set.setNum))
+    }
+
+    /// `effectivePriceEUR(for:)` with the set's non-expired quotes already in hand — same
+    /// resolution chain, no fetch. `quotes` must be pre-filtered the way both
+    /// `LocalRepository.cachedPrices(setNum:)` and `SetPriceIndex.pricesBySetNum` do it (expired
+    /// rows dropped), which is why callers pass one of those two.
+    private func effectivePriceEUR(for set: CachedSet, quotes: [PriceQuote]) -> Double? {
         let condition = set.currentListId.flatMap { conditionByListId[$0] }
-        let quotes = localRepository.cachedPrices(setNum: set.setNum)
         return resolveCollectionPrice(storePriceEUR: set.storePriceEUR, condition: condition, quotes: quotes)
     }
 
     /// - Parameters:
-    ///   - priceByNum: precomputed by `load()` via `effectivePriceEUR(for:)` — the
-    ///     `resolveCollectionPrice` fallback chain — since this function stays pure/static and has
-    ///     no repository access of its own.
+    ///   - priceByNum: precomputed by `recomputeStats()` via `effectivePriceEUR(for:quotes:)` —
+    ///     the `resolveCollectionPrice` fallback chain — since this function stays pure/static and
+    ///     has no repository access of its own.
     ///   - themeName: display-name resolver, used to group `themeBreakdown` by name rather than
     ///     raw `themeId` (see `ThemeBreakdown`'s doc for why).
     private static func computeStats(
@@ -165,12 +198,14 @@ final class StatisticsViewModel {
 
         return CollectionStats(
             setCount: sets.count,
+            unitCount: sets.reduce(0) { $0 + $1.quantity },
             partCount: partCount,
             themeCount: themeCount,
             themeBreakdown: themeBreakdown,
             yearBreakdown: yearBreakdown,
             totalValueEUR: totalValueEUR,
             setsWithKnownPrice: pricedSets.count,
+            pricedUnitCount: pricedSets.reduce(0) { $0 + $1.set.quantity },
             mostExpensiveSet: mostExpensive?.set,
             mostExpensiveSetPriceEUR: mostExpensive?.price,
             oldestSet: sets.min { $0.year < $1.year },
