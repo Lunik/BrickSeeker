@@ -107,6 +107,9 @@
     "Activité" : {
 
     },
+    "Actualiser la valeur estimée" : {
+
+    },
     "Ajoutez un set à votre liste cadeaux depuis sa fiche, ou importez le CSV d'une liste Rebrickable avec le bouton en haut." : {
 
     },
@@ -134,12 +137,12 @@
     "Autorise la caméra dans les réglages iOS, ou saisis un numéro / choisis une photo." : {
 
     },
-    "Basée sur %@ / %@ sets dont le prix est connu" : {
+    "Basée sur %lld / %lld sets (%lld / %lld exemplaires) dont le prix est connu" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Basée sur %1$@ / %2$@ sets dont le prix est connu"
+            "value" : "Basée sur %1$lld / %2$lld sets (%3$lld / %4$lld exemplaires) dont le prix est connu"
           }
         }
       }
@@ -456,6 +459,9 @@
 
     },
     "Toutes" : {
+
+    },
+    "Une actualisation des prix de la collection est déjà en cours ou en attente de reprise. Terminez-la avant d'en relancer une." : {
 
     },
     "Valeur cible" : {

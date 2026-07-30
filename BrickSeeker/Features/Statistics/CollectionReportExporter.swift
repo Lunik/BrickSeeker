@@ -82,7 +82,16 @@ enum CollectionReportExporter {
 
             draw("Totaux", font: .boldSystemFont(ofSize: 14), spacingAfter: 8)
             draw("\(stats.setCount) sets · \(stats.partCount) pièces · \(stats.themeCount) thèmes", font: .systemFont(ofSize: 12))
-            let valueText = String(format: "Valeur estimée : %.2f € (basée sur %d / %d sets dont le prix est connu)", stats.totalValueEUR, stats.setsWithKnownPrice, stats.setCount)
+            // Same two-unit phrasing as the Statistiques screen's estimated-value caption — the
+            // total is quantity-weighted, so the set count alone would describe a different unit.
+            let valueText = String(
+                format: "Valeur estimée : %.2f € (basée sur %d / %d sets, %d / %d exemplaires, dont le prix est connu)",
+                stats.totalValueEUR,
+                stats.setsWithKnownPrice,
+                stats.setCount,
+                stats.pricedUnitCount,
+                stats.unitCount
+            )
             draw(valueText, font: .systemFont(ofSize: 12), spacingAfter: 16)
 
             draw("Détail des sets", font: .boldSystemFont(ofSize: 14), spacingAfter: 8)

@@ -9,6 +9,9 @@ struct StatisticsView: View {
     @State private var pdfFile: ShareableFile?
     @State private var exportErrorMessage: String?
     @State private var showSettings = false
+    /// `.busy` feedback for the "Valeur estimée" reload button — inline in that card rather than
+    /// an alert, since it's a "not now" state (another batch owns the queue), not a failure.
+    @State private var valueRefreshMessage: String?
     let lookupViewModel: ScannerViewModel
 
     /// True while the initial launch sync (#148) is still unresolved and there's nothing to show
@@ -159,13 +162,47 @@ struct StatisticsView: View {
     }
 
     private func valueSection(_ viewModel: StatisticsViewModel) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Valeur estimée").font(.headline)
+        let updater = CollectionPriceUpdater.shared
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Valeur estimée").font(.headline)
+                Spacer()
+                // While a batch runs, the icon gives way to live progress rather than a dead
+                // spinner — `CollectionPriceUpdater` is `@Observable @MainActor`, so reading
+                // `isRunning`/`done`/`total` here is enough to track a run started from anywhere
+                // (this button, the section below, or Collection's bulk actions).
+                if updater.isRunning {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text("\(updater.done) / \(updater.total)")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Button {
+                        Task { await refreshCollectionValue(viewModel) }
+                    } label: {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Actualiser la valeur estimée")
+                }
+            }
+
+            if let valueRefreshMessage {
+                DismissibleErrorLabel(message: valueRefreshMessage) {
+                    self.valueRefreshMessage = nil
+                }
+            }
+
             Text(viewModel.stats.totalValueEUR.formatted(.currency(code: "EUR")))
                 .font(.title2.bold())
                 .contentTransition(.numericText(value: viewModel.stats.totalValueEUR))
                 .animation(.default, value: viewModel.stats.totalValueEUR)
-            Text("Basée sur \(viewModel.stats.setsWithKnownPrice) / \(viewModel.stats.setCount) sets dont le prix est connu")
+            // Both units, deliberately: the total above weights each price by `quantity`, so
+            // "X / Y sets" alone described a different quantity than the number it sat under.
+            Text("Basée sur \(viewModel.stats.setsWithKnownPrice) / \(viewModel.stats.setCount) sets (\(viewModel.stats.pricedUnitCount) / \(viewModel.stats.unitCount) exemplaires) dont le prix est connu")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .contentTransition(.numericText(value: Double(viewModel.stats.setsWithKnownPrice)))
@@ -186,6 +223,31 @@ struct StatisticsView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardStyle()
+    }
+
+    /// Re-fetches prices for the whole owned collection straight from the value card, through the
+    /// **existing** `refreshPrices(for:persist:)` entry point — it already does authorize →
+    /// start → notify. `.busy` means a global run is in flight or a paused queue is waiting to be
+    /// resumed; that's surfaced as a message rather than hijacking or silently resuming the other
+    /// job (the reason `refreshPrices` reports it instead of just starting).
+    private func refreshCollectionValue(_ viewModel: StatisticsViewModel) async {
+        valueRefreshMessage = nil
+
+        let outcome = await CollectionPriceUpdater.shared.refreshPrices(
+            for: viewModel.setsForExport.map { $0.asLegoSet() },
+            persist: CollectionPriceUpdater.persistClosure(modelContext: modelContext)
+        )
+
+        switch outcome {
+        case .completed:
+            viewModel.load()
+        case .busy:
+            valueRefreshMessage = String(
+                localized: "Une actualisation des prix de la collection est déjà en cours ou en attente de reprise. Terminez-la avant d'en relancer une."
+            )
+        case .cancelled:
+            break
+        }
     }
 
     @ViewBuilder
