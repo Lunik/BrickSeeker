@@ -148,6 +148,13 @@ final class CachedSetPrice {
     var currency: String
     var sourceURLString: String?
     var fetchedAt: Date
+    /// BrickLink's min/max + lot count for this same quote (#213). Optional columns here rather
+    /// than a second `@Model`: the range is strictly 1:1 with a quote, so a separate entity would
+    /// force a second fetch into every price path for no gain. Defaults keep the migration
+    /// lightweight — existing rows simply read back `nil`.
+    var minAmount: Decimal?
+    var maxAmount: Decimal?
+    var lotCount: Int?
 
     init(setNum: String, quote: PriceQuote) {
         self.setNum = setNum
@@ -156,6 +163,9 @@ final class CachedSetPrice {
         self.currency = quote.currency
         self.sourceURLString = quote.sourceURL?.absoluteString
         self.fetchedAt = quote.fetchedAt
+        self.minAmount = quote.minAmount
+        self.maxAmount = quote.maxAmount
+        self.lotCount = quote.lotCount
     }
 
     var isExpired: Bool {
@@ -169,8 +179,51 @@ final class CachedSetPrice {
             amount: amount,
             currency: currency,
             sourceURL: sourceURLString.flatMap(URL.init),
-            fetchedAt: fetchedAt
+            fetchedAt: fetchedAt,
+            minAmount: minAmount,
+            maxAmount: maxAmount,
+            lotCount: lotCount
         )
+    }
+}
+
+/// One real, completed BrickLink sale (`price_detail[]` under `guide_type=sold`, #214) — the local
+/// equivalent of BrickEconomy's `price_events_*`, plotted as a scatter under the price-history
+/// lines on `SetDetailView`.
+///
+/// Deliberately **not** folded into `PriceHistoryEntry`: that table is our own once-a-day reading of
+/// the average, and mixing third-party sales into it would triple its rows and change what the
+/// trend line means. Rows here are written as a **wholesale replacement per (setNum, source)**, not
+/// appended — BrickLink re-sends the entire 6-month window on every refresh, so replacing needs no
+/// deduplication, while appending would multiply the same sale by the number of refreshes.
+///
+/// Pure cache: everything here can be re-fetched from BrickLink, so unlike `PriceHistoryEntry` this
+/// *is* cleared by `LocalRepository.clearAll()`.
+@Model
+final class SoldListingEntry {
+    var setNum: String
+    /// A `PriceSource` raw value — the condition the sale was in, since BrickLink prices new and
+    /// used separately and the scatter is filtered to the set's own condition.
+    var source: String
+    var unitAmount: Decimal
+    var quantity: Int
+    /// When the sale actually happened (BrickLink `date_ordered`) — the scatter's x-axis, and the
+    /// reason this feature needed a live shape check before being written: without it there is no
+    /// honest place to plot a point.
+    var orderedAt: Date
+    var currency: String
+    /// When *we* retrieved it, distinct from `orderedAt` — lets a future retention pass age out
+    /// rows for sets that stopped being refreshed.
+    var fetchedAt: Date
+
+    init(setNum: String, source: String, unitAmount: Decimal, quantity: Int, orderedAt: Date, currency: String, fetchedAt: Date = Date()) {
+        self.setNum = setNum
+        self.source = source
+        self.unitAmount = unitAmount
+        self.quantity = quantity
+        self.orderedAt = orderedAt
+        self.currency = currency
+        self.fetchedAt = fetchedAt
     }
 }
 

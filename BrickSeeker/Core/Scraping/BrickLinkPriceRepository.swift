@@ -32,13 +32,77 @@ import Foundation
 /// diagnosing recurring unresolved items from real data. Unresolved items are the natural home for
 /// a future visible link-out + manual-entry fallback.
 struct BrickLinkPriceRepository: Sendable {
+    /// The Price Guide payload. `avg_price` stays the one number every consumer (`DealVerdict`,
+    /// `SetRowView`, price history, the valuation kernel) means by "the BrickLink price" — the
+    /// rest is surfaced strictly as *extra* context on the detail screen (#213). Everything but
+    /// `avg_price`/`currency_code` is optional: BrickLink omits or zeroes these on an item with no
+    /// recorded sales, and a missing key must not cost us the average we do have.
     private struct PriceGuideData: Decodable {
         let currencyCode: String
         let avgPrice: String
+        let minPrice: String?
+        let maxPrice: String?
+        /// Quantity-weighted average — decoded but deliberately unused as the headline number, see
+        /// the "à ne pas faire" note in #213: swapping `amount` onto it would silently change the
+        /// meaning of every stored history point and deal verdict.
+        let qtyAvgPrice: String?
+        /// Number of *lots* behind the guide (`unit_quantity`), i.e. how many sales the range spans.
+        /// `total_quantity` counts individual items across those lots, which reads as a bigger,
+        /// more reassuring number than the sample actually is.
+        let unitQuantity: Int?
+        let totalQuantity: Int?
+        /// The individual sales behind the guide (#214). Empty for an item with no sale in the
+        /// 6-month window — which is the common case, not an error.
+        let priceDetail: [PriceDetail]
+
+        /// One `price_detail[]` entry. Verified live (see the type doc): under `guide_type=sold`
+        /// each carries `quantity`, `unit_price`, `seller_country_code`, `buyer_country_code` and
+        /// `date_ordered` (ISO-8601, milliseconds, `Z`). Only the three fields the scatter plots
+        /// are decoded — the country codes describe *who* traded, which this app has no use for
+        /// and no reason to store.
+        struct PriceDetail: Decodable {
+            let quantity: Int?
+            let unitPrice: String?
+            let dateOrdered: String?
+
+            enum CodingKeys: String, CodingKey {
+                case quantity
+                case unitPrice = "unit_price"
+                case dateOrdered = "date_ordered"
+            }
+        }
 
         enum CodingKeys: String, CodingKey {
             case currencyCode = "currency_code"
             case avgPrice = "avg_price"
+            case minPrice = "min_price"
+            case maxPrice = "max_price"
+            case qtyAvgPrice = "qty_avg_price"
+            case unitQuantity = "unit_quantity"
+            case totalQuantity = "total_quantity"
+            case priceDetail = "price_detail"
+        }
+
+        /// Hand-written rather than synthesised so a surprise in the *secondary* fields can never
+        /// cost us the average. The synthesised `Decodable` throws the whole payload away over a
+        /// single unexpected key type — and losing the price the app already displays, for the sake
+        /// of decoration, is the wrong trade. The shape below was verified against a live signed
+        /// call (#214), but that is one item at one point in time, not a contract.
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            currencyCode = try container.decode(String.self, forKey: .currencyCode)
+            avgPrice = try container.decode(String.self, forKey: .avgPrice)
+            minPrice = try? container.decodeIfPresent(String.self, forKey: .minPrice)
+            maxPrice = try? container.decodeIfPresent(String.self, forKey: .maxPrice)
+            qtyAvgPrice = try? container.decodeIfPresent(String.self, forKey: .qtyAvgPrice)
+            unitQuantity = Self.lenientInt(container, .unitQuantity)
+            totalQuantity = Self.lenientInt(container, .totalQuantity)
+            priceDetail = (try? container.decodeIfPresent([PriceDetail].self, forKey: .priceDetail)) ?? []
+        }
+
+        private static func lenientInt(_ container: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) -> Int? {
+            if let value = try? container.decodeIfPresent(Int.self, forKey: key) { return value }
+            return (try? container.decodeIfPresent(String.self, forKey: key)).flatMap(Int.init)
         }
     }
 
@@ -140,7 +204,59 @@ struct BrickLinkPriceRepository: Sendable {
         guard let amount = Decimal(string: data.avgPrice), amount > 0 else {
             throw ScrapeError.notFound
         }
-        return PriceQuote(source: source, amount: amount, currency: data.currencyCode, sourceURL: itemURL, fetchedAt: Date())
+        // The range only means something as a pair: a lone bound would render as "12 € – " and,
+        // worse, imply a spread we don't actually know. `> 0` filters BrickLink's "0.0000" for an
+        // item with no recorded sales in the window.
+        let minAmount = Decimal(string: data.minPrice ?? "").flatMap { $0 > 0 ? $0 : nil }
+        let maxAmount = Decimal(string: data.maxPrice ?? "").flatMap { $0 > 0 ? $0 : nil }
+        return PriceQuote(
+            source: source,
+            amount: amount,
+            currency: data.currencyCode,
+            sourceURL: itemURL,
+            fetchedAt: Date(),
+            minAmount: minAmount,
+            maxAmount: maxAmount,
+            lotCount: data.unitQuantity.flatMap { $0 > 0 ? $0 : nil },
+            sales: Self.sales(from: data.priceDetail)
+        )
+    }
+
+    /// How many recent sales are kept per item+condition (#214). A long-running, heavily-traded set
+    /// returns hundreds of `price_detail[]` rows, re-fetched in full on every refresh — storing all
+    /// of them would add hundreds of rows per set to a several-hundred-set collection for a scatter
+    /// nobody can read at that density. The newest ones are also the only ones that say anything
+    /// about the current price.
+    private static let maxStoredSales = 50
+
+    /// Maps `price_detail[]` to the app's own value type, newest first and capped. Entries missing
+    /// a price or a date are dropped rather than guessed at: a sale with no `date_ordered` has no
+    /// x-coordinate, so there is nowhere honest to plot it.
+    private static func sales(from details: [PriceGuideData.PriceDetail]) -> [SoldSale] {
+        details.compactMap { detail -> SoldSale? in
+            guard let unitPrice = detail.unitPrice,
+                  let unitAmount = Decimal(string: unitPrice), unitAmount > 0,
+                  let dateOrdered = detail.dateOrdered,
+                  let orderedAt = Self.parseDate(dateOrdered) else { return nil }
+            return SoldSale(unitAmount: unitAmount, quantity: max(1, detail.quantity ?? 1), orderedAt: orderedAt)
+        }
+        // Newest-first to pick which survive the cap, then back to chronological order for storage.
+        .sorted { $0.orderedAt > $1.orderedAt }
+        .prefix(maxStoredSales)
+        .reversed()
+        .map { $0 }
+    }
+
+    /// `date_ordered` came back as `2026-05-28T00:18:27.603Z` on the verified call, but BrickLink
+    /// documents no format — so the fractional-seconds-less variant is tried too rather than
+    /// silently dropping every sale if they ever stop sending milliseconds.
+    private static func parseDate(_ value: String) -> Date? {
+        let withFractional = ISO8601DateFormatter()
+        withFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = withFractional.date(from: value) { return date }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: value)
     }
 
     /// Reads the on-disk cache, or (first lookup only) resolves and saves it by cross-referencing

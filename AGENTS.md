@@ -490,6 +490,24 @@ lego.com price.
   (6-month sold average) matches what the old scraper read, not `guide_type=stock` (current
   listings) — keep using `sold` if this is touched again, or `DealVerdict`/history numbers change
   meaning silently.
+  - **The response's verified shape** (probed live, #213/#214 — see the `check-bricklink-endpoint`
+    skill, which has a signed `probe.py` for re-checking any BrickLink endpoint):
+    `currency_code`, `min_price`, `max_price`, `avg_price`, `qty_avg_price` (money as decimal
+    *strings*), `unit_quantity`/`total_quantity` (JSON numbers), and `price_detail[]` — each entry
+    carrying `quantity`, `unit_price`, `seller_country_code`, `buyer_country_code` and
+    `date_ordered` (`2026-05-28T00:18:27.603Z`; a stray misspelled `qunatity` duplicate rides along,
+    ignore it). An item with no sale in the window returns `"0.0000"` everywhere and an empty
+    `price_detail[]` rather than omitting fields — treat present-but-zero as absent.
+    `PriceGuideData` decodes this with a **hand-written** `init(from:)` on purpose: everything past
+    `avg_price` is decoration, and a strict synthesised decoder would throw the whole payload away
+    (losing the price the app displays) over one unexpected key type.
+  - **`avg_price` stays the headline number.** `qty_avg_price` is decoded but deliberately unused:
+    promoting it would silently redefine every stored `PriceHistoryEntry` and `DealVerdict`, the
+    same trap as switching `guide_type`. `min`/`max`/`unit_quantity` surface only as a secondary
+    caption on the SetDetail price row, and `price_detail[]` only as the chart's sales scatter
+    (`SoldListingEntry`, written as a wholesale replace per set+source, capped at 50 recent rows —
+    BrickLink re-sends its whole 6-month window every refresh, so appending would multiply the same
+    sale once per refresh). Neither is ever recorded into `PriceHistoryEntry`.
   - **Item-type resolution**: most Rebrickable set numbers are directly usable as BrickLink's own
     `SET` number — tried first, no lookup. Minifigs (`fig-…` ids) and the rare set BrickLink files
     under a different type (e.g. individual collectible-minifig boxes) fall back to
