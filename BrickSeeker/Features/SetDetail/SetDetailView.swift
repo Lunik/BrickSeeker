@@ -659,8 +659,11 @@ struct SetDetailView: View {
                         // stops merging them and draws two full, near-duplicate legends.
                         .foregroundStyle(by: .value("Source", Self.salesSeriesName(sale.source)))
                         .symbol(by: .value("Source", Self.salesSeriesName(sale.source)))
-                        .symbolSize(40)
-                        .opacity(0.7)
+                        // Small on purpose: at the 50-row cap a heavily-traded set packs its whole
+                        // window into a 180 pt-tall chart, and default-sized marks merge into one
+                        // blob that hides both the spread and the history lines behind it.
+                        .symbolSize(12)
+                        .opacity(0.6)
                     }
                 }
                 .frame(height: 180)
