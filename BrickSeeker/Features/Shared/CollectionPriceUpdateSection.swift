@@ -2,13 +2,26 @@ import SwiftUI
 import SwiftData
 
 /// The "Prix de la collection" batch-update rows, shared by Réglages (inside a `Form` `Section`)
-/// and Statistiques (inside a titled `VStack`) — last-completed date, progress, done/total
+/// and Statistiques (inside the "Valeur estimée" card) — last-completed date, progress, done/total
 /// counter, error, and the start/resume button. Observes `CollectionPriceUpdater.shared`
 /// **directly** (it's `@Observable @MainActor`), so both screens show the same live progress
 /// with no per-view-model forwarding properties; the singleton, not any view model, owns the
 /// actual job, and progress stays live even if the presenting screen is dismissed and reopened
 /// mid-run.
 struct CollectionPriceUpdateSection: View {
+    /// Which rows to render. The batch logic is identical either way — only the chrome differs,
+    /// because the two hosts frame it very differently.
+    enum Layout {
+        /// Réglages: this section *is* the whole "Prix de la collection" section, so it carries
+        /// every row.
+        case standalone
+        /// Statistiques' "Valeur estimée" card: that card's own header already carries the title,
+        /// the refresh control and the live `done / total`, so those rows are dropped here rather
+        /// than stating the same run twice in one card.
+        case embedded
+    }
+
+    var layout: Layout = .standalone
     @Environment(\.modelContext) private var modelContext
     /// Called when a run finishes to completion — Statistiques reloads its stats here.
     var onCompleted: (() -> Void)? = nil
@@ -29,16 +42,20 @@ struct CollectionPriceUpdateSection: View {
     var body: some View {
         let updater = CollectionPriceUpdater.shared
 
-        if let lastCompletedAt = updater.lastCompletedAt {
-            Text("Dernière actualisation : \(lastCompletedAt.formatted(Self.dateStyle))")
-                .foregroundStyle(.secondary)
-        }
+        // This row carries the lifecycle hooks because it's the only one rendered unconditionally
+        // in both layouts — this view's `body` returns a bare list of rows (dropped into a `Form`
+        // `Section` on Réglages, a `VStack` on Statistiques), so there's no container to hang them
+        // on, and a `.task` attached to a row that isn't rendered never fires. That's also why the
+        // label has a "jamais actualisés" fallback instead of vanishing when no run has completed.
+        lastUpdateLabel(updater)
+            .task { refreshMissingPriceCount() }
+            .onChange(of: updater.isRunning) { _, _ in refreshMissingPriceCount() }
 
         if updater.isRunning {
             ProgressView(value: Double(updater.done), total: Double(max(updater.total, 1)))
         }
 
-        if updater.isRunning || updater.hasResumableUpdate {
+        if layout == .standalone, updater.isRunning || updater.hasResumableUpdate {
             Text("\(updater.done) / \(updater.total) sets")
                 .foregroundStyle(.secondary)
         }
@@ -50,20 +67,31 @@ struct CollectionPriceUpdateSection: View {
             }
         }
 
-        // Both hooks hang off this button because it's the one row that's always present — this
-        // view's `body` returns a bare list of rows (it's dropped into a `Form` `Section` on
-        // Réglages and a `VStack` on Statistiques), so there's no container to attach them to.
-        Button(buttonTitle) {
-            Task { await updateAllPrices() }
+        // Embedded, the plain "Actualiser…" variant would just restate the card header's refresh
+        // button, so it's dropped — but "Reprendre (N restants)" is kept: a paused queue is the one
+        // state the header's button can't act on (it reports `.busy` instead of hijacking it).
+        if layout == .standalone || updater.hasResumableUpdate {
+            Button(buttonTitle) {
+                Task { await updateAllPrices() }
+            }
+            .disabled(updater.isRunning)
         }
-        .disabled(updater.isRunning)
-        .task { refreshMissingPriceCount() }
-        .onChange(of: updater.isRunning) { _, _ in refreshMissingPriceCount() }
 
         if !updater.isRunning && !updater.hasResumableUpdate && missingPriceCount > 0 {
             Button(String(localized: "Compléter les prix manquants (\(missingPriceCount))")) {
                 Task { await updateMissingPrices() }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func lastUpdateLabel(_ updater: CollectionPriceUpdater) -> some View {
+        if let lastCompletedAt = updater.lastCompletedAt {
+            Text("Dernière actualisation : \(lastCompletedAt.formatted(Self.dateStyle))")
+                .foregroundStyle(.secondary)
+        } else {
+            Text("Prix jamais actualisés")
+                .foregroundStyle(.secondary)
         }
     }
 

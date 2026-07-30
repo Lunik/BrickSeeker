@@ -35,7 +35,6 @@ struct StatisticsView: View {
                     }
                     valueSection(viewModel)
                     superlativesSection(viewModel.stats)
-                    priceUpdateSection(viewModel)
                     exportSection(viewModel)
                 }
                 .padding()
@@ -208,6 +207,13 @@ struct StatisticsView: View {
                 .contentTransition(.numericText(value: Double(viewModel.stats.setsWithKnownPrice)))
                 .animation(.default, value: viewModel.stats.setsWithKnownPrice)
 
+            // The batch rows live in this card rather than a second one below it: price freshness,
+            // progress, resume and "prix manquants" are all state *about the number above*, and a
+            // separate "Prix de la collection" card restated the same run's title, counter and
+            // refresh button. `.embedded` drops exactly the rows this card's header already shows.
+            CollectionPriceUpdateSection(layout: .embedded, onCompleted: { viewModel.load() })
+                .padding(.top, 4)
+
             // `.caption` alone was a ~16 pt tap target (#150) — `.subheadline` plus vertical
             // padding gets this closer to the 44 pt minimum.
             NavigationLink {
@@ -283,15 +289,6 @@ struct StatisticsView: View {
             }
         }
         .buttonStyle(.plain)
-    }
-
-    private func priceUpdateSection(_ viewModel: StatisticsViewModel) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Prix de la collection").font(.headline)
-            CollectionPriceUpdateSection(onCompleted: { viewModel.load() })
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .cardStyle()
     }
 
     private func exportSection(_ viewModel: StatisticsViewModel) -> some View {
