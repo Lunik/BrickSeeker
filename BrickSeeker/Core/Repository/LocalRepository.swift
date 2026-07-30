@@ -375,6 +375,11 @@ final class LocalRepository {
         if let prices = try? modelContext.fetch(FetchDescriptor<CachedSetPrice>()) {
             prices.forEach { modelContext.delete($0) }
         }
+        // Unlike `PriceHistoryEntry` above, these *are* purged: BrickLink re-sends its whole
+        // 6-month sales window on the next refresh, so nothing here is lost for good (#214).
+        if let soldListings = try? modelContext.fetch(FetchDescriptor<SoldListingEntry>()) {
+            soldListings.forEach { modelContext.delete($0) }
+        }
         if let syncStates = try? modelContext.fetch(FetchDescriptor<CollectionSyncState>()) {
             syncStates.forEach { modelContext.delete($0) }
         }
@@ -423,14 +428,60 @@ final class LocalRepository {
                 existing.currency = quote.currency
                 existing.sourceURLString = quote.sourceURL?.absoluteString
                 existing.fetchedAt = quote.fetchedAt
+                // Assigned unconditionally, `nil` included: a source that stopped reporting a
+                // range must not keep showing the previous refresh's numbers next to a fresh
+                // average.
+                existing.minAmount = quote.minAmount
+                existing.maxAmount = quote.maxAmount
+                existing.lotCount = quote.lotCount
             } else {
                 let inserted = CachedSetPrice(setNum: setNum, quote: quote)
                 modelContext.insert(inserted)
                 cachedBySource[source] = inserted // a duplicated source in `quotes` updates, not re-inserts
             }
             recordPriceHistory(setNum: setNum, source: source, amount: quote.amount, currency: quote.currency)
+            // Only a quote that actually carries sales information may rewrite the stored rows —
+            // `nil` means "this quote says nothing about sales" (a cache-rebuilt quote, or a source
+            // with no such concept) and must leave them alone. See `PriceQuote.sales`.
+            if let sales = quote.sales {
+                replaceSoldListings(setNum: setNum, source: source, sales: sales, currency: quote.currency)
+            }
         }
         try? modelContext.save()
+    }
+
+    /// Wholesale replacement of a set+source's sold listings (#214) — never an append. BrickLink
+    /// re-sends its whole 6-month window on every refresh, so deleting first is both the simplest
+    /// correct behaviour and the only one that can't accumulate the same sale once per refresh.
+    /// An empty `sales` from a live fetch legitimately clears the rows: the sales aged out of the
+    /// window, and keeping them would show a scatter BrickLink no longer stands behind.
+    private func replaceSoldListings(setNum: String, source: String, sales: [SoldSale], currency: String) {
+        let existing = (try? modelContext.fetch(
+            FetchDescriptor<SoldListingEntry>(predicate: #Predicate { $0.setNum == setNum && $0.source == source })
+        )) ?? []
+        existing.forEach { modelContext.delete($0) }
+
+        let fetchedAt = Date()
+        for sale in sales {
+            modelContext.insert(SoldListingEntry(
+                setNum: setNum,
+                source: source,
+                unitAmount: sale.unitAmount,
+                quantity: sale.quantity,
+                orderedAt: sale.orderedAt,
+                currency: currency,
+                fetchedAt: fetchedAt
+            ))
+        }
+    }
+
+    /// Recorded BrickLink sales for a set, oldest first — the scatter series on `SetDetailView`'s
+    /// price chart. Both conditions are returned; filtering to the set's own is the view's call.
+    func soldListings(setNum: String) -> [SoldListingEntry] {
+        let entries = (try? modelContext.fetch(
+            FetchDescriptor<SoldListingEntry>(predicate: #Predicate { $0.setNum == setNum })
+        )) ?? []
+        return entries.sorted { $0.orderedAt < $1.orderedAt }
     }
 
     /// Appends a price reading for `setNum`+`source`, skipping the insert if one was already

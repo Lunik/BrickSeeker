@@ -11,6 +11,9 @@ struct SetDetailView: View {
     @State private var showSettings = false
     @State private var showScanMap = false
     @State private var priceHistory: [PriceHistoryEntry] = []
+    /// Real BrickLink sales (#214), plotted as a scatter over the history lines. Loaded from the
+    /// cache alongside `priceHistory` — same inputs, same refresh points, never fetched here.
+    @State private var soldListings: [SoldListingEntry] = []
     /// Current value + growth shown in the header (`valuationCard`), recomputed locally from the
     /// cached quotes/retail price/paid price — never fetched. Reloaded everywhere `priceHistory`
     /// is, since it is derived from exactly the same inputs.
@@ -390,7 +393,9 @@ struct SetDetailView: View {
     }
 
     private func reloadPriceHistory() {
-        priceHistory = LocalRepository(modelContext: modelContext).priceHistory(setNum: viewModel.legoSet.setNum)
+        let repository = LocalRepository(modelContext: modelContext)
+        priceHistory = repository.priceHistory(setNum: viewModel.legoSet.setNum)
+        soldListings = repository.soldListings(setNum: viewModel.legoSet.setNum)
     }
 
     /// Recomputes the header's value/growth from local data only (cached quotes, lego.com retail,
@@ -613,12 +618,20 @@ struct SetDetailView: View {
         return parts.joined(separator: ", ")
     }
 
-    /// Line chart of every recorded price reading (one per source), shown only once there's more
-    /// than a single point to draw a trend from — see issue #5.
+    /// Our own recorded price readings as one line per source (issue #5), plus a scatter of the
+    /// real BrickLink sales behind them (#214) — the local answer to BrickEconomy's "Set Value"
+    /// visual. The lines are deliberately kept, not replaced: without BrickEconomy's API our own
+    /// history is the only source of *trend* we have, while the sales say where the market
+    /// actually cleared.
+    ///
+    /// Shown as soon as there is anything worth drawing: two history points make a trend, but so
+    /// does a scatter on its own — a set with real sales and a single history reading used to
+    /// render nothing at all.
     @ViewBuilder
     private var priceHistoryChart: some View {
         let bySource = Dictionary(grouping: priceHistory, by: \.source)
-        if priceHistory.count > 1 {
+        let sales = salesToPlot
+        if priceHistory.count > 1 || !sales.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Évolution des prix")
                     .font(.subheadline.bold())
@@ -633,6 +646,25 @@ struct SetDetailView: View {
                             .symbol(by: .value("Source", source.priceHistorySourceDisplayName))
                         }
                     }
+                    ForEach(sales, id: \.persistentModelID) { sale in
+                        PointMark(
+                            x: .value("Date", sale.orderedAt),
+                            y: .value("Prix", (sale.unitAmount as NSDecimalNumber).doubleValue)
+                        )
+                        // Its own series, so the legend names it and its colour can't be confused
+                        // with a history line. `.symbol(by:)` as well as `.foregroundStyle(by:)`
+                        // is **required**, not decoration: the history lines register both a
+                        // colour *and* a symbol scale, and a series that joins only one of the two
+                        // leaves the scales with different domains — at which point Swift Charts
+                        // stops merging them and draws two full, near-duplicate legends.
+                        .foregroundStyle(by: .value("Source", Self.salesSeriesName(sale.source)))
+                        .symbol(by: .value("Source", Self.salesSeriesName(sale.source)))
+                        // Small on purpose: at the 50-row cap a heavily-traded set packs its whole
+                        // window into a 180 pt-tall chart, and default-sized marks merge into one
+                        // blob that hides both the spread and the history lines behind it.
+                        .symbolSize(12)
+                        .opacity(0.6)
+                    }
                 }
                 .frame(height: 180)
                 // Swift Charts draws no accessible content by default — VoiceOver saw nothing
@@ -640,22 +672,54 @@ struct SetDetailView: View {
                 // source stands in for a full `AXChartDescriptor` at a fraction of the code, and
                 // covers the actual question a VoiceOver user has ("what's the current price").
                 .accessibilityLabel("Évolution des prix, \(bySource.count) source\(bySource.count > 1 ? "s" : "")")
-                .accessibilityValue(priceHistoryAccessibilitySummary(bySource))
+                .accessibilityValue(priceHistoryAccessibilitySummary(bySource, sales: sales))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .cardStyle(padding: 12)
         }
     }
 
-    /// One "Source : dernier prix" clause per line, newest reading first — read out as the
-    /// `Chart`'s `accessibilityValue` (#143) since Swift Charts marks itself accessibility-hidden
-    /// by default.
-    private func priceHistoryAccessibilitySummary(_ bySource: [String: [PriceHistoryEntry]]) -> String {
-        bySource.keys.sorted().compactMap { source in
+    /// The sales to scatter, filtered to the condition the set is actually valued in — plotting
+    /// used sales against a sealed set's new prices would put two unrelated markets on one axis.
+    ///
+    /// A set with no known condition (not owned, so no list to take one from) shows **both**
+    /// series rather than none: they're separately named and coloured in the legend, and hiding
+    /// real data because we don't know which half to prefer would be the worse answer.
+    private var salesToPlot: [SoldListingEntry] {
+        switch listCondition {
+        case .newSet: return soldListings.filter { $0.source == PriceSource.bricklinkNew.rawValue }
+        case .used: return soldListings.filter { $0.source == PriceSource.bricklinkUsed.rawValue }
+        case nil: return soldListings
+        }
+    }
+
+    private static func salesSeriesName(_ source: String) -> String {
+        source == PriceSource.bricklinkUsed.rawValue
+            ? "Ventes BrickLink (occasion)"
+            : "Ventes BrickLink (neuf)"
+    }
+
+    /// One "Source : dernier prix" clause per line, newest reading first, plus a closing clause per
+    /// scatter series — read out as the `Chart`'s `accessibilityValue` (#143) since Swift Charts
+    /// marks itself accessibility-hidden by default. The sales clause gives the count and the range
+    /// rather than 50 individual points, which is the shape of what the scatter conveys visually.
+    private func priceHistoryAccessibilitySummary(_ bySource: [String: [PriceHistoryEntry]], sales: [SoldListingEntry]) -> String {
+        var clauses = bySource.keys.sorted().compactMap { source -> String? in
             guard let latest = bySource[source]?.max(by: { $0.fetchedAt < $1.fetchedAt }) else { return nil }
             let amount = latest.amount.formatted(.currency(code: latest.currency))
             return "\(source.priceHistorySourceDisplayName) : \(amount)"
-        }.joined(separator: ", ")
+        }
+
+        let salesBySeries = Dictionary(grouping: sales, by: \.source)
+        for series in salesBySeries.keys.sorted() {
+            guard let entries = salesBySeries[series], !entries.isEmpty,
+                  let low = entries.map(\.unitAmount).min(),
+                  let high = entries.map(\.unitAmount).max() else { continue }
+            let currency = entries[0].currency
+            let range = "\(low.formatted(.currency(code: currency))) à \(high.formatted(.currency(code: currency)))"
+            clauses.append("\(Self.salesSeriesName(series)) : \(entries.count) vente\(entries.count > 1 ? "s" : ""), de \(range)")
+        }
+        return clauses.joined(separator: ", ")
     }
 
     /// How many scan rows "Tes scans" shows before collapsing into an "et N scans plus
@@ -1317,32 +1381,61 @@ struct SetDetailView: View {
     /// A scraped-source row. Always rendered so the price list stays the same
     /// shape across sets — shows the quote, a loading indicator, or
     /// "Indisponible", consistently with the lego.com row.
+    ///
+    /// A BrickLink quote also carries the low/high of the sales its average was computed over
+    /// (#213); that goes on a secondary caption line under the price, never in place of it.
     @ViewBuilder
     private func sourceRow(_ source: PriceSource) -> some View {
-        priceRow(label: source.displayName) {
-            if let quote = viewModel.priceQuotes.first(where: { $0.source == source }) {
-                HStack(spacing: 6) {
-                    if let promo = discountVsStore(quote.amount, currency: quote.currency) {
-                        Text(promo.text)
-                            .font(.caption2)
-                            .foregroundStyle(promo.color)
-                    }
-                    if let sourceURL = quote.sourceURL {
-                        Link(destination: sourceURL) {
-                            HStack(spacing: 4) {
-                                Text(quote.amount.formatted(.currency(code: quote.currency)))
-                                ExternalLinkIcon()
-                            }
+        let quote = viewModel.priceQuotes.first(where: { $0.source == source })
+        VStack(alignment: .trailing, spacing: 2) {
+            priceRow(label: source.displayName) {
+                if let quote {
+                    HStack(spacing: 6) {
+                        if let promo = discountVsStore(quote.amount, currency: quote.currency) {
+                            Text(promo.text)
+                                .font(.caption2)
+                                .foregroundStyle(promo.color)
                         }
-                        .foregroundStyle(.primary)
-                    } else {
-                        Text(quote.amount.formatted(.currency(code: quote.currency)))
+                        if let sourceURL = quote.sourceURL {
+                            Link(destination: sourceURL) {
+                                HStack(spacing: 4) {
+                                    Text(quote.amount.formatted(.currency(code: quote.currency)))
+                                    ExternalLinkIcon()
+                                }
+                            }
+                            .foregroundStyle(.primary)
+                        } else {
+                            Text(quote.amount.formatted(.currency(code: quote.currency)))
+                        }
                     }
+                } else {
+                    priceStatus(loading: viewModel.pricesLoading)
                 }
-            } else {
-                priceStatus(loading: viewModel.pricesLoading)
+            }
+
+            if let quote, let range = priceRange(quote) {
+                Text(range.text)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(range.accessibilityLabel)
             }
         }
+    }
+
+    /// "12,00 € – 30,00 € (7 lots)" — the spread the source's average was drawn from, plus how many
+    /// sales it spans. Nil unless both bounds are known: a single bound would suggest a range we
+    /// don't have. The lot count is dropped rather than shown as "(1 lot)" when the sample is a
+    /// single sale — min and max are then the same number and there is no spread to qualify.
+    private func priceRange(_ quote: PriceQuote) -> (text: String, accessibilityLabel: String)? {
+        guard let minAmount = quote.minAmount, let maxAmount = quote.maxAmount, minAmount < maxAmount else {
+            return nil
+        }
+        let low = minAmount.formatted(.currency(code: quote.currency))
+        let high = maxAmount.formatted(.currency(code: quote.currency))
+        guard let lots = quote.lotCount, lots > 1 else {
+            return ("\(low) – \(high)", "Fourchette de \(low) à \(high)")
+        }
+        return ("\(low) – \(high) (\(lots) lots)", "Fourchette de \(low) à \(high), sur \(lots) lots")
     }
 
     /// Shared trailing for a row with no value yet: a spinner while its source

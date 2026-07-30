@@ -53,10 +53,44 @@ extension String {
     }
 }
 
+/// One source's price for one item. `amount` is *the* number every consumer means by "the price"
+/// (`DealVerdict`, `SetRowView`, the valuation kernel, the price history) — the fields below it are
+/// optional context a source may or may not provide, and nothing may quietly promote one of them
+/// into `amount`'s place (#213).
+///
+/// The trailing defaults are load-bearing: the synthesised memberwise init is called from
+/// `BrickLinkPriceRepository`, `AmazonPriceScraper`, `CdiscountPriceScraper` and
+/// `CachedSetPrice.quote`, and only BrickLink has anything to put in these.
 struct PriceQuote: Codable, Hashable {
     let source: PriceSource
     let amount: Decimal
     let currency: String
     let sourceURL: URL?
     let fetchedAt: Date
+    /// Low/high of the sales the average was computed over (BrickLink `min_price`/`max_price`).
+    /// Always meaningful as a pair or not at all — see `BrickLinkPriceRepository.fetchQuote`.
+    var minAmount: Decimal? = nil
+    var maxAmount: Decimal? = nil
+    /// How many lots that range spans (BrickLink `unit_quantity`) — the sample size behind it.
+    var lotCount: Int? = nil
+    /// The individual sales the average was computed over (BrickLink `price_detail[]`, #214).
+    ///
+    /// `nil` and `[]` mean different things, and the storage layer depends on the difference:
+    /// `nil` is "this quote says nothing about sales" (a quote rebuilt from the cache, or a source
+    /// that has no such concept), while `[]` is a live fetch that found **no** sale — the only one
+    /// of the two allowed to clear previously stored rows.
+    var sales: [SoldSale]? = nil
+}
+
+/// One real, completed sale behind a `PriceQuote` — BrickLink's `price_detail[]` under
+/// `guide_type=sold`. The shape was verified against a live signed call before being coded against
+/// (#214, skill `check-bricklink-endpoint`): `guide_type=stock` returns current *listings* instead,
+/// with no `date_ordered` at all, so the scatter is only meaningful on the `sold` guide.
+///
+/// Currency is deliberately absent — it is always the parent quote's, and duplicating it per sale
+/// would only invite the two drifting apart.
+struct SoldSale: Codable, Hashable {
+    let unitAmount: Decimal
+    let quantity: Int
+    let orderedAt: Date
 }
