@@ -62,6 +62,12 @@ struct MinifigSetEntry: Codable, Identifiable, Hashable, Sendable {
     let setUrl: String?
     let quantity: Int?
 
+    // No `theme_id` here, and don't add one: this endpoint doesn't send it. Verified live on
+    // device for #224 — decoding it optionally left a known merchandise entry (`852554-1`, a
+    // Star Wars magnet set) unfiltered, i.e. the key never arrived. Callers that need a theme for
+    // one of these set numbers cross-reference `OfflineCatalogStore` instead (see
+    // `SetDetailView.loadSetsContainingMinifigIfNeeded`).
+
     enum CodingKeys: String, CodingKey {
         case setNum = "set_num"
         case name

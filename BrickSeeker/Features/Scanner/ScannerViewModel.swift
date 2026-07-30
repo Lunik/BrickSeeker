@@ -238,6 +238,43 @@ final class ScannerViewModel {
         resumeScanning()
     }
 
+    /// The disambiguation list is a *search result* — Rebrickable's catalog answers a bare set
+    /// number with keychains and T-shirts alongside the actual set — so merchandise is dropped
+    /// from it when the user asked for that in Réglages (#224).
+    ///
+    /// Two guards keep this from ever making things worse than they were:
+    /// - if every candidate is merchandise, the unfiltered list is shown instead. A number the
+    ///   user deliberately pointed the camera at that only matches a cap should show that cap,
+    ///   not an unexplained "Set non trouvé";
+    /// - if exactly one candidate survives, it's presented as a normal result — the same thing
+    ///   `RebrickableRepository.resolveSet` already does for a single search hit, just now that
+    ///   filtering made it single. That branch mirrors `resolveSet`'s own `.found` handling
+    ///   (collection status, scan event, success haptic) rather than routing through
+    ///   `selectAmbiguousSet`, which would re-read the already-consumed `forceDetailNextResolution`
+    ///   and lose this resolution's batch-bypass decision.
+    private func presentAmbiguous(
+        _ sets: [LegoSet],
+        bypassBatch: Bool,
+        source: LookupSource,
+        wasFromCache: Bool
+    ) async {
+        let visible = sets.filter { !WearableFilter.shared.shouldHide(themeId: $0.themeId) }
+        guard visible.count == 1, let legoSet = visible.first else {
+            state = .ambiguous(visible.isEmpty ? sets : visible)
+            return
+        }
+        presentFound(
+            legoSet,
+            await fetchCollectionStatus(for: legoSet.setNum),
+            bypassBatch: bypassBatch,
+            wasFromCache: wasFromCache
+        )
+        if !wasFromCache {
+            recordScanEventIfNeeded(setNum: legoSet.setNum, bypassBatch: bypassBatch, source: source)
+            if playsFeedbackSounds { ScanFeedback.playResolutionSucceeded() }
+        }
+    }
+
     func importImage(_ cgImage: CGImage) {
         cancelAllDebounceTasks()
         isPaused = true
@@ -417,7 +454,12 @@ final class ScannerViewModel {
                 // the user already got the detection feedback for this candidate.
                 if playsFeedbackSounds, !foundWasFromCache { ScanFeedback.playResolutionSucceeded() }
             case .ambiguous(let sets):
-                state = .ambiguous(sets)
+                await presentAmbiguous(
+                    sets,
+                    bypassBatch: bypassBatch,
+                    source: source,
+                    wasFromCache: foundWasFromCache
+                )
             case .notFound:
                 // Some cached numbers (e.g. minifigs, "fig-…") can't be re-resolved through the
                 // sets endpoint at all — don't let a live reconcile failure close a detail view

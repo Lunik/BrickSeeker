@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
     @Bindable private var theme = AppTheme.shared
     @Bindable private var scanLocation = ScanLocationService.shared
+    @Bindable private var wearableFilter = WearableFilter.shared
     @State private var preferredPPPText: String = ""
     @State private var showPrivacyDetail = false
     @State private var isAPIKeyVisible = false
@@ -198,6 +199,14 @@ struct SettingsView: View {
                     Text("API BrickLink")
                 } footer: {
                     Text("Générez ces 4 valeurs sur bricklink.com/v3/api.page (section « Register a Consumer », puis « Manage a Consumer » → générez un jeton) — les noms de champs ci-dessus reprennent ceux du site BrickLink. Utilisé pour afficher les prix neuf/occasion BrickLink officiels ; nécessaire uniquement pour cette fonctionnalité.")
+                }
+
+                Section {
+                    Toggle("Masquer les produits dérivés", isOn: $wearableFilter.isEnabled)
+                } header: {
+                    Text("Catalogue")
+                } footer: {
+                    Text("Le catalogue Rebrickable référence aussi des produits dérivés (vêtements, sacs, porte-clés, montres…) qui n'ont rien à voir avec une collection de sets. Ils sont masqués des suggestions : résultats de recherche, nouveaux sets, sets où apparaît une minifig. Votre collection, votre historique et vos statistiques ne sont jamais filtrés, et un produit dérivé que vous scannez reste consultable.")
                 }
 
                 Section {
