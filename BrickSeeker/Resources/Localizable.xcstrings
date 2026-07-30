@@ -4,6 +4,9 @@
     " " : {
 
     },
+    "—" : {
+
+    },
     "« %@ » restera dans votre Collection, mais disparaîtra de l'Historique." : {
 
     },
@@ -238,6 +241,9 @@
     "et %@ sets supplémentaires" : {
 
     },
+    "Évolution" : {
+
+    },
     "Évolution des prix" : {
 
     },
@@ -262,8 +268,15 @@
     "L'accès à la position est refusé dans les réglages iOS — aucune position ne sera enregistrée." : {
 
     },
-    "Le pourcentage est appliqué au prix lego.com déjà connu pour calculer le prix final." : {
-
+    "Le pourcentage est appliqué au prix « %@ » (%@) pour calculer le prix final." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Le pourcentage est appliqué au prix « %1$@ » (%2$@) pour calculer le prix final."
+          }
+        }
+      }
     },
     "Le type détermine la source de prix utilisée pour estimer la valeur de votre collection. Choisissez « Neuf » pour les sets encore scellés (lego.com en priorité) et « Occasion » pour les sets ouverts ou d'occasion (BrickLink occasion)." : {
 
@@ -356,6 +369,9 @@
 
     },
     "Réduction (%)" : {
+
+    },
+    "Renseigne ce que tu as réellement payé ce set — il sert de référence pour calculer son évolution de valeur. Laisse le champ vide pour l'effacer." : {
 
     },
     "Renseigne le prix affiché en magasin pour ce scan — il sert à repérer le meilleur prix vu, et sur quel lieu." : {
