@@ -17,6 +17,12 @@ struct CollectionPriceUpdateSection: View {
     var legoStoreRepository: LegoStoreRepositoryProtocol = LegoStoreRepository()
 
     @State private var errorMessage: String?
+    /// Cached rather than computed from `body`: `setsMissingPrice()` runs a collection-wide
+    /// `ownedSets()` + `conditionByListId()` + a price resolution per set, and `body` is
+    /// re-evaluated on every `done` tick of a batch — so reading it inline re-ran the whole scan
+    /// once per processed set. Refreshed at the points where the answer can actually change: first
+    /// appearance, a run starting or ending, and right after this view drives one itself.
+    @State private var missingPriceCount = 0
 
     private static let dateStyle = Date.FormatStyle(date: .abbreviated, time: .omitted, locale: Locale(identifier: "fr_FR"))
 
@@ -44,10 +50,15 @@ struct CollectionPriceUpdateSection: View {
             }
         }
 
+        // Both hooks hang off this button because it's the one row that's always present — this
+        // view's `body` returns a bare list of rows (it's dropped into a `Form` `Section` on
+        // Réglages and a `VStack` on Statistiques), so there's no container to attach them to.
         Button(buttonTitle) {
             Task { await updateAllPrices() }
         }
         .disabled(updater.isRunning)
+        .task { refreshMissingPriceCount() }
+        .onChange(of: updater.isRunning) { _, _ in refreshMissingPriceCount() }
 
         if !updater.isRunning && !updater.hasResumableUpdate && missingPriceCount > 0 {
             Button(String(localized: "Compléter les prix manquants (\(missingPriceCount))")) {
@@ -69,19 +80,26 @@ struct CollectionPriceUpdateSection: View {
     /// keep advertising it and the user would click forever with N never reaching 0 (#194). The
     /// full "Actualiser les prix de la collection" button re-fetches *everything* regardless, so
     /// such a set can still be revisited if its price ever appears.
+    ///
+    /// Quotes come from one grouped `allCachedPrices()` fetch rather than a
+    /// `cachedPrices(setNum:)` call per set — same reason as `StatisticsViewModel.recomputeStats()`.
     private func setsMissingPrice() -> [CachedSet] {
         let repository = LocalRepository(modelContext: modelContext)
         let conditionByListId = repository.conditionByListId()
+        let quotesBySetNum = SetPriceIndex.pricesBySetNum(repository.allCachedPrices())
         return repository.ownedSets().filter { set in
             guard set.pricesFetchedAt == nil else { return false }
             let condition = set.currentListId.flatMap { conditionByListId[$0] }
-            let quotes = repository.cachedPrices(setNum: set.setNum)
-            return resolveCollectionPrice(storePriceEUR: set.storePriceEUR, condition: condition, quotes: quotes) == nil
+            return resolveCollectionPrice(
+                storePriceEUR: set.storePriceEUR,
+                condition: condition,
+                quotes: quotesBySetNum[set.setNum] ?? []
+            ) == nil
         }
     }
 
-    private var missingPriceCount: Int {
-        setsMissingPrice().count
+    private func refreshMissingPriceCount() {
+        missingPriceCount = setsMissingPrice().count
     }
 
     private var buttonTitle: String {
@@ -125,5 +143,8 @@ struct CollectionPriceUpdateSection: View {
             PriceUpdateNotifier.notifyCompleted(total: result.total)
             onCompleted?()
         }
+        // `isRunning` has already flipped back to `false` by the time this returns, so the
+        // `.onChange` hook above can't be relied on to catch a run this view started itself.
+        refreshMissingPriceCount()
     }
 }
