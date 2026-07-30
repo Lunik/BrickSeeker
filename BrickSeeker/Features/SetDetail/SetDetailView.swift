@@ -155,6 +155,26 @@ struct SetDetailView: View {
                             .foregroundStyle(.secondary)
                     }
 
+                    // Shown whatever the Réglages toggle says (#224): this sheet is only ever
+                    // reached by an explicit action — a scan, a manual entry, a row tap — and
+                    // hiding what the user just pointed the camera at would be the confusing
+                    // outcome. The label explains why the same item is missing from the
+                    // suggestion lists instead of leaving that unexplained.
+                    // `!isMinifig` matters: a minifig has no theme of its own, so
+                    // `OfflineMinifigCatalogStore` borrows one from a set it appears in — and for
+                    // a figure sold in a magnet set or a watch that borrowed theme lands inside
+                    // "Gear", which badged Chewbacca as a derived product (seen on device).
+                    if !isMinifig, WearableFilter.shared.isWearable(themeId: viewModel.legoSet.themeId) {
+                        Label(
+                            WearableFilter.shared.isEnabled
+                                ? "Produit dérivé — masqué des suggestions de sets"
+                                : "Produit dérivé — ce n'est pas un set de briques",
+                            systemImage: "tshirt"
+                        )
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    }
+
                     statusBadge
 
                     quantityRow
@@ -860,6 +880,20 @@ struct SetDetailView: View {
         .accessibilityAddTraits(.isButton)
     }
 
+    /// Drops merchandise entries from a "sets containing this minifig" page (#224). Returns the
+    /// list untouched when the toggle is off, so a disabled filter costs nothing — not even the
+    /// offline catalogue's first decode.
+    private func filteringWearables(_ entries: [MinifigSetEntry]) async -> [MinifigSetEntry] {
+        guard WearableFilter.shared.isEnabled else { return entries }
+        var visible: [MinifigSetEntry] = []
+        for entry in entries {
+            let themeId = await OfflineCatalogStore.shared.lookup(setNum: entry.setNum)?.themeId
+            if let themeId, WearableFilter.shared.shouldHide(themeId: themeId) { continue }
+            visible.append(entry)
+        }
+        return visible
+    }
+
     /// Loads which sets this minifig appears in (issue #178) — the one live network call this
     /// section needs, since Rebrickable has no local/offline source for it. Runs once per view
     /// identity (guarded on `setsContainingMinifig.isEmpty`); pricing for each result is then
@@ -872,11 +906,19 @@ struct SetDetailView: View {
             let response = try await rebrickableRepository.fetchSetsContainingMinifig(
                 figNum: viewModel.legoSet.setNum, pageSize: 30
             )
-            setsContainingMinifig = response.results
+            // Suggestion gallery, so merchandise is dropped (#224) — a minifig also "appears" in
+            // keychains, magnets and watches, which is exactly the noise this filter exists for.
+            // The theme comes from `OfflineCatalogStore`, not the response: this endpoint sends no
+            // `theme_id` (verified live, see `MinifigSetEntry`). That snapshot is memoized after
+            // its first read, so these are dictionary hits, not one decode per card — and a set
+            // it doesn't know (or the whole catalogue not being downloaded) simply stays visible,
+            // the same fail-open direction as the rest of the filter.
+            let results = await filteringWearables(response.results)
+            setsContainingMinifig = results
             setsContainingMinifigTotalCount = response.count
             let repository = LocalRepository(modelContext: modelContext)
             var prices: [String: Double] = [:]
-            for entry in response.results {
+            for entry in results {
                 let storePriceEUR = repository.cachedSet(setNum: entry.setNum)?.storePriceEUR
                 let quotes = repository.cachedPrices(setNum: entry.setNum)
                 prices[entry.setNum] = resolveNewPrice(storePriceEUR: storePriceEUR, quotes: quotes)
@@ -1154,6 +1196,11 @@ struct SetDetailView: View {
             let response = try await rebrickableRepository.fetchSimilarSets(to: viewModel.legoSet, pageSize: 20)
             let currentSetNum = viewModel.legoSet.setNum
             let currentNumParts = viewModel.legoSet.numParts
+            // No merchandise filter here (#224), deliberately: `fetchSimilarSets` queries
+            // `theme_id=<this set's theme>`, so every result shares the reference set's theme and
+            // is therefore merchandise exactly when the set being viewed already is. Filtering
+            // could only ever empty this gallery for someone who deliberately opened a derived
+            // product — never remove noise from a real set's suggestions.
             let results = response.results
                 .filter { $0.setNum != currentSetNum }
                 .sorted { abs($0.numParts - currentNumParts) < abs($1.numParts - currentNumParts) }

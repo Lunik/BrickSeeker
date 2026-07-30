@@ -162,6 +162,9 @@
     "Capture la position (approximative) au moment d'un scan caméra, pour retrouver le magasin où vous avez vu le meilleur prix. Stockée uniquement sur l'appareil, et supprimée dès que le set rejoint votre collection." : {
 
     },
+    "Catalogue" : {
+
+    },
     "Catalogue hors-ligne" : {
 
     },
@@ -271,6 +274,9 @@
     "L'accès à la position est refusé dans les réglages iOS — aucune position ne sera enregistrée." : {
 
     },
+    "Le catalogue Rebrickable référence aussi des produits dérivés (vêtements, sacs, porte-clés, montres…) qui n'ont rien à voir avec une collection de sets. Ils sont masqués des suggestions : résultats de recherche, nouveaux sets, sets où apparaît une minifig. Votre collection, votre historique et vos statistiques ne sont jamais filtrés, et un produit dérivé que vous scannez reste consultable." : {
+
+    },
     "Le pourcentage est appliqué au prix « %@ » (%@) pour calculer le prix final." : {
       "localizations" : {
         "fr" : {
@@ -312,6 +318,9 @@
 
     },
     "Localisation des scans" : {
+
+    },
+    "Masquer les produits dérivés" : {
 
     },
     "Minifigs de ce set" : {
@@ -357,6 +366,12 @@
 
     },
     "Prix jamais actualisés" : {
+
+    },
+    "Produit dérivé — ce n'est pas un set de briques" : {
+
+    },
+    "Produit dérivé — masqué des suggestions de sets" : {
 
     },
     "Quantité : ×%@" : {

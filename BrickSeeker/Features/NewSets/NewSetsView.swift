@@ -228,7 +228,7 @@ struct NewSetsView: View {
     }
 
     var body: some View {
-        let filteredSorted = viewModel.allSets.filteredAndSorted(
+        let filteredSorted = viewModel.visibleSets.filteredAndSorted(
             by: filter,
             owned: { cachedByNum[$0]?.isInCollection ?? false },
             resolvedPrice: resolvedPrice(for:),
@@ -242,10 +242,10 @@ struct NewSetsView: View {
         Group {
             if !viewModel.hasCatalog {
                 emptyCatalogView
-            } else if viewModel.allSets.isEmpty && viewModel.isLoadingCatalog {
+            } else if viewModel.visibleSets.isEmpty && viewModel.isLoadingCatalog {
                 ProgressView("Chargement du catalogue…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if viewModel.allSets.isEmpty {
+            } else if viewModel.visibleSets.isEmpty {
                 // Distinct from the "Aucun résultat" case below: nothing has ever been confirmed
                 // new since the baseline sync (see `NewSetsViewModel.loadCatalog`'s doc), not "the
                 // search/filters excluded everything" — different cause, different copy/action.
@@ -348,7 +348,7 @@ struct NewSetsView: View {
             }
             // Pinned to the bottom bar (not the nav bar) — iOS hides the top nav bar's own
             // toolbar items while the search field is focused (#141).
-            if !viewModel.allSets.isEmpty {
+            if !viewModel.visibleSets.isEmpty {
                 ToolbarItemGroup(placement: .bottomBar) {
                     if isSelecting {
                         Button(areAllWindowedSelected ? "Tout désélectionner" : "Tout sélectionner") {
@@ -479,7 +479,7 @@ struct NewSetsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Shown when the catalogue is downloaded but `viewModel.allSets` is empty — nothing has been
+    /// Shown when the catalogue is downloaded but `viewModel.visibleSets` is empty — nothing has been
     /// confirmed added to Rebrickable's catalogue since the baseline sync yet (see
     /// `NewSetsViewModel.loadCatalog`'s doc), including right after that very first sync, where
     /// this is the expected, not broken, result. Distinct copy from "Aucun résultat" below (that

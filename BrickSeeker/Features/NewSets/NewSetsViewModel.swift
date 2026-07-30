@@ -29,12 +29,25 @@ final class NewSetsViewModel {
 
     var hasCatalog: Bool { catalogMetadata != nil }
 
+    /// What this screen actually browses: `allSets` minus the "Gear" merchandise sub-tree when the
+    /// user asked for it in Réglages (#224). Applied here rather than inside
+    /// `Array<LegoSet>.filteredAndSorted` so it's the *source* the whole screen agrees on — the
+    /// empty states below distinguish "nothing new since the baseline sync" from "your filters
+    /// excluded everything", and a catalogue whose only new entries are keychains has to read as
+    /// the former, not as unexplained "Aucun résultat" with no filter active.
+    ///
+    /// Computed, not stored: the toggle can flip while this screen is on-screen, and reading
+    /// `WearableFilter`/`ThemeNameStore` from the view's body chain is what re-renders it.
+    var visibleSets: [LegoSet] {
+        allSets.filter { !WearableFilter.shared.shouldHide(themeId: $0.themeId) }
+    }
+
     var availableThemeIds: [Int] {
-        Array(Set(allSets.map(\.themeId)))
+        Array(Set(visibleSets.map(\.themeId)))
     }
 
     var availableYears: [Int] {
-        Array(Set(allSets.map(\.year))).sorted(by: >)
+        Array(Set(visibleSets.map(\.year))).sorted(by: >)
     }
 
     /// `allSets` only ever holds sets seen *after* `OfflineCatalogStore.initialSyncAt` — see that

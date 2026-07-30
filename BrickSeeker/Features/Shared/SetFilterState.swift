@@ -122,6 +122,11 @@ enum NewSetsFilterState {
 }
 
 extension Array where Element == CachedSet {
+    /// Note for #224: this pass-through deliberately does **not** hide "Gear" merchandise. Its
+    /// callers are Collection/Historique/Liste cadeaux — sets the user owns or scanned, which stay
+    /// visible and counted whatever the Réglages toggle says. Hiding happens only on screens that
+    /// *suggest* sets (see `WearableFilter`).
+    ///
     /// - Parameters:
     ///   - resolvedPrice: closure used only for `.price` sort — each screen passes its own rule
     ///     (new-price chain for History, condition-aware for Collection). Nil falls back to
