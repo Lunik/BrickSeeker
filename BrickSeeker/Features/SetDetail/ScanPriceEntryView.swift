@@ -16,10 +16,26 @@ import SwiftUI
 /// Below the input, a live 🟢🟡🔴 verdict (`DealVerdictCalculator`, issue #12) compares the typed
 /// price against the lego.com price and the scraped `PriceQuote`s already loaded by
 /// `SetDetailViewModel` — no new scrape triggered from this sheet.
+///
+/// The same sheet also captures the **paid price** of a set already owned (`Purpose.paidPrice`),
+/// which is the reference the header's valuation card measures growth against. It's the identical
+/// interaction ("an amount, or a -X% off a reference"), so it reuses this view rather than forking
+/// a near-copy; only the wording and the verdict differ.
 struct ScanPriceEntryView: View {
     private enum EntryMode: Hashable {
         case price
         case percentage
+    }
+
+    /// Which number this sheet is capturing. The layout is identical — the same "type an amount, or
+    /// a -X% off a reference" problem — but the wording and the verdict differ:
+    /// - `.scanSeen`: a shelf price on a set you don't own yet, judged by the 🟢🟡🔴 verdict.
+    /// - `.paidPrice`: what you actually paid for a set you own. No verdict here: the header's
+    ///   valuation card already answers "was that a good price?" against this very number, so
+    ///   showing a verdict too would just restate the same arithmetic twice.
+    enum Purpose {
+        case scanSeen
+        case paidPrice
     }
 
     let setNum: String
@@ -28,6 +44,7 @@ struct ScanPriceEntryView: View {
     let referenceCurrency: String
     let quotes: [PriceQuote]
     @Binding var priceText: String
+    var purpose: Purpose = .scanSeen
     let onSave: () -> Void
 
     @State private var mode: EntryMode = .price
@@ -39,10 +56,31 @@ struct ScanPriceEntryView: View {
     @FocusState private var isInputFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
-    /// The price computed from `referencePriceEUR` and the typed percentage, rounded to the
+    /// The reference a `-X%` is applied to, **and the name of the source it came from**.
+    /// `referencePriceEUR` is the lego.com retail price, which is absent for every minifig and every
+    /// set the store no longer carries — that used to kill percentage mode entirely on exactly the
+    /// items most likely to be discounted (issue #210), so it falls back to the same new-price
+    /// chain the rest of the app uses.
+    ///
+    /// The name matters as much as the number: applying a shelf's "−20 %" to a marketplace quote
+    /// rather than to the retail price is an approximation, and the footer has to say which one it
+    /// just did. The winning source is recovered by matching the resolved amount back to its quote
+    /// rather than by re-running the chain here — a second chain is how these numbers drift apart.
+    private var discountReference: (amountEUR: Double, sourceName: String)? {
+        // Source names match the row labels in `SetDetailView`'s Prix card, so the user can see
+        // exactly which line the percentage was taken off.
+        if let referencePriceEUR { return (referencePriceEUR, "lego.com (officiel)") }
+        guard let amount = resolveNewPrice(storePriceEUR: nil, quotes: quotes) else { return nil }
+        let source = quotes.first { ($0.amount as NSDecimalNumber).doubleValue == amount }?.source
+        return (amount, source?.displayName ?? "prix connu")
+    }
+
+    private var discountReferenceEUR: Double? { discountReference?.amountEUR }
+
+    /// The price computed from `discountReferenceEUR` and the typed percentage, rounded to the
     /// nearest cent like the currency display elsewhere in `SetDetailView`.
     private var calculatedPrice: Double? {
-        guard let referencePriceEUR,
+        guard let referencePriceEUR = discountReferenceEUR,
               let percent = Double(percentText.replacingOccurrences(of: ",", with: ".")),
               percent >= 0, percent <= 100
         else { return nil }
@@ -75,7 +113,7 @@ struct ScanPriceEntryView: View {
     var body: some View {
         NavigationStack {
             Form {
-                if referencePriceEUR != nil {
+                if discountReferenceEUR != nil {
                     Section {
                         Picker("Mode de saisie", selection: $mode) {
                             Text("Prix").tag(EntryMode.price)
@@ -86,7 +124,7 @@ struct ScanPriceEntryView: View {
                 }
 
                 Section {
-                    if mode == .percentage, referencePriceEUR != nil {
+                    if mode == .percentage, discountReferenceEUR != nil {
                         HStack {
                             TextField("0", text: $percentText)
                                 .keyboardType(.decimalPad)
@@ -116,14 +154,16 @@ struct ScanPriceEntryView: View {
                 } header: {
                     Text("\(setNum.baseSetNum) · \(setName)")
                 } footer: {
-                    if mode == .percentage, referencePriceEUR != nil {
-                        Text("Le pourcentage est appliqué au prix lego.com déjà connu pour calculer le prix final.")
+                    if mode == .percentage, let reference = discountReference {
+                        Text("Le pourcentage est appliqué au prix « \(reference.sourceName) » (\(Decimal(reference.amountEUR).formatted(.currency(code: referenceCurrency)))) pour calculer le prix final.")
+                    } else if purpose == .paidPrice {
+                        Text("Renseigne ce que tu as réellement payé ce set — il sert de référence pour calculer son évolution de valeur. Laisse le champ vide pour l'effacer.")
                     } else {
                         Text("Renseigne le prix affiché en magasin pour ce scan — il sert à repérer le meilleur prix vu, et sur quel lieu.")
                     }
                 }
 
-                if let verdictResult {
+                if purpose == .scanSeen, let verdictResult {
                     Section {
                         Text("\(verdictResult.verdict.emoji) \(verdictResult.verdict.label)")
                             .font(.headline)
@@ -142,11 +182,11 @@ struct ScanPriceEntryView: View {
                     }
                 }
             }
-            .navigationTitle("Quel prix as-tu vu ?")
+            .navigationTitle(purpose == .paidPrice ? "Prix payé" : "Quel prix as-tu vu ?")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Passer") { dismiss() }
+                    Button(purpose == .paidPrice ? "Annuler" : "Passer") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Enregistrer") {
@@ -165,7 +205,7 @@ struct ScanPriceEntryView: View {
             // once a verdict already exists, and would wrongly expand even when there's a typed
             // price but zero reference data to compare it against (no Verdict section to show).
             .onChange(of: verdictResult != nil) { _, hasVerdict in
-                if hasVerdict { detent = .large }
+                if hasVerdict, purpose == .scanSeen { detent = .large }
             }
         }
         // The app's other multi-detent sheets (`SetFilterSheet`/`MinifigFilterSheet`) leave the
