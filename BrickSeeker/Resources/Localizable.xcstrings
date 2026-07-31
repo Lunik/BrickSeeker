@@ -33,6 +33,16 @@
         }
       }
     },
+    "%@ / %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ / %2$@"
+          }
+        }
+      }
+    },
     "%@ / %@ sets" : {
       "localizations" : {
         "fr" : {
@@ -107,9 +117,6 @@
     "Activité" : {
 
     },
-    "Actualiser la valeur estimée" : {
-
-    },
     "Ajoutez un set à votre liste cadeaux depuis sa fiche, ou importez le CSV d'une liste Rebrickable avec le bouton en haut." : {
 
     },
@@ -137,12 +144,12 @@
     "Autorise la caméra dans les réglages iOS, ou saisis un numéro / choisis une photo." : {
 
     },
-    "Basée sur %lld / %lld sets (%lld / %lld exemplaires) dont le prix est connu" : {
+    "Basée sur %@ / %@ sets (%@ / %@ exemplaires) dont le prix est connu" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Basée sur %1$lld / %2$lld sets (%3$lld / %4$lld exemplaires) dont le prix est connu"
+            "value" : "Basée sur %1$@ / %2$@ sets (%3$@ / %4$@ exemplaires) dont le prix est connu"
           }
         }
       }
@@ -320,9 +327,6 @@
     "Localisation des scans" : {
 
     },
-    "Masquer les produits dérivés" : {
-
-    },
     "Minifigs de ce set" : {
 
     },
@@ -366,12 +370,6 @@
 
     },
     "Prix jamais actualisés" : {
-
-    },
-    "Produit dérivé — ce n'est pas un set de briques" : {
-
-    },
-    "Produit dérivé — masqué des suggestions de sets" : {
 
     },
     "Quantité : ×%@" : {
@@ -477,9 +475,6 @@
 
     },
     "Toutes" : {
-
-    },
-    "Une actualisation des prix de la collection est déjà en cours ou en attente de reprise. Terminez-la avant d'en relancer une." : {
 
     },
     "Valeur cible" : {
