@@ -475,7 +475,8 @@ struct SetDetailView: View {
     /// "Valeur estimée / Évolution" — the local stand-in for BrickEconomy's `current_value` +
     /// `growth`, computed by `SetValuationCalculator` from data already on the device. The growth
     /// is measured against what the user paid when that's known, and against the lego.com retail
-    /// price otherwise; the caption always says which, so the number is never ambiguous.
+    /// price otherwise — never against a marketplace quote (#227, see `SetValuation.Basis`); the
+    /// caption always says which, so the number is never ambiguous.
     ///
     /// When no source has a price yet, the card deliberately still renders (as "—") with a refresh
     /// action rather than disappearing: an absent value is itself information, and hiding the card
@@ -597,15 +598,15 @@ struct SetDetailView: View {
     /// and, when there is no growth to show, says why rather than leaving a bare "—".
     private var valuationBasisCaption: String {
         guard let basisEUR = valuation.basisEUR else {
+            // A minifig has no lego.com retail price to be missing (#175) — naming one as an
+            // absent input would send the user looking for something that can never exist. The
+            // paid price is its only possible reference, so that's the only one worth mentioning.
+            if viewModel.legoSet.setNum.isMinifig {
+                return "Prix payé inconnu — évolution indisponible"
+            }
             return "Prix payé et prix retail inconnus — évolution indisponible"
         }
         let formatted = Decimal(basisEUR).formatted(.currency(code: "EUR"))
-        if valuation.growthUnavailability == .valuedAtBasis {
-            // See `SetValuation.GrowthUnavailability.valuedAtBasis`: value and reference are the
-            // same retail figure. The "Prix payé" row right below is the way out, so the caption
-            // states the fact and lets the affordance speak for itself.
-            return "Valeur estimée au prix retail \(formatted) — évolution non mesurable"
-        }
         switch valuation.basis {
         case .paid: return "vs prix payé \(formatted)"
         case .retail: return "vs prix retail \(formatted)"
