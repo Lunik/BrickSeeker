@@ -33,6 +33,8 @@ struct WishlistView: View {
     private var filteredSets: [CachedSet] { cachedSets.filteredAndSorted(by: filter, resolvedPrice: resolvedPrice) }
     private var availableThemeIds: [Int] { Set(cachedSets.map(\.themeId)).sorted() }
     private var availableYears: [Int] { Set(cachedSets.map(\.year)).sorted(by: >) }
+    /// Counted over the screen's whole dataset, same reasoning as `HistoryView`'s (#226).
+    private var unknownAvailabilityCount: Int { cachedSets.count { $0.storeAvailabilityStatus == .unknown } }
 
     private var areAllFilteredSelected: Bool {
         !filteredSets.isEmpty && filteredSets.allSatisfy { selectedSetNums.contains($0.setNum) }
@@ -376,6 +378,7 @@ struct WishlistView: View {
                 availableYears: availableYears,
                 availableListNames: [],
                 showsOwnedFilter: false,
+                unknownAvailabilityCount: unknownAvailabilityCount,
                 themeName: { ThemeNameStore.shared.displayName(forThemeId: $0) },
                 excludedSortOptions: [.dateAdded]
             )

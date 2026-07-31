@@ -55,6 +55,7 @@ struct NewSetsView: View {
         let themeName: String?
         let year: Int?
         let ownedOnly: Bool?
+        let availability: StoreAvailabilityStatus?
         let sort: SetSortOption
         let sortAscending: Bool
     }
@@ -62,7 +63,8 @@ struct NewSetsView: View {
     private var filterSignature: FilterSignature {
         FilterSignature(
             searchText: filter.searchText, themeName: filter.themeName, year: filter.year,
-            ownedOnly: filter.ownedOnly, sort: filter.sort, sortAscending: filter.sortAscending
+            ownedOnly: filter.ownedOnly, availability: filter.availability,
+            sort: filter.sort, sortAscending: filter.sortAscending
         )
     }
 
@@ -73,6 +75,13 @@ struct NewSetsView: View {
     /// "compute once, not per row" reasoning.
     private var cachedByNum: [String: CachedSet] {
         Dictionary(allCachedSets.map { ($0.setNum, $0) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// Counted over `visibleSets` (what this screen actually browses), not the current filter
+    /// result — a catalogue entry only gets a lego.com availability once someone fetched its
+    /// price, so here that's nearly all of them until prices are refreshed (#226).
+    private var unknownAvailabilityCount: Int {
+        viewModel.visibleSets.count { (cachedByNum[$0.setNum]?.storeAvailabilityStatus ?? .unknown) == .unknown }
     }
 
     private func resolvedPrice(for legoSet: LegoSet) -> Double? {
@@ -233,6 +242,7 @@ struct NewSetsView: View {
             owned: { cachedByNum[$0]?.isInCollection ?? false },
             resolvedPrice: resolvedPrice(for:),
             firstSeenAt: { viewModel.firstSeenBySetNum[$0] },
+            availability: { cachedByNum[$0]?.storeAvailabilityStatus ?? .unknown },
             themeName: { ThemeNameStore.shared.displayName(forThemeId: $0) }
         )
         let windowed = Array(filteredSorted.prefix(displayedCount))
@@ -426,6 +436,7 @@ struct NewSetsView: View {
                 availableYears: viewModel.availableYears,
                 availableListNames: [],
                 showsOwnedFilter: true,
+                unknownAvailabilityCount: unknownAvailabilityCount,
                 themeName: { ThemeNameStore.shared.displayName(forThemeId: $0) },
                 excludedSortOptions: [.dateScanned]
             )

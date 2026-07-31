@@ -226,7 +226,16 @@
     "Dernière synchronisation : %@" : {
 
     },
+    "Disponibilité" : {
+
+    },
+    "Disponible à l'achat" : {
+
+    },
     "Données fournies par Rebrickable, Brickset et BrickLink." : {
+
+    },
+    "Elle est relevée en même temps que le prix lego.com : actualisez les prix pour la compléter." : {
 
     },
     "En attente (%@/%@)" : {
@@ -270,6 +279,9 @@
 
     },
     "Hors-ligne" : {
+
+    },
+    "Inconnue" : {
 
     },
     "Indisponible" : {
@@ -331,6 +343,12 @@
 
     },
     "Mode lot actif — scanne un set pour commencer" : {
+
+    },
+    "n'a pas encore d'information de disponibilité lego.com." : {
+
+    },
+    "n'ont pas encore d'information de disponibilité lego.com." : {
 
     },
     "Nécessaire pour gérer votre liste cadeaux. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session." : {
@@ -406,6 +424,12 @@
 
     },
     "Répartition par thème" : {
+
+    },
+    "Retiré de la vente" : {
+
+    },
+    "Rupture de stock" : {
 
     },
     "Scanne plusieurs sets en mode lot pour les comparer ici." : {

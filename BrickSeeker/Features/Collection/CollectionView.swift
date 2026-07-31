@@ -42,6 +42,13 @@ struct CollectionView: View {
         !filteredSets.isEmpty && filteredSets.allSatisfy { selectedSetNums.contains($0.setNum) }
     }
 
+    /// Counted over the whole collection, not the current filter result — it answers "how much of
+    /// my collection has never been checked against lego.com" (#226), which shouldn't shrink just
+    /// because a theme filter is on.
+    private var unknownAvailabilityCount: Int {
+        viewModel?.cachedSets.count { $0.storeAvailabilityStatus == .unknown } ?? 0
+    }
+
     private func toggleSelection(_ setNum: String) {
         if selectedSetNums.contains(setNum) {
             selectedSetNums.remove(setNum)
@@ -402,6 +409,7 @@ struct CollectionView: View {
                 availableYears: viewModel?.availableYears ?? [],
                 availableListNames: viewModel?.availableListNames ?? [],
                 showsOwnedFilter: false,
+                unknownAvailabilityCount: unknownAvailabilityCount,
                 themeName: { ThemeNameStore.shared.displayName(forThemeId: $0) },
                 excludedSortOptions: [.dateAdded]
             )

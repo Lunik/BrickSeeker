@@ -56,6 +56,14 @@ final class SetFilterState {
     var listName: String?
     /// History only — `nil` shows both owned and not-owned, `true`/`false` restricts to one.
     var ownedOnly: Bool?
+    /// lego.com availability (#226) — `nil` means "all". `.unknown` is a **selectable** value, not
+    /// a hidden fourth bucket: `CachedSet.storeAvailability` is only written when a lego.com price
+    /// was actually fetched (`LocalRepository.cacheStorePrice`, driven by opening a set sheet or by
+    /// the price batch), so on a large collection most sets have no availability at all. Selecting
+    /// "En vente" must therefore *exclude* those sets rather than silently lump them in with
+    /// "Retiré de la vente", and the user needs a way to see how many are still unchecked — see
+    /// `SetFilterSheet`'s `unknownAvailabilityCount` hint.
+    var availability: StoreAvailabilityStatus?
     var sort: SetSortOption
     var sortAscending: Bool
 
@@ -73,7 +81,7 @@ final class SetFilterState {
 
     var isFilterActive: Bool {
         themeName != nil || year != nil || listName != nil || ownedOnly != nil ||
-            sort != defaultSort || sortAscending != sort.defaultAscending
+            availability != nil || sort != defaultSort || sortAscending != sort.defaultAscending
     }
 
     func resetFilters() {
@@ -81,6 +89,7 @@ final class SetFilterState {
         year = nil
         listName = nil
         ownedOnly = nil
+        availability = nil
         sort = defaultSort
         sortAscending = defaultSort.defaultAscending
     }
@@ -160,6 +169,12 @@ extension Array where Element == CachedSet {
         if let ownedOnly = filter.ownedOnly {
             result = result.filter { $0.isInCollection == ownedOnly }
         }
+        if let availability = filter.availability {
+            // Never-checked sets have `storeAvailability == nil`, which maps to `.unknown` — so
+            // they match only the explicit "Inconnue" choice and never leak into one of the three
+            // real lego.com states (#226).
+            result = result.filter { $0.storeAvailabilityStatus == availability }
+        }
 
         let ascending = filter.sortAscending
         let priceFor = resolvedPrice ?? { $0.storePriceEUR }
@@ -210,6 +225,9 @@ extension Array where Element == LegoSet {
     ///   - resolvedPrice: cache-only price lookup, used only for `.price` sort.
     ///   - firstSeenAt: when this device's downloaded snapshot first contained a given `setNum`
     ///     (`OfflineCatalogStore.allFirstSeenAt()`), used only for `.dateAdded` sort.
+    ///   - availability: last known lego.com availability for a given `setNum`, cross-referenced
+    ///     from `CachedSet` by the caller — a catalogue entry carries no store status of its own,
+    ///     so an entry with no cached row is `.unknown` (#226).
     ///   - themeName: display-name resolver, used to match `filter.themeName` against every
     ///     `themeId` that resolves to it (see `SetFilterState.themeName`'s doc for why).
     @MainActor
@@ -218,6 +236,7 @@ extension Array where Element == LegoSet {
         owned: (String) -> Bool,
         resolvedPrice: (LegoSet) -> Double?,
         firstSeenAt: (String) -> Date?,
+        availability: (String) -> StoreAvailabilityStatus,
         themeName: (Int) -> String = { ThemeNameStore.shared.displayName(forThemeId: $0) }
     ) -> [LegoSet] {
         var result = self
@@ -240,6 +259,11 @@ extension Array where Element == LegoSet {
         // (`availableListNames: []`) and `filter.listName` stays nil in practice.
         if let ownedOnly = filter.ownedOnly {
             result = result.filter { owned($0.setNum) == ownedOnly }
+        }
+        if let selectedAvailability = filter.availability {
+            // Same rule as the `CachedSet` version above — a set nobody ever fetched a lego.com
+            // price for is `.unknown`, and only matches the explicit "Inconnue" choice (#226).
+            result = result.filter { availability($0.setNum) == selectedAvailability }
         }
 
         let ascending = filter.sortAscending
