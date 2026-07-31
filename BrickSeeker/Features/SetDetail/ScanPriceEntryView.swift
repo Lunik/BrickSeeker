@@ -49,10 +49,14 @@ struct ScanPriceEntryView: View {
 
     @State private var mode: EntryMode = .price
     @State private var percentText = ""
-    /// Starts compact; forced to `.large` the moment a verdict appears so the 🟢🟡🔴 section — the
-    /// whole point of this sheet — can't end up below the fold under the keyboard (issue #157).
-    /// Only ever grows, never auto-shrinks, so it doesn't fight a manual drag back down afterward.
-    @State private var detent: PresentationDetent = .medium
+    /// Opens `.large` and stays there. It used to open `.medium` and grow to `.large` on the first
+    /// verdict (issue #157), but the field is focused on appear: the keyboard eats about half the
+    /// screen right away, so the compact height was never really usable — it only guaranteed a
+    /// re-layout under the rising keyboard, then a second one when the verdict arrived (issue #228).
+    /// Starting large keeps the 🟢🟡🔴 section clear of the keyboard by construction, with no
+    /// animated jump, and covers `.paidPrice` too — it has no verdict to grow for, yet suffered the
+    /// same shuffle. Still a binding so a manual drag down to `.medium` remains possible.
+    @State private var detent: PresentationDetent = .large
     @FocusState private var isInputFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
@@ -200,17 +204,9 @@ struct ScanPriceEntryView: View {
                 }
             }
             .onAppear { isInputFocused = true }
-            // Watches the verdict's nil-ness (always `Equatable`, unlike `DealVerdictResult`
-            // itself) rather than `priceForVerdict` — that would also re-fire on every keystroke
-            // once a verdict already exists, and would wrongly expand even when there's a typed
-            // price but zero reference data to compare it against (no Verdict section to show).
-            .onChange(of: verdictResult != nil) { _, hasVerdict in
-                if hasVerdict, purpose == .scanSeen { detent = .large }
-            }
         }
-        // The app's other multi-detent sheets (`SetFilterSheet`/`MinifigFilterSheet`) leave the
-        // detent entirely to the user; this is deliberately the first sheet that drives it
-        // programmatically, to guarantee the verdict's visibility rather than merely allow it.
+        // Like the app's other multi-detent sheets (`SetFilterSheet`/`MinifigFilterSheet`), the
+        // detent is the user's from here on — the binding only sets the initial height.
         .presentationDetents([.medium, .large], selection: $detent)
     }
 }
