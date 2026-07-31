@@ -104,13 +104,19 @@ below already exists and has a paid-for reason to be the way it is.
   resolution path.
 
 - **Search/filter/sort state is a process-lifetime singleton, not `@State`.** `SetFilterState`
-  (`Features/Shared/SetFilterState.swift`) holds `searchText` + theme/year/list/owned filters +
-  `SetSortOption`. Each screen gets its own singleton (`CollectionFilterState`, `HistoryFilterState`,
+  (`Features/Shared/SetFilterState.swift`) holds `searchText` + theme/year/list/owned/lego.com-
+  availability filters + `SetSortOption`. Each screen gets its own singleton (`CollectionFilterState`, `HistoryFilterState`,
   and the gallery's `MinifigFilterState`) because the view is rebuilt from scratch on every
   push/present — per #38 the filter must survive that and reset only on relaunch. Apply it with
   `Array<CachedSet>.filteredAndSorted(by:resolvedPrice:)`; feed the filter sheet
   `availableThemeIds`/`availableYears` derived from the data. ⚠️ Theme options are still keyed by raw
   `themeId`, so homonymous themes double up (#171) — same bug in every filter, fix once.
+  The lego.com availability filter (#226) reads `CachedSet.storeAvailability`, which is only
+  written when a lego.com price was actually fetched — so `.unknown` is a **selectable** choice
+  ("Inconnue"), not a hidden fourth bucket, and each screen passes `unknownAvailabilityCount` so
+  the sheet can say how many sets are still unchecked and point at the price refresh that fills
+  it. `MinifigGalleryView` deliberately doesn't get this filter — a minifig has no lego.com page
+  (#175).
 
 - **Search bar:** `.searchable(text: $filter.searchText, placement: .navigationBarDrawer(displayMode:
   .always), prompt: …)`. **Filter button** presents `SetFilterSheet`.

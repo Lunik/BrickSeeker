@@ -11,6 +11,11 @@ struct SetFilterSheet: View {
     let availableYears: [Int]
     let availableListNames: [String]
     let showsOwnedFilter: Bool
+    /// How many of the screen's sets have no lego.com availability information yet (#226). Drives
+    /// the hint under the "Disponibilité" picker: that data is only written when a lego.com price
+    /// is actually fetched, so on a big collection most sets legitimately sit in "Inconnue" and
+    /// the filter would otherwise look broken ("En vente returns 3 sets?"). 0 hides the hint.
+    var unknownAvailabilityCount: Int = 0
     let themeName: (Int) -> String
     /// Hides sort options that don't make sense for a given screen — e.g. `.dateScanned` for
     /// `NewSetsView`'s catalogue browse, which has no scan history to sort by. Empty by default so
@@ -25,6 +30,16 @@ struct SetFilterSheet: View {
     /// deduplicated by display name rather than one per `themeId` — Rebrickable's theme table is
     /// hierarchical, so distinct ids can share a name (e.g. two "City" entries, issue #171), and
     /// showing both would just confuse the user with no way to tell them apart.
+    /// French-correct singular/plural, same convention as `setsCountSentence` (#155).
+    private var unknownAvailabilityHint: String {
+        let count = setsCountSentence(
+            unknownAvailabilityCount,
+            singular: "n'a pas encore d'information de disponibilité lego.com.",
+            plural: "n'ont pas encore d'information de disponibilité lego.com."
+        )
+        return "\(count) \(String(localized: "Elle est relevée en même temps que le prix lego.com : actualisez les prix pour la compléter."))"
+    }
+
     private var sortedThemeNames: [String] {
         Set(availableThemeIds.map(themeName)).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
@@ -57,7 +72,7 @@ struct SetFilterSheet: View {
                     }
                 }
 
-                Section("Filtres") {
+                Section {
                     Picker("Thème", selection: $filter.themeName) {
                         Text("Tous").tag(String?.none)
                         ForEach(sortedThemeNames, id: \.self) { name in
@@ -87,6 +102,37 @@ struct SetFilterSheet: View {
                             Text("Possédés").tag(Bool?.some(true))
                             Text("Non possédés").tag(Bool?.some(false))
                         }
+                    }
+
+                    // Same icons/wording as SetDetail's badge next to the lego.com price
+                    // (`StoreAvailabilityStatus`'s display extension) so both surfaces describe
+                    // the same store state identically (#226). The per-status `tint` is set here
+                    // but a menu-style Picker repaints its row icons with the app accent colour,
+                    // so only the *shapes* (check / warning triangle / archive box / question
+                    // mark) carry the distinction inside the menu — verified in the simulator.
+                    // "Inconnue" is a listed choice, not a hidden bucket — see
+                    // `SetFilterState.availability`.
+                    Picker("Disponibilité", selection: $filter.availability) {
+                        Text("Toutes").tag(StoreAvailabilityStatus?.none)
+                        ForEach(StoreAvailabilityStatus.allCases, id: \.self) { status in
+                            Label {
+                                Text(status.label)
+                            } icon: {
+                                Image(systemName: status.pickerSystemImage)
+                                    .foregroundStyle(status.tint)
+                            }
+                            .tag(StoreAvailabilityStatus?.some(status))
+                        }
+                    }
+                } header: {
+                    Text("Filtres")
+                } footer: {
+                    if unknownAvailabilityCount > 0 {
+                        // The pointer the issue asks for: this data is a by-product of fetching
+                        // the lego.com price, so "refresh the prices" is the one gesture that
+                        // fills it in — said explicitly rather than leaving the user to guess why
+                        // so many sets are "Inconnue".
+                        Text(unknownAvailabilityHint)
                     }
                 }
 

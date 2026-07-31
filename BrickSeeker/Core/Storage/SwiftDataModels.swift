@@ -47,6 +47,14 @@ final class CachedSet {
         self.currentListName = currentListName
     }
 
+    /// Typed view of the raw `product:availability` string cached alongside the lego.com price.
+    /// A row that never had a lego.com price fetched has `storeAvailability == nil` → `.unknown`,
+    /// which is exactly what the "Disponibilité" filter needs to keep unchecked sets out of the
+    /// three real states (#226). Computed, so nothing new is persisted.
+    var storeAvailabilityStatus: StoreAvailabilityStatus {
+        StoreAvailabilityStatus(rawValue: storeAvailability)
+    }
+
     func asLegoSet() -> LegoSet {
         LegoSet(setNum: setNum, name: name, year: year, themeId: themeId, numParts: numParts, setImgUrl: setImgUrl, setUrl: setUrl)
     }

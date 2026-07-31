@@ -1365,24 +1365,16 @@ struct SetDetailView: View {
 
     /// Small coloured indicator for `StoreAvailabilityStatus`, shown next to the lego.com price —
     /// a price alone doesn't say whether the set is actively sold, temporarily out of stock, or
-    /// retired with a residual price still displayed (see #64 / AGENTS.md).
+    /// retired with a residual price still displayed (see #64 / AGENTS.md). Icons/colours/wording
+    /// come from `StoreAvailabilityStatus`'s display extension so this badge and the
+    /// "Disponibilité" filter picker (#226) can't drift apart; `.unknown` still renders nothing
+    /// here (`systemImage == nil`) — an empty state next to a price is noise, not information.
     @ViewBuilder
     private func availabilityBadge(_ status: StoreAvailabilityStatus) -> some View {
-        switch status {
-        case .available:
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-                .accessibilityLabel("Disponible à l'achat")
-        case .outOfStock:
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-                .accessibilityLabel("Rupture de stock")
-        case .retired:
-            Image(systemName: "archivebox.fill")
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("Retiré de la vente")
-        case .unknown:
-            EmptyView()
+        if let symbol = status.systemImage {
+            Image(systemName: symbol)
+                .foregroundStyle(status.tint)
+                .accessibilityLabel(status.label)
         }
     }
 

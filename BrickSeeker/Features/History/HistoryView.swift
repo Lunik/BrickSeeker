@@ -36,6 +36,10 @@ struct HistoryView: View {
     private var selectedCachedSets: [CachedSet] { filteredSets.filter { selectedSetNums.contains($0.setNum) } }
     private var availableThemeIds: [Int] { Set(cachedSets.map(\.themeId)).sorted() }
     private var availableYears: [Int] { Set(cachedSets.map(\.year)).sorted(by: >) }
+    /// Counted over the screen's whole dataset, not the current filter result — it answers "how
+    /// much of this screen has never been checked against lego.com" (#226), which shouldn't shrink
+    /// just because a theme filter is on.
+    private var unknownAvailabilityCount: Int { cachedSets.count { $0.storeAvailabilityStatus == .unknown } }
 
     private var areAllFilteredSelected: Bool {
         !filteredSets.isEmpty && filteredSets.allSatisfy { selectedSetNums.contains($0.setNum) }
@@ -416,6 +420,7 @@ struct HistoryView: View {
                 availableYears: availableYears,
                 availableListNames: [],
                 showsOwnedFilter: true,
+                unknownAvailabilityCount: unknownAvailabilityCount,
                 themeName: { ThemeNameStore.shared.displayName(forThemeId: $0) },
                 excludedSortOptions: [.dateAdded]
             )

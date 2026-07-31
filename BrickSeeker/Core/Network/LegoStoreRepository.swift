@@ -14,7 +14,11 @@ struct StorePrice: Equatable, Sendable {
 /// Mapping confirmed against real lego.com pages (see #64): a `product:price:amount` can be
 /// present alongside *any* of these statuses, including `.retired` — a retired set keeps
 /// showing its last price, so the amount is never conditioned on this status (see AGENTS.md).
-enum StoreAvailabilityStatus: Equatable, Sendable {
+/// `Hashable`/`CaseIterable` for the "Disponibilité" filter (#226): the picker tags its rows with
+/// the status itself and enumerates every case, `.unknown` included — a set whose lego.com price
+/// was never fetched has no availability string at all, and that has to be a visible, selectable
+/// state rather than a silent fourth bucket (see `SetFilterState.availability`).
+enum StoreAvailabilityStatus: Equatable, Hashable, Sendable, CaseIterable {
     case available
     case outOfStock
     case retired
