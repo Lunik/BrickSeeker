@@ -475,7 +475,9 @@ struct SetDetailView: View {
     /// "Valeur estimée / Évolution" — the local stand-in for BrickEconomy's `current_value` +
     /// `growth`, computed by `SetValuationCalculator` from data already on the device. The growth
     /// is measured against what the user paid when that's known, and against the lego.com retail
-    /// price otherwise; the caption always says which, so the number is never ambiguous.
+    /// price otherwise; the caption always says which, so the number is never ambiguous. In that
+    /// second case the amount above it is a *market* quote, retail being the reference rather than
+    /// the value (#227) — so it can legitimately differ from the same set's Collection row price.
     ///
     /// When no source has a price yet, the card deliberately still renders (as "—") with a refresh
     /// action rather than disappearing: an absent value is itself information, and hiding the card
@@ -601,10 +603,12 @@ struct SetDetailView: View {
         }
         let formatted = Decimal(basisEUR).formatted(.currency(code: "EUR"))
         if valuation.growthUnavailability == .valuedAtBasis {
-            // See `SetValuation.GrowthUnavailability.valuedAtBasis`: value and reference are the
-            // same retail figure. The "Prix payé" row right below is the way out, so the caption
-            // states the fact and lets the affordance speak for itself.
-            return "Valeur estimée au prix retail \(formatted) — évolution non mesurable"
+            // See `SetValuation.GrowthUnavailability.valuedAtBasis`: no marketplace quotes this set,
+            // so the only number left is the retail price and there's nothing independent to compare
+            // it against. Names the missing input (a market quote) rather than just asserting the
+            // evolution can't be shown — that's what tells the user a price refresh, or the "Prix
+            // payé" row right below, is the way out.
+            return "Valeur estimée au prix retail \(formatted) — aucune cote marché pour mesurer l'évolution"
         }
         switch valuation.basis {
         case .paid: return "vs prix payé \(formatted)"

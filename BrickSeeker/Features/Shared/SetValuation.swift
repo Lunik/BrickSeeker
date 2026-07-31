@@ -21,6 +21,9 @@ struct SetValuation: Equatable {
     }
 
     /// Current estimated value of one unit, condition-aware. `nil` when no source has a price.
+    /// When `basis` is `.retail` this is a **market** quote (Amazon/Cdiscount/BrickLink), the
+    /// lego.com retail price having been excluded so it can't be compared against itself — see
+    /// `SetValuationCalculator.make`. It therefore doesn't always match the Collection row's price.
     let currentValueEUR: Double?
     /// The reference the growth is computed from (paid price, else retail). `nil` when neither is known.
     let basisEUR: Double?
@@ -29,8 +32,9 @@ struct SetValuation: Equatable {
     /// condition, since the resolvers cross-fall-back as a last resort (#194/#203). Lets the UI
     /// label the amount honestly ("valeur occasion") instead of trusting the nominal list.
     let valuedCondition: ListCondition?
-    /// `(current − basis) / basis × 100`. `nil` unless both values are known *and* they come from
-    /// different sources — see `GrowthUnavailability` for the two ways this stays `nil`.
+    /// `(current − basis) / basis × 100`. `nil` unless both values are known *and* the value comes
+    /// from a source independent of the reference — see `GrowthUnavailability` for the two ways
+    /// this stays `nil`.
     let growthPercent: Double?
     /// Why `growthPercent` is `nil`, so the UI can explain the "—" instead of just showing it.
     /// `nil` exactly when `growthPercent` is non-`nil`.
@@ -38,17 +42,17 @@ struct SetValuation: Equatable {
 
     /// The two reasons a growth figure can't be stated. Kept explicit rather than collapsing both
     /// into a bare `nil`, because they call for opposite UI: one is "go fetch a price", the other
-    /// is "tell me what you paid".
+    /// is "no market has quoted this set".
     enum GrowthUnavailability: Equatable {
         /// No current value, or no basis at all — nothing to compare. A refresh may fix it.
         case missingPrice
-        /// Both are known but they are *the same number*: with no paid price recorded the basis is
-        /// the lego.com retail price, and `resolveCollectionPrice`'s new-price chain returns that
-        /// very retail price first (`resolveNewPriceForValuation`), so the two are the same field
-        /// read twice. The percentage would then be 0 by construction rather than by measurement —
-        /// which is the misleading kind of zero, not the honest one: a retired set quoted at twice
-        /// retail on Cdiscount would still report "+0 %". Recording a paid price gives the growth a
-        /// reference genuinely independent of the value, and makes it meaningful again.
+        /// The basis is the lego.com retail price and **no market source quotes this item at all**
+        /// (no Amazon/Cdiscount, no BrickLink new or used), so the only number left to display is
+        /// that same retail price. Comparing it against itself would report 0 % by construction
+        /// rather than by measurement — the misleading kind of zero, since a retired set quoted at
+        /// twice retail on Cdiscount would still read "+0 %" (issue #227). With the market-only
+        /// resolution below this is now the *rare* case it was always meant to describe: it means
+        /// "no market signal", not "we happened to read retail twice".
         case valuedAtBasis
     }
 
@@ -67,11 +71,28 @@ struct SetValuation: Equatable {
 enum SetValuationCalculator {
     /// Builds a `SetValuation` for one set or minifig.
     ///
-    /// The current value is **never** resolved here: it delegates to the existing single sources of
-    /// truth — `resolveCollectionPrice`/`resolveCollectionPriceCondition` for a set,
-    /// `resolveMinifigPrice` for a `fig-…` (a minifig only ever has BrickLink quotes, #175/#203).
-    /// Re-deriving a second chain here is exactly how the header card, the Collection row and the
-    /// Statistics total would start disagreeing about the same set — the drift #194 had to fix.
+    /// The current value is resolved through the existing single sources of truth —
+    /// `resolveCollectionPrice`/`resolveCollectionPriceCondition` for a set, `resolveMinifigPrice`
+    /// for a `fig-…` (a minifig only ever has BrickLink quotes, #175/#203). Re-deriving a second
+    /// chain here is exactly how the header card, the Collection row and the Statistics total would
+    /// start disagreeing about the same set — the drift #194 had to fix. The one deliberate
+    /// exception is the retail-basis case below, which reuses those very resolvers with
+    /// `storePriceEUR: nil` rather than open-coding a new chain.
+    ///
+    /// **Breaking the circularity (#227).** With no paid price recorded the basis is the lego.com
+    /// retail price — and `resolveCollectionPrice`'s new-price chain returns that same retail price
+    /// first, so value and reference used to be one field read twice, and the card fell back to
+    /// "évolution non mesurable" for nearly every owned set. So when (and only when) the basis is
+    /// retail, the value is resolved from **market sources only** — Amazon/Cdiscount, BrickLink
+    /// new/used — by passing `storePriceEUR: nil` to the same resolver. The comparison then measures
+    /// something real (a retired set quoted at twice retail reads "+85 %", not "+0 %"), and
+    /// `.valuedAtBasis` survives only for the genuinely signal-less case: retail known, no market
+    /// quote anywhere. A `.paid` basis is never circular, so it keeps the full chain untouched.
+    ///
+    /// This makes the card's amount diverge from the Collection row / Statistics total for a
+    /// retail-priced set with a market quote — intentionally. `resolveCollectionPrice` itself is
+    /// **not** modified (that would desync all three, #194); the narrower resolution is local to
+    /// this calculator, which is the only caller that has to compare its value against a reference.
     ///
     /// - Parameters:
     ///   - setNum: used only to tell a minifig from a set (`String.isMinifig`).
@@ -86,26 +107,6 @@ enum SetValuationCalculator {
         condition: ListCondition?,
         quotes: [PriceQuote]
     ) -> SetValuation {
-        let currentValue: Double?
-        let valuedCondition: ListCondition?
-        if setNum.isMinifig {
-            currentValue = resolveMinifigPrice(condition: condition, quotes: quotes)
-            // `resolveMinifigPrice` doesn't expose which side it picked; report the requested
-            // condition (defaulting the way that resolver does) rather than inventing one.
-            valuedCondition = currentValue == nil ? nil : (condition ?? .used)
-        } else {
-            currentValue = resolveCollectionPrice(
-                storePriceEUR: storePriceEUR,
-                condition: condition,
-                quotes: quotes
-            )
-            valuedCondition = resolveCollectionPriceCondition(
-                storePriceEUR: storePriceEUR,
-                condition: condition,
-                quotes: quotes
-            )
-        }
-
         let basisEUR: Double?
         let basis: SetValuation.Basis
         if let paidPriceEUR, paidPriceEUR > 0 {
@@ -119,12 +120,48 @@ enum SetValuationCalculator {
             basis = .unknown
         }
 
-        // Exact `Double` equality is the right test, not a tolerance: when the retail price wins
-        // the new-price chain it is returned verbatim (`resolveNewPriceForValuation` does
-        // `if let retail = storePriceEUR { return retail }`), so the two are bit-for-bit the same
-        // value read twice, not two measurements that happen to agree. A `.paid` basis is never
-        // self-referential — a paid price that equals the current value is a real, measured 0 %.
-        let isValuedAtBasis = basis == .retail && currentValue == basisEUR
+        let currentValue: Double?
+        let valuedCondition: ListCondition?
+        // Tracked explicitly rather than re-derived from `currentValue == basisEUR`: once the value
+        // comes from a market source, a quote that lands exactly on the retail price is a real,
+        // measured 0 % — indistinguishable by equality alone from the retail-read-twice case, but
+        // the opposite thing. Only this branch knows which one happened.
+        var isValuedAtBasis = false
+        if setNum.isMinifig {
+            // A minifig has no `storePriceEUR` at all (#175), so its basis is `.paid` or `.unknown`
+            // — never `.retail`, and never circular. Nothing to break here.
+            currentValue = resolveMinifigPrice(condition: condition, quotes: quotes)
+            // `resolveMinifigPrice` doesn't expose which side it picked; report the requested
+            // condition (defaulting the way that resolver does) rather than inventing one.
+            valuedCondition = currentValue == nil ? nil : (condition ?? .used)
+        } else if basis == .retail,
+                  let marketValue = resolveCollectionPrice(
+                      storePriceEUR: nil,
+                      condition: condition,
+                      quotes: quotes
+                  ) {
+            currentValue = marketValue
+            valuedCondition = resolveCollectionPriceCondition(
+                storePriceEUR: nil,
+                condition: condition,
+                quotes: quotes
+            )
+        } else {
+            // Either the basis isn't retail (no circularity to break), or no market source quotes
+            // this set — in which case the full chain falls back to the retail price itself, and
+            // that self-comparison is exactly what `.valuedAtBasis` exists to suppress.
+            currentValue = resolveCollectionPrice(
+                storePriceEUR: storePriceEUR,
+                condition: condition,
+                quotes: quotes
+            )
+            valuedCondition = resolveCollectionPriceCondition(
+                storePriceEUR: storePriceEUR,
+                condition: condition,
+                quotes: quotes
+            )
+            isValuedAtBasis = basis == .retail && currentValue != nil
+        }
 
         let growthPercent: Double?
         let growthUnavailability: SetValuation.GrowthUnavailability?
