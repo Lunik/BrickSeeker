@@ -15,6 +15,9 @@ struct PrivacyNoticeView: View {
 
             bullet("Vos clés API et identifiants sont conservés dans le Keychain iOS chiffré par Apple ; votre historique de scans et votre collection restent sur l'appareil.")
             bullet("Vous pouvez révoquer l'accès à tout moment depuis vos paramètres Rebrickable, Brickset ou BrickLink.")
+            // The app now does something while it isn't open (#230) — saying so here, not only in
+            // the detail sheet, keeps this notice from reading as "nothing happens unless you look".
+            bullet("En tâche de fond, seule l'API BrickLink est interrogée, et seulement pour les sets sous alerte de prix ou dans votre liste cadeaux.")
         }
         .font(.footnote)
         .foregroundStyle(.secondary)

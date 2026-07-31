@@ -530,6 +530,93 @@
     },
     "Vous devrez ressaisir votre mot de passe pour relier ce compte." : {
 
+    },
+    "Alerte : %@" : {
+
+    },
+    "Alerte active" : {
+
+    },
+    "Alerte de prix" : {
+
+    },
+    "Alerte de prix active" : {
+
+    },
+    "Alerte désactivée" : {
+
+    },
+    "Alerte sous" : {
+
+    },
+    "Alertes de prix" : {
+
+    },
+    "Aucun passage en tâche de fond pour l'instant" : {
+
+    },
+    "Aucune alerte de prix" : {
+
+    },
+    "Baisse de prix : %@" : {
+
+    },
+    "Créer une alerte de prix" : {
+
+    },
+    "Dernier passage" : {
+
+    },
+    "Dernier prix vu" : {
+
+    },
+    "Modifier l'alerte de prix" : {
+
+    },
+    "Montant" : {
+
+    },
+    "Prix actuel" : {
+
+    },
+    "Sets surveillés" : {
+
+    },
+    "Sous %@" : {
+
+    },
+    "Supprimer cette alerte ?" : {
+
+    },
+    "Supprimer l'alerte" : {
+
+    },
+    "Surveillance des prix" : {
+
+    },
+    "Type de seuil" : {
+
+    },
+    "Wi-Fi uniquement" : {
+
+    },
+    "lego.com (officiel)" : {
+
+    },
+    "prévenu le %@" : {
+
+    },
+    "valeur actuelle" : {
+
+    },
+    "%@ sous %@" : {
+
+    },
+    "%@ — %@ en %@, sous votre seuil de %@." : {
+
+    },
+    "−%@ %%" : {
+
     }
   },
   "version" : "1.0"

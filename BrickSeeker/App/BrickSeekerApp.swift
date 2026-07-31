@@ -12,6 +12,7 @@ struct BrickSeekerApp: App {
     @State private var homeViewModel: HomeViewModel?
     @State private var networkMonitor = NetworkMonitor.shared
     @State private var shortcutCenter = ShortcutCenter.shared
+    @State private var priceAlertRouter = PriceAlertRouter.shared
     @State private var pendingHomeAction: HomeScreenShortcut?
     @Environment(\.scenePhase) private var scenePhase
     // UserDefaults-backed (not `@State`), so "seen the onboarding" survives HomeView/homeViewModel
@@ -23,11 +24,9 @@ struct BrickSeekerApp: App {
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @State private var showOnboarding = false
 
-    var modelContainer: ModelContainer = {
-        let schema = Schema([CachedSet.self, CachedSetList.self, CollectionSyncState.self, CachedSetPrice.self, PriceHistoryEntry.self, SoldListingEntry.self, ScanEvent.self, SetPurchaseRecord.self])
-        let configuration = ModelConfiguration(schema: schema)
-        return try! ModelContainer(for: schema, configurations: [configuration])
-    }()
+    // The container itself lives in `AppModelContainer` — `BackgroundPriceRefresher` needs the same
+    // store from a `BGAppRefreshTask`, which can run without this scene ever being built (#230).
+    var modelContainer: ModelContainer { AppModelContainer.shared }
 
     var body: some Scene {
         WindowGroup {
@@ -62,8 +61,28 @@ struct BrickSeekerApp: App {
                 // the app is reopened — the user shouldn't have to go back into Settings and tap
                 // "Reprendre" themselves just to continue a job they already started.
                 .onChange(of: scenePhase) { _, newPhase in
-                    guard newPhase == .active else { return }
-                    Task { await CollectionPriceUpdater.shared.resumeIfNeeded(modelContext: modelContainer.mainContext) }
+                    switch newPhase {
+                    case .active:
+                        Task {
+                            await CollectionPriceUpdater.shared.resumeIfNeeded(modelContext: modelContainer.mainContext)
+                            // Catch-up for the watched sets whose refresh date came due while the
+                            // app was closed (#230) — the safety net for a device iOS never wakes.
+                            // Sequenced after the resume, in the same task rather than a second
+                            // one, so the two price loops can't race for the same store.
+                            await BackgroundPriceRefresher.shared.catchUpInForeground()
+                        }
+                    case .background:
+                        // A `BGTask` never re-arms itself; this is the request for the next
+                        // opportunistic wake-up, dropped when nothing is under watch.
+                        BackgroundPriceRefresher.shared.scheduleIfNeeded(modelContext: modelContainer.mainContext)
+                    default:
+                        break
+                    }
+                }
+                // A tapped price-drop notification names a set (#229) — leave the camera first so
+                // `HomeView`, which owns the lookup view model, is the one that consumes it.
+                .onChange(of: priceAlertRouter.pendingSetNum) { _, newValue in
+                    if newValue != nil { isScanning = false }
                 }
 
                 if isShowingSplash {

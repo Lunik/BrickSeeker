@@ -29,6 +29,9 @@ struct SetRowView<Trailing: View>: View {
     /// list is rendering it. `nil` renders no caption (never shown without a price either way).
     var priceLabel: String? = nil
     var isInWishlist: Bool = false
+    /// An enabled `PriceAlert` is armed on this set (#229) — same role as `isInWishlist`'s heart:
+    /// a marker, not an action. Off by default so screens that don't fetch alerts stay unchanged.
+    var hasPriceAlert: Bool = false
     /// Copies owned (issue #115) — only ever passed > 1 by CollectionView, so the "×N" badge
     /// stays invisible everywhere else (History/Wishlist rows aren't about owned copies).
     var quantity: Int = 1
@@ -54,6 +57,12 @@ struct SetRowView<Trailing: View>: View {
                             .font(.caption)
                             .foregroundStyle(.pink)
                             .accessibilityLabel("Dans ta liste cadeaux")
+                    }
+                    if hasPriceAlert {
+                        Image(systemName: "bell.fill")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .accessibilityLabel("Alerte de prix active")
                     }
                 }
                 Text(name)

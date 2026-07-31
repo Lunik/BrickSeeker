@@ -191,6 +191,159 @@ final class LocalRepository {
         ).first
     }
 
+    // MARK: - Price alerts (issue #229)
+
+    func priceAlerts() -> [PriceAlert] {
+        let alerts = (try? modelContext.fetch(FetchDescriptor<PriceAlert>())) ?? []
+        return alerts.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// Both conditions' alerts for one set — `SetDetailView` shows the neuf and occasion alerts as
+    /// two independent rows, since they're two independent alerts.
+    func priceAlerts(setNum: String) -> [PriceAlert] {
+        (try? modelContext.fetch(
+            FetchDescriptor<PriceAlert>(predicate: #Predicate { $0.setNum == setNum })
+        )) ?? []
+    }
+
+    func priceAlert(setNum: String, condition: ListCondition) -> PriceAlert? {
+        let key = PriceAlert.key(setNum: setNum, condition: condition)
+        return (try? modelContext.fetch(
+            FetchDescriptor<PriceAlert>(predicate: #Predicate { $0.key == key })
+        ))?.first
+    }
+
+    /// Creates or replaces the alert for `setNum`+`condition`. Exactly one of `thresholdEUR` /
+    /// `discountPercent` is meaningful; the caller (`PriceAlertEntryView`) resolves the percentage's
+    /// reference once, here it's only stored. Overwriting resets `wasBelowThreshold` — a new
+    /// threshold is a new question, so the next evaluation must be free to fire even if the old one
+    /// had already reported the price as low.
+    @discardableResult
+    func upsertPriceAlert(
+        setNum: String,
+        condition: ListCondition,
+        setName: String,
+        setImgUrl: String?,
+        thresholdEUR: Double?,
+        discountPercent: Double?,
+        referencePriceEUR: Double?,
+        referenceSourceName: String?
+    ) -> PriceAlert {
+        let alert: PriceAlert
+        if let existing = priceAlert(setNum: setNum, condition: condition) {
+            existing.setName = setName
+            existing.setImgUrl = setImgUrl
+            existing.thresholdEUR = thresholdEUR
+            existing.discountPercent = discountPercent
+            existing.referencePriceEUR = referencePriceEUR
+            existing.referenceSourceName = referenceSourceName
+            existing.isEnabled = true
+            existing.wasBelowThreshold = false
+            existing.lastNotifiedAt = nil
+            alert = existing
+        } else {
+            let inserted = PriceAlert(
+                setNum: setNum,
+                condition: condition,
+                setName: setName,
+                setImgUrl: setImgUrl,
+                thresholdEUR: thresholdEUR,
+                discountPercent: discountPercent,
+                referencePriceEUR: referencePriceEUR,
+                referenceSourceName: referenceSourceName,
+                nextRefreshDue: PriceWatchSchedule.nextDueDate()
+            )
+            modelContext.insert(inserted)
+            alert = inserted
+        }
+        try? modelContext.save()
+        return alert
+    }
+
+    func setPriceAlertEnabled(_ alert: PriceAlert, isEnabled: Bool) {
+        alert.isEnabled = isEnabled
+        // Re-arms the crossing detector: a re-enabled alert should be able to notify again on the
+        // next evaluation rather than staying silent because the price was already low when it was
+        // switched off.
+        if isEnabled { alert.wasBelowThreshold = false }
+        try? modelContext.save()
+    }
+
+    func deletePriceAlert(_ alert: PriceAlert) {
+        modelContext.delete(alert)
+        try? modelContext.save()
+    }
+
+    /// Every set the background refresher is allowed to touch (#230): the gift list, plus the sets
+    /// carrying at least one enabled alert. Deliberately **not** the whole collection — that was
+    /// #5's objection to background refreshing, and this restricted scope is what answers it.
+    ///
+    /// Returns one entry per set number, with the `LegoSet` reconstructed from the cache when a row
+    /// exists and from the alert's own copy of the name otherwise (an alert outlives its
+    /// `CachedSet`, so its set can genuinely have no row left).
+    ///
+    /// **Mutating on purpose**: a wishlisted set with no `nextPriceRefreshDue` yet gets one drawn
+    /// here, over the coming week, instead of counting as due now. Treating `nil` as due-now made
+    /// every set in a 150-set gift list overdue the instant the feature shipped, which is precisely
+    /// the burst the random spread exists to avoid — and it re-arises every time a batch of sets is
+    /// imported at once.
+    func priceWatchTargets() -> [PriceWatchTarget] {
+        var targets: [String: PriceWatchTarget] = [:]
+        var seededAny = false
+
+        let wishlisted = (try? modelContext.fetch(
+            FetchDescriptor<CachedSet>(predicate: #Predicate { $0.isInWishlist })
+        )) ?? []
+        for cached in wishlisted {
+            let dueAt: Date
+            if let existing = cached.nextPriceRefreshDue {
+                dueAt = existing
+            } else {
+                dueAt = PriceWatchSchedule.nextDueDate()
+                cached.nextPriceRefreshDue = dueAt
+                seededAny = true
+            }
+            targets[cached.setNum] = PriceWatchTarget(legoSet: cached.asLegoSet(), dueAt: dueAt)
+        }
+        if seededAny { try? modelContext.save() }
+
+        let cachedBySetNum = Dictionary(
+            ((try? modelContext.fetch(FetchDescriptor<CachedSet>())) ?? []).map { ($0.setNum, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        for alert in priceAlerts() where alert.isEnabled {
+            let legoSet = cachedBySetNum[alert.setNum]?.asLegoSet()
+                ?? LegoSet(
+                    setNum: alert.setNum,
+                    name: alert.setName,
+                    year: 0,
+                    themeId: 0,
+                    numParts: 0,
+                    setImgUrl: alert.setImgUrl,
+                    setUrl: nil
+                )
+            // A set that is both wishlisted and alerted comes due at whichever date is earlier —
+            // one fetch serves both, so the tighter schedule wins rather than the set being
+            // processed twice.
+            let dueAt = min(targets[alert.setNum]?.dueAt ?? .distantFuture, alert.nextRefreshDue)
+            targets[alert.setNum] = PriceWatchTarget(legoSet: legoSet, dueAt: dueAt)
+        }
+
+        return targets.values.sorted { $0.dueAt < $1.dueAt }
+    }
+
+    /// Re-draws the next due date for every schedule attached to `setNum`, after a background pass
+    /// processed it. Both carriers are updated together so a set that is both wishlisted and
+    /// alerted doesn't come straight back due through the one that wasn't reset.
+    func rescheduleWatch(setNum: String) {
+        let due = PriceWatchSchedule.nextDueDate()
+        cachedSet(setNum: setNum)?.nextPriceRefreshDue = due
+        for alert in priceAlerts(setNum: setNum) {
+            alert.nextRefreshDue = due
+        }
+        try? modelContext.save()
+    }
+
     /// No-ops if no CachedSet row exists yet, mirroring `setWishlistStatus` — `cacheSet` never
     /// touches `quantity` (only `syncCollection`'s full reconcile does), so a quantity edit needs
     /// this dedicated setter rather than being folded into `cacheSet`.
@@ -363,7 +516,9 @@ final class LocalRepository {
     /// kept for the same reason (they're the "when did I scan this" history), but their
     /// location fields are stripped: purging the history revokes the "where" (issue #46).
     /// `SetPurchaseRecord` is kept too, and for the strongest version of that reason: a paid
-    /// price is typed by hand and cannot be re-fetched from anywhere.
+    /// price is typed by hand and cannot be re-fetched from anywhere. `PriceAlert` (#229) is kept
+    /// for exactly the same reason — a threshold is hand-typed and unrecoverable — which is also
+    /// why it lives in its own model rather than as a `CachedSet` column.
     func clearAll() {
         stripScanLocations(setNums: nil)
         if let sets = try? modelContext.fetch(FetchDescriptor<CachedSet>()) {

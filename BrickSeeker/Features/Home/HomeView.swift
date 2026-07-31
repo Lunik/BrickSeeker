@@ -6,6 +6,7 @@ struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     let viewModel: HomeViewModel
     @State private var lookupViewModel = ScannerViewModel()
+    @State private var priceAlertRouter = PriceAlertRouter.shared
 
     @State private var hasAPIKey = KeychainService.shared.hasAPIKey
     @State private var showSettings = false
@@ -147,6 +148,7 @@ struct HomeView: View {
             // open without re-syncing the whole remote collection just for returning to Home.
             viewModel.loadFromCache()
             consumePendingAction()
+            consumePendingPriceAlert()
             Task { await viewModel.loadOwnedMinifigsCount() }
             // The scan disambiguator filters out merchandise (#224) from the theme hierarchy, and
             // it can be reached without ever opening a list screen — those are where the theme
@@ -154,6 +156,10 @@ struct HomeView: View {
             Task { await ThemeNameStore.shared.refreshIfNeeded() }
         }
         .onChange(of: pendingAction) { _, _ in consumePendingAction() }
+        // Warm-app case: the notification is tapped while Home is already on screen, so the
+        // property changes under an observer that already exists. `onAppear` above covers the cold
+        // launch, where `AppDelegate` set it before this view tree existed.
+        .onChange(of: priceAlertRouter.pendingSetNum) { _, _ in consumePendingPriceAlert() }
         // Refreshes the "Mes minifigs" count after returning from the gallery — unlike the other
         // pushed destinations, that screen can change the answer mid-visit (downloading the
         // minifig catalogue there), and `HomeView` itself isn't recreated by a push/pop the way
@@ -177,6 +183,18 @@ struct HomeView: View {
         case .scan:
             break
         }
+    }
+
+    /// Opens the set a tapped price-drop notification points at (#229), through the shared lookup
+    /// path every other entry point uses — not a second resolution path.
+    private func consumePendingPriceAlert() {
+        guard let setNum = priceAlertRouter.pendingSetNum else { return }
+        priceAlertRouter.pendingSetNum = nil
+        // Any pushed destination or open sheet would swallow the result sheet; drop back to Home
+        // first, exactly as `consumePendingAction` does for its own case.
+        destination = nil
+        showManualEntry = false
+        lookupViewModel.lookupSetNumber(setNum, source: .listReopen)
     }
 
 

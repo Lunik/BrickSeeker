@@ -37,8 +37,11 @@ this workflow, without being asked. Verify behavior manually (skill `verify`/`ru
 
 ```
 BrickSeeker/
-├── App/            BrickSeekerApp (SwiftData ModelContainer, splash, Home/Scanner root switch)
+├── App/            BrickSeekerApp (splash, Home/Scanner root switch), AppModelContainer (the one
+│                   SwiftData container — shared with the background task), AppDelegate
 ├── Core/
+│   ├── Background/ BackgroundPriceRefresher (BGAppRefreshTask price refresh for watched sets)
+│   ├── Notifications/ PriceUpdateNotifier (local notifications), PriceAlertEvaluator
 │   ├── Network/    NetworkClient, APIError, RebrickableEndpoint (path builders), APIModels,
 │   │               LegoStoreRepository (lego.com retail price via hidden WKWebView)
 │   ├── Repository/ RebrickableRepository (API calls), LocalRepository (SwiftData cache)
@@ -590,6 +593,73 @@ lego.com price.
   collection based on which marketplace happened to be cheaper that day). Don't merge them into a
   single `SetDetailView` row, and don't split the History/Wishlist/valuation chains back into
   independent fallback steps, without re-checking that intent.
+
+## Price alerts + background refresh — what may and may not run while the app is closed
+
+Two linked features (#229, #230) that together reverse a decision #5 had made explicitly ("pas
+d'alertes proactives", `UNUserNotificationCenter` and `BGAppRefreshTask` both named in its "à ne PAS
+faire" list). The reversal is deliberate and narrow — read this before touching either.
+
+- **`PriceAlert`** (`SwiftDataModels.swift`) is one hand-typed threshold, on one set, for **one
+  condition** (neuf *or* occasion — never both; they're priced by different sources, so a single
+  alert covering the pair couldn't say which one crossed). Keyed by a composite `key`
+  (`"{setNum}#{condition}"`) because SwiftData has no multi-column unique constraint. It carries its
+  own copy of the set's name/image and is **never** deleted by `clearAll()` or by `syncCollection`'s
+  cleanup — same doctrine as `SetPurchaseRecord`/`ScanEvent`: hand-entered data outlives the caches,
+  which is exactly why it isn't a `CachedSet` column.
+- **The percentage's reference is the lego.com retail price, frozen at creation** (falling back to
+  the set's current resolved value for that condition when retail is unknown), with the resulting
+  amount shown live under the field. That was #229's open question; re-resolving the reference on
+  every evaluation would let the threshold drift with the market. `PriceAlert.referenceSourceName`
+  exists so the UI can name which line the percentage came off, the same honesty
+  `ScanPriceEntryView.discountReference` already applies.
+- **`PriceAlertEvaluator` is the only place an alert fires**, and it reads the just-written cache
+  rather than taking quotes as arguments — so a new price path only has to call
+  `evaluate(setNum:in:)` once. It resolves the watched price through the app's **existing** chains
+  (`resolveNewPrice` for neuf, the BrickLink used quote alone for occasion — no cross-fallback here,
+  unlike `resolveCollectionPrice`: an occasion alert firing off a retail price reports something the
+  user didn't ask about). Notification fires only on a **crossing** (`wasBelowThreshold` false →
+  true), with a 12 h floor between two notifications for the same alert. Don't "simplify" that to
+  "notify whenever the price is low" — it would fire on every refresh forever.
+- **`PriceUpdateNotifier` now has two identifier schemes and they are not interchangeable.** The
+  batch-completion ping keeps a fixed identifier (a later run genuinely supersedes the earlier one);
+  price alerts use a **per set+condition** identifier, because a fixed one would silently replace
+  every alert but the last.
+- **Only BrickLink can run in the background.** lego.com/Amazon/Cdiscount prices come from a hidden
+  `WKWebView`, which per the section above must live in a real `keyWindow` — there is no window in a
+  `BGAppRefreshTask`. `BrickLinkOnlyPriceRepository` is a *separate type* rather than a flag on
+  `PriceRepository` precisely so no default can ever spin a web view up inside a system task (that
+  would also break the `app-store-compliance` skill's hard rule #1). Consequence, stated in the
+  alert UI so the feature doesn't read as capricious: an occasion alert is fully served by the
+  background, a neuf alert only as far as BrickLink neuf.
+- **There is no cadence, so nothing counts wake-ups.** Each watched set carries a due date drawn
+  uniformly over 7 days (`PriceWatchSchedule`, stored on `CachedSet.nextPriceRefreshDue` *and*
+  `PriceAlert.nextRefreshDue` — an alert has to keep being served after its `CachedSet` row is
+  gone). A granted wake-up processes ≤3 overdue sets; `catchUpInForeground()` drains ≤15 on app
+  activation. **That foreground catch-up is what makes the feature work at all** on a device iOS
+  never wakes — don't remove it as redundant.
+- **The watched scope is the gift list + sets with an enabled alert** (`priceWatchTargets()`), never
+  the collection. That restricted scope is the whole answer to #5's "ça ne passe pas à l'échelle"
+  objection; widening it re-opens the decision.
+- **`CollectionPriceUpdater.runWatchPass` deliberately runs on its own track** —
+  `isRunningWatchPass`/`cancelWatchPassRequested`, no persisted queue, no `done`/`total`. Sharing
+  `isRunning` would have made `SettingsViewModel.handleScenePhaseChange`'s pause-on-backgrounding
+  kill the background pass, and shown the background pass in Réglages as a run the user started.
+  Each guards against the other so the two never overlap. Its persist hook is
+  `watchPassPersistClosure`, which omits `markPricesFetched` on purpose: the pass only asked
+  BrickLink, so stamping "every source tried" would drop the set out of "Compléter les prix
+  manquants" (#194) without lego.com/Amazon ever having been asked.
+- `BGTaskSchedulerPermittedIdentifiers` + the `fetch` background mode live in **`project.yml`**, and
+  the identifier must match `BackgroundPriceRefresher.taskIdentifier` or registration traps at
+  launch. Registration itself must happen in `AppDelegate.application(_:didFinishLaunchingWithOptions:)`
+   — `BGTaskScheduler` rejects a later one. The container moved to `AppModelContainer` for this: a
+  background launch can run without the `WindowGroup` scene ever being built.
+
+To simulate a wake-up, pause in the debugger after launch and run:
+
+```
+e -l objc -- (void)[[BGTaskScheduler sharedScheduler] _simulateLaunchForTaskWithIdentifier:@"com.lunik.brickseeker.priceRefresh"]
+```
 
 ## PR scope — file adjacent issues, don't fix them inline
 

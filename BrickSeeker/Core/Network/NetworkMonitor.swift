@@ -13,6 +13,10 @@ final class NetworkMonitor {
     static let shared = NetworkMonitor()
 
     private(set) var isConnected = true
+    /// True when the current path is metered — cellular or a personal hotspot. Only read by the
+    /// background price refresher's "Wi-Fi seulement" option (#230); nothing the user asked for
+    /// explicitly is ever blocked on it.
+    private(set) var isExpensive = false
 
     private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "com.lunik.brickseeker.network-monitor")
@@ -20,7 +24,11 @@ final class NetworkMonitor {
     private init() {
         monitor.pathUpdateHandler = { [weak self] path in
             let connected = path.status == .satisfied
-            Task { @MainActor in self?.isConnected = connected }
+            let expensive = path.isExpensive
+            Task { @MainActor in
+                self?.isConnected = connected
+                self?.isExpensive = expensive
+            }
         }
         monitor.start(queue: queue)
     }

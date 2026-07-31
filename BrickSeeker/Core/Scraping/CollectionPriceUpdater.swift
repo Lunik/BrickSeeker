@@ -26,17 +26,24 @@ enum SelectionPriceRefreshOutcome {
 /// flagged as abusive traffic, so this deliberately trades speed for being polite to the
 /// scraped sites.
 ///
-/// Mirrors `OfflineCatalogStore`'s pause/resume pattern: there is no background execution
-/// here (see AGENTS.md / issue #5 on why this app avoids `BGAppRefreshTask`-style background
-/// work) — `SettingsViewModel.handleScenePhaseChange` calls `cancelPreservingProgress()` when
+/// Mirrors `OfflineCatalogStore`'s pause/resume pattern: this **manual** batch has no background
+/// execution — `SettingsViewModel.handleScenePhaseChange` calls `cancelPreservingProgress()` when
 /// the app backgrounds, and the next `start()` call (after the user reopens the app and taps
 /// the button again) resumes from the persisted queue instead of restarting from zero.
+///
+/// `runWatchPass` (#230) is the one thing here that *does* run in the background, and it is
+/// deliberately kept on a separate track: its own `isRunningWatchPass`/`cancelWatchPassRequested`
+/// flags, no persisted queue, no `done`/`total`. Reusing this class buys its sequential,
+/// politely-spaced loop and its `persistClosure`; sharing `isRunning` would have made the manual
+/// batch's pause-on-backgrounding kill the background pass, and made the background pass show up in
+/// Réglages as a run the user started. Each guards against the other so the two never overlap.
 @MainActor
 @Observable
 final class CollectionPriceUpdater {
     static let shared = CollectionPriceUpdater()
 
     private(set) var isRunning = false
+    private(set) var isRunningWatchPass = false
     private(set) var done = 0
     private(set) var total = 0
     /// When the last full pass over the collection finished — `nil` until the first one ever
@@ -46,6 +53,12 @@ final class CollectionPriceUpdater {
 
     private let queueURL: URL
     private var cancelRequested = false
+    private var cancelWatchPassRequested = false
+
+    /// Delay between two sets, shared by both loops. It exists for the scraped sources; the signed
+    /// BrickLink API used by `runWatchPass` doesn't need it, but a few extra seconds spread over a
+    /// handful of sets costs nothing and keeps one rule instead of two.
+    private static let delayBetweenSets: Duration = .seconds(1.5)
 
     private static let lastCompletedAtDefaultsKey = "CollectionPriceUpdateLastCompletedAt"
 
@@ -84,7 +97,7 @@ final class CollectionPriceUpdater {
         legoStoreRepository: LegoStoreRepositoryProtocol,
         persist: @escaping @MainActor (LegoSet, [PriceQuote], StorePrice?) async -> Void
     ) async -> (completed: Bool, total: Int) {
-        guard !isRunning else { return (false, total) }
+        guard !isRunning, !isRunningWatchPass else { return (false, total) }
 
         var queue = Self.loadQueue(at: queueURL) ?? Queue(remaining: allSets, total: allSets.count)
         total = queue.total
@@ -111,13 +124,63 @@ final class CollectionPriceUpdater {
             done = queue.total - queue.remaining.count
 
             if !queue.remaining.isEmpty {
-                try? await Task.sleep(for: .seconds(1.5))
+                try? await Task.sleep(for: Self.delayBetweenSets)
             }
         }
 
         let finishedTotal = queue.total
         clearQueue()
         return (true, finishedTotal)
+    }
+
+    /// The background/catch-up pass of #230: a **bounded** list of already-selected sets, fetched
+    /// from `priceRepository` only — the caller passes `BrickLinkOnlyPriceRepository`, since the
+    /// lego.com/Amazon/Cdiscount sources need a `WKWebView` in a real window and cannot run in a
+    /// system task (see `BackgroundPriceRefresher`). No `StorePrice` is ever fetched here, hence the
+    /// `nil` handed to `persist`.
+    ///
+    /// Nothing is persisted to the resumable queue file: this pass is re-derivable from the watched
+    /// sets' due dates, so an interrupted run simply leaves them due. `onProcessed` fires after each
+    /// set's prices are written — that's where the caller re-draws the due date and evaluates the
+    /// set's price alerts, so a pass cut short still leaves every *completed* set fully handled.
+    ///
+    /// Returns how many sets were processed. Refuses to start (returning 0) while the manual batch
+    /// is running, rather than interleaving two price loops over the same store.
+    @discardableResult
+    func runWatchPass(
+        sets: [LegoSet],
+        priceRepository: PriceRepositoryProtocol,
+        persist: @escaping @MainActor (LegoSet, [PriceQuote], StorePrice?) async -> Void,
+        onProcessed: @MainActor (LegoSet) -> Void
+    ) async -> Int {
+        guard !isRunning, !isRunningWatchPass, !sets.isEmpty else { return 0 }
+
+        isRunningWatchPass = true
+        cancelWatchPassRequested = false
+        defer { isRunningWatchPass = false }
+
+        var processed = 0
+        for (index, legoSet) in sets.enumerated() {
+            if cancelWatchPassRequested || Task.isCancelled { break }
+
+            let quotes = await priceRepository.fetchPrices(for: legoSet)
+            await persist(legoSet, quotes, nil)
+            onProcessed(legoSet)
+            processed += 1
+
+            if index < sets.count - 1 {
+                try? await Task.sleep(for: Self.delayBetweenSets)
+            }
+        }
+        return processed
+    }
+
+    /// Stops the watch pass after the set in flight — the counterpart of
+    /// `cancelPreservingProgress()` for the background track, called from the `BGTask` expiration
+    /// handler. Deliberately does **not** touch the manual batch, and vice versa.
+    func cancelWatchPass() {
+        guard isRunningWatchPass else { return }
+        cancelWatchPassRequested = true
     }
 
     /// Resumes a previously paused run with no user interaction — called when the app
@@ -164,6 +227,24 @@ final class CollectionPriceUpdater {
             // Stamp "every source tried" even on an empty result, so a set that stays unpriced
             // drops out of "Compléter les prix manquants" instead of looping forever (#194).
             repo.markPricesFetched(setNum: legoSet.setNum)
+            // Every refreshed price is an evaluation point for that set's price alerts (#229) —
+            // hooked here rather than at each of the four call sites that drive a batch, so a new
+            // one can't forget it. No-ops for a set with no alert. The background pass evaluates
+            // through its own `onProcessed` instead, after re-drawing the due date.
+            PriceAlertEvaluator.evaluate(setNum: legoSet.setNum, in: modelContext)
+        }
+    }
+
+    /// `persist` hook for `runWatchPass` (#230). Same price caching and alert evaluation as
+    /// `persistClosure`, minus `markPricesFetched` — and that omission is the point: the background
+    /// pass only ever queries BrickLink, so stamping "every source tried" would make a set with no
+    /// lego.com/Amazon/Cdiscount price yet drop out of "Compléter les prix manquants" (#194)
+    /// without those sources ever having been asked.
+    static func watchPassPersistClosure(modelContext: ModelContext) -> @MainActor (LegoSet, [PriceQuote], StorePrice?) async -> Void {
+        { legoSet, quotes, _ in
+            let repo = LocalRepository(modelContext: modelContext)
+            repo.cachePrices(quotes, setNum: legoSet.setNum)
+            PriceAlertEvaluator.evaluate(setNum: legoSet.setNum, in: modelContext)
         }
     }
 
@@ -180,7 +261,7 @@ final class CollectionPriceUpdater {
         persist: @escaping @MainActor (LegoSet, [PriceQuote], StorePrice?) async -> Void
     ) async -> SelectionPriceRefreshOutcome {
         guard !sets.isEmpty else { return .completed }
-        guard !isRunning, !hasResumableUpdate else { return .busy }
+        guard !isRunning, !isRunningWatchPass, !hasResumableUpdate else { return .busy }
 
         await PriceUpdateNotifier.requestAuthorizationIfNeeded()
 
