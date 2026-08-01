@@ -641,16 +641,23 @@ faire" list). The reversal is deliberate and narrow — read this before touchin
 - **Batch size and `window` are different levers — don't confuse them when "it's not refreshing
   often enough".** `window` alone sets how often *one* set is refreshed (7 days → each watched set
   about weekly). The batch sizes only set how fast a *backlog* drains, i.e. worst-case latency after
-  the app has been closed a while. With ~150 watched sets the daily demand is ~21 sets against a
-  background capacity well above that, so raising the batch sizes cannot make any individual set
-  fresher — only shortening `window` can.
+  the app has been closed a while. Now that the scope is alerts only, demand is a few sets a week
+  against a background capacity orders of magnitude above it, so raising the batch sizes cannot make
+  any individual set fresher — only shortening `window` can.
 - **`runWatchPass` has no inter-set delay, deliberately.** `BrickLinkClient` owns a
   `RequestThrottler(minimumInterval: 1.0)`, so calls are already spaced ≥1 s (≥2 s per set: new +
   used). The manual batch's 1.5 s `delayBetweenSets` is for the `WKWebView` scrapes and does not
   apply here — adding it back would pay the same politeness twice and halve what fits in a wake-up.
-- **The watched scope is the gift list + sets with an enabled alert** (`priceWatchTargets()`), never
-  the collection. That restricted scope is the whole answer to #5's "ça ne passe pas à l'échelle"
-  objection; widening it re-opens the decision.
+- **The watched scope is *only* the sets with an enabled alert** (`priceWatchTargets()`) — not the
+  gift list, not the collection. That restricted scope is the whole answer to #5's "ça ne passe pas
+  à l'échelle" objection; widening it re-opens the decision. The gift list *was* in scope as #230
+  specified, and was pulled back out: the background pass can only query BrickLink, while
+  `resolveWishlistPrice` reads best(Amazon, Cdiscount) → lego.com → BrickLink neuf → BrickLink
+  occasion, so for any wishlisted set with a marketplace or retail price cached it was refreshing a
+  number the gift list doesn't display — ~99% of the background work (a ~150-set gift list against a
+  handful of alerts) to keep a mostly-invisible BrickLink history series warm. Consequence to keep
+  in mind: with no alert configured, nothing is watched and `scheduleIfNeeded` cancels the
+  `BGTask` outright, so the app genuinely never runs in the background.
 - **`CollectionPriceUpdater.runWatchPass` deliberately runs on its own track** —
   `isRunningWatchPass`/`cancelWatchPassRequested`, no persisted queue, no `done`/`total`. Sharing
   `isRunning` would have made `SettingsViewModel.handleScenePhaseChange`'s pause-on-backgrounding

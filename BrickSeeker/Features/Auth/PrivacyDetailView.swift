@@ -35,7 +35,7 @@ struct PrivacyDetailView: View {
                     Text("BrickLink (API officielle) : prix neuf/occasion, avec vos identifiants API BrickLink (si vous les renseignez)")
                     Text("lego.com, amazon.fr et cdiscount.com : consultés pour afficher les prix du marché, sans identifiant transmis")
                     Text("Apple (service de localisation) : conversion de la position en ville approximative, si l'enregistrement de position est activé")
-                    Text("En tâche de fond, l'app contacte uniquement l'API BrickLink, et uniquement pour les sets de votre liste cadeaux ou sous alerte de prix. Aucune autre source n'est consultée hors utilisation directe.")
+                    Text("En tâche de fond, l'app contacte uniquement l'API BrickLink, et uniquement pour les sets sur lesquels vous avez créé une alerte de prix. Sans alerte configurée, l'app ne s'exécute jamais en arrière-plan. Aucune autre source n'est consultée hors utilisation directe.")
                 }
 
                 Section {

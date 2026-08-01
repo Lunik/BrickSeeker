@@ -72,7 +72,7 @@ struct PriceAlertsView: View {
                                     }
                             }
                         } footer: {
-                            Text("Les prix des sets sous alerte et de la liste cadeaux sont actualisés en tâche de fond, quand iOS l'autorise, puis au lancement de l'app. Seuls les prix BrickLink peuvent être récupérés en tâche de fond.")
+                            Text("Les prix des sets sous alerte sont actualisés en tâche de fond, quand iOS l'autorise, puis au lancement de l'app. Seuls les prix BrickLink peuvent être récupérés en tâche de fond.")
                         }
                     }
                 }

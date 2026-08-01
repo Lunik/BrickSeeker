@@ -274,38 +274,25 @@ final class LocalRepository {
         try? modelContext.save()
     }
 
-    /// Every set the background refresher is allowed to touch (#230): the gift list, plus the sets
-    /// carrying at least one enabled alert. Deliberately **not** the whole collection — that was
-    /// #5's objection to background refreshing, and this restricted scope is what answers it.
+    /// Every set the background refresher is allowed to touch (#230): **only** the sets carrying at
+    /// least one enabled alert. Deliberately not the whole collection — that was #5's objection to
+    /// background refreshing, and this restricted scope is what answers it.
+    ///
+    /// The gift list was in scope originally, and was removed deliberately. The background pass can
+    /// only query BrickLink (no window for a `WKWebView`), while `resolveWishlistPrice` reads
+    /// best(Amazon, Cdiscount) → lego.com → BrickLink neuf → BrickLink occasion — so for any
+    /// wishlisted set with a marketplace or retail price cached, which is the common case, the pass
+    /// was refreshing a number the gift list doesn't display. It cost ~99% of the background work
+    /// (a ~150-set gift list against a handful of alerts) to keep a mostly-invisible BrickLink
+    /// history series warm. An alert, by contrast, is watched precisely because the user asked to be
+    /// told about it. Don't put the wishlist back without first making a non-BrickLink source usable
+    /// in the background — which `AGENTS.md` explains isn't possible.
     ///
     /// Returns one entry per set number, with the `LegoSet` reconstructed from the cache when a row
     /// exists and from the alert's own copy of the name otherwise (an alert outlives its
     /// `CachedSet`, so its set can genuinely have no row left).
-    ///
-    /// **Mutating on purpose**: a wishlisted set with no `nextPriceRefreshDue` yet gets one drawn
-    /// here, over the coming week, instead of counting as due now. Treating `nil` as due-now made
-    /// every set in a 150-set gift list overdue the instant the feature shipped, which is precisely
-    /// the burst the random spread exists to avoid — and it re-arises every time a batch of sets is
-    /// imported at once.
     func priceWatchTargets() -> [PriceWatchTarget] {
         var targets: [String: PriceWatchTarget] = [:]
-        var seededAny = false
-
-        let wishlisted = (try? modelContext.fetch(
-            FetchDescriptor<CachedSet>(predicate: #Predicate { $0.isInWishlist })
-        )) ?? []
-        for cached in wishlisted {
-            let dueAt: Date
-            if let existing = cached.nextPriceRefreshDue {
-                dueAt = existing
-            } else {
-                dueAt = PriceWatchSchedule.nextDueDate()
-                cached.nextPriceRefreshDue = dueAt
-                seededAny = true
-            }
-            targets[cached.setNum] = PriceWatchTarget(legoSet: cached.asLegoSet(), dueAt: dueAt)
-        }
-        if seededAny { try? modelContext.save() }
 
         let cachedBySetNum = Dictionary(
             ((try? modelContext.fetch(FetchDescriptor<CachedSet>())) ?? []).map { ($0.setNum, $0) },
@@ -322,9 +309,8 @@ final class LocalRepository {
                     setImgUrl: alert.setImgUrl,
                     setUrl: nil
                 )
-            // A set that is both wishlisted and alerted comes due at whichever date is earlier —
-            // one fetch serves both, so the tighter schedule wins rather than the set being
-            // processed twice.
+            // A set can hold two alerts (neuf and occasion) — one fetch serves both, so the earlier
+            // due date wins rather than the set being processed twice.
             let dueAt = min(targets[alert.setNum]?.dueAt ?? .distantFuture, alert.nextRefreshDue)
             targets[alert.setNum] = PriceWatchTarget(legoSet: legoSet, dueAt: dueAt)
         }
@@ -332,12 +318,11 @@ final class LocalRepository {
         return targets.values.sorted { $0.dueAt < $1.dueAt }
     }
 
-    /// Re-draws the next due date for every schedule attached to `setNum`, after a background pass
-    /// processed it. Both carriers are updated together so a set that is both wishlisted and
-    /// alerted doesn't come straight back due through the one that wasn't reset.
+    /// Re-draws the next due date for every alert on `setNum`, after a background pass processed it.
+    /// All of them together: a set watched in both conditions must not come straight back due
+    /// through the alert that wasn't reset.
     func rescheduleWatch(setNum: String) {
         let due = PriceWatchSchedule.nextDueDate()
-        cachedSet(setNum: setNum)?.nextPriceRefreshDue = due
         for alert in priceAlerts(setNum: setNum) {
             alert.nextRefreshDue = due
         }

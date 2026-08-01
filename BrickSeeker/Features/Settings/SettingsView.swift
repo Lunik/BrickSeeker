@@ -359,7 +359,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Surveillance des prix")
                 } footer: {
-                    Text("Créez une alerte depuis la fiche d'un set pour être prévenu quand son prix passe sous un seuil. Les sets sous alerte et ceux de votre liste cadeaux sont réactualisés en tâche de fond quand iOS l'autorise — uniquement via l'API BrickLink (neuf/occasion) — puis rattrapés à l'ouverture de l'app. Les prix lego.com, Amazon et Cdiscount ne sont actualisés qu'au premier plan.")
+                    Text("Créez une alerte depuis la fiche d'un set pour être prévenu quand son prix passe sous un seuil. Seuls les sets sous alerte sont réactualisés en tâche de fond quand iOS l'autorise — uniquement via l'API BrickLink (neuf/occasion) — puis rattrapés à l'ouverture de l'app. Les prix lego.com, Amazon et Cdiscount ne sont actualisés qu'au premier plan. Sans aucune alerte, rien n'est surveillé et l'app ne s'exécute jamais en arrière-plan.")
                 }
 
                 Section {

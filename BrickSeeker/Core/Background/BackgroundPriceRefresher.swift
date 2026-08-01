@@ -11,8 +11,7 @@ import SwiftData
 enum PriceWatchSchedule {
     static let window: TimeInterval = 7 * 24 * 60 * 60
 
-    /// Drawn uniformly over `[now, now + 7 days]`. Callers store it on `CachedSet
-    /// .nextPriceRefreshDue` / `PriceAlert.nextRefreshDue`.
+    /// Drawn uniformly over `[now, now + 7 days]`. Callers store it on `PriceAlert.nextRefreshDue`.
     static func nextDueDate(from now: Date = Date()) -> Date {
         now.addingTimeInterval(TimeInterval.random(in: 0...window))
     }
@@ -29,8 +28,9 @@ struct PriceWatchTarget {
 ///
 /// This reverses #5's "no `BGAppRefreshTask`, no periodic background work" on the specific ground
 /// that #5 gave for it — "ça ne passe pas à l'échelle avec beaucoup de sets". The scope here is
-/// **not** the collection: only the gift list and the sets carrying an enabled `PriceAlert` are
-/// ever touched (`LocalRepository.priceWatchTargets()`), which is a handful of sets, not hundreds.
+/// **only the sets carrying an enabled `PriceAlert`** (`LocalRepository.priceWatchTargets()`),
+/// which is a handful of sets, not hundreds. The gift list was in scope originally and was pulled
+/// back out — see that method's doc for why refreshing it in the background bought almost nothing.
 ///
 /// Two iOS constraints shape the whole design and are not negotiable:
 ///

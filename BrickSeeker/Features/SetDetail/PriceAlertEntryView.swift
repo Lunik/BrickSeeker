@@ -108,6 +108,9 @@ struct PriceAlertEntryView: View {
                     Text(condition == .used
                          ? "Le prix occasion vient de l'API BrickLink, la seule source que l'app peut interroger en tâche de fond : cette alerte est surveillée même sans ouvrir l'app."
                          : "Le prix neuf vient de lego.com, Amazon/Cdiscount puis BrickLink. Seul BrickLink peut être interrogé en tâche de fond : les autres sources ne sont actualisées qu'à l'ouverture de l'app.")
+                    // Creating an alert is the *only* thing that puts a set under surveillance
+                    // (the gift list no longer is) — worth stating here, where the user is doing it.
+                    Text("Créer une alerte est ce qui met ce set sous surveillance : lui seul sera réactualisé en tâche de fond.")
                 }
 
                 Section {

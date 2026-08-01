@@ -34,7 +34,7 @@ BrickSeeker communique directement avec les services suivants, depuis votre appa
 
 Pour que les alertes de prix soient utiles, l'app peut actualiser des prix **sans être ouverte**, quand iOS le lui autorise. Ce mode est strictement encadré :
 
-- **Périmètre** : uniquement les sets de votre liste cadeaux et ceux sur lesquels vous avez créé une alerte de prix. Jamais l'ensemble de votre collection.
+- **Périmètre** : uniquement les sets sur lesquels vous avez créé une alerte de prix. Jamais votre liste cadeaux, jamais l'ensemble de votre collection. Sans aucune alerte configurée, l'app ne s'exécute jamais en arrière-plan.
 - **Source unique** : l'**API officielle BrickLink** (prix neuf/occasion). lego.com, amazon.fr et cdiscount.com ne sont **jamais** contactés en tâche de fond ; leurs prix ne sont actualisés que lorsque vous utilisez l'app.
 - **Fréquence** : opportuniste — iOS décide quand réveiller l'app. Chaque set surveillé se voit attribuer une date d'actualisation tirée au hasard sur une semaine ; le retard est rattrapé au lancement suivant de l'app.
 - **Option** : l'actualisation en tâche de fond peut être limitée au Wi-Fi (Réglages → Surveillance des prix).

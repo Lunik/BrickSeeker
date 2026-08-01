@@ -32,13 +32,6 @@ final class CachedSet {
     /// Mirrors Brickset's `wanted` flag (see `BricksetRepository`) — deliberately independent of
     /// `isInCollection`: a set can be wishlisted, owned, both, or neither.
     var isInWishlist: Bool = false
-    /// When the background price refresher (#230) should next look at this set, for the half of its
-    /// scope driven by the wishlist. Drawn at random over the coming 7 days so the watched sets
-    /// spread out instead of all coming due at once, and re-drawn after every pass. `nil` means
-    /// "never scheduled" and is treated as due now, which is what a set just added to the wishlist
-    /// wants. Only ever read for wishlisted sets — the other half of the scope carries its own
-    /// due date on `PriceAlert`, which has to outlive this row.
-    var nextPriceRefreshDue: Date?
 
     init(from legoSet: LegoSet, isInCollection: Bool = false, currentListId: Int? = nil, currentListName: String? = nil) {
         self.setNum = legoSet.setNum
@@ -328,9 +321,11 @@ final class PriceAlert {
     var lastObservedPriceEUR: Double?
     var lastNotifiedAt: Date?
 
-    /// When the background refresher (#230) should next fetch this set. Same 7-day random spread as
-    /// `CachedSet.nextPriceRefreshDue`; carried here too because an alert must keep being served
-    /// even when no `CachedSet` row exists for its set.
+    /// When the background refresher (#230) should next fetch this set — drawn at random over the
+    /// coming 7 days (`PriceWatchSchedule`) so watched sets spread out instead of all coming due at
+    /// once, and re-drawn after every pass. It lives here, not on `CachedSet`, for two reasons: an
+    /// alert must keep being served even when no `CachedSet` row exists for its set, and an alert is
+    /// now the *only* thing that puts a set under background surveillance.
     var nextRefreshDue: Date
 
     init(
