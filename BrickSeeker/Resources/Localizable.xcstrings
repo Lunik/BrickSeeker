@@ -574,6 +574,99 @@
     },
     "Vous serez prévenu dès que le prix passe sous ce montant, une seule fois par franchissement." : {
 
+    },
+    "Alerte active" : {
+
+    },
+    "Alerte de prix (désactivée)" : {
+
+    },
+    "Disponibilité" : {
+
+    },
+    "Disponible à l'achat" : {
+
+    },
+    "Elle est relevée en même temps que le prix lego.com : actualisez les prix pour la compléter." : {
+
+    },
+    "Inconnue" : {
+
+    },
+    "n'a pas encore d'information de disponibilité lego.com." : {
+
+    },
+    "n'ont pas encore d'information de disponibilité lego.com." : {
+
+    },
+    "Retiré de la vente" : {
+
+    },
+    "Rupture de stock" : {
+
+    },
+    "Alerte : %@" : {
+
+    },
+    "Alerte de prix" : {
+
+    },
+    "Alerte de prix active" : {
+
+    },
+    "Alerte désactivée" : {
+
+    },
+    "Alertes de prix" : {
+
+    },
+    "Aucune alerte de prix" : {
+
+    },
+    "Baisse de prix : %@" : {
+
+    },
+    "Créer une alerte de prix" : {
+
+    },
+    "Dernier prix vu" : {
+
+    },
+    "Modifier l'alerte de prix" : {
+
+    },
+    "Sous %@" : {
+
+    },
+    "Supprimer cette alerte ?" : {
+
+    },
+    "Supprimer l'alerte" : {
+
+    },
+    "Type de seuil" : {
+
+    },
+    "Wi-Fi uniquement" : {
+
+    },
+    "lego.com (officiel)" : {
+
+    },
+    "prévenu le %@" : {
+
+    },
+    "valeur actuelle" : {
+
+    },
+    "%@ sous %@" : {
+
+    },
+    "%@ — %@ en %@, sous votre seuil de %@." : {
+
+    },
+    "−%@ %%" : {
+
     }
   },
   "version" : "1.0"

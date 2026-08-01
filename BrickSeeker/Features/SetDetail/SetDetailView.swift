@@ -1672,22 +1672,34 @@ struct SetDetailView: View {
             showPriceAlertSheet = true
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: enabledPriceAlerts.isEmpty ? "bell" : "bell.fill")
+                Image(systemName: priceAlertIconName)
                 Text(priceAlertLabel)
             }
             .foregroundStyle(enabledPriceAlerts.isEmpty ? AppTheme.shared.accent : .orange)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(enabledPriceAlerts.isEmpty ? "Créer une alerte de prix" : "Modifier l'alerte de prix")
+        .accessibilityLabel(priceAlerts.isEmpty ? "Créer une alerte de prix" : "Modifier l'alerte de prix")
     }
 
     private var enabledPriceAlerts: [PriceAlert] {
         priceAlerts.filter(\.isEnabled)
     }
 
+    /// Three states, not two: "no alert", "alert switched off", and "armed". A set whose only alert
+    /// is disabled used to render exactly like one with no alert at all, which hid the fact that a
+    /// threshold was still stored on it.
+    private var priceAlertIconName: String {
+        if !enabledPriceAlerts.isEmpty { return "bell.fill" }
+        return priceAlerts.isEmpty ? "bell" : "bell.slash"
+    }
+
     private var priceAlertLabel: String {
         let armed = enabledPriceAlerts.sorted { $0.conditionRaw < $1.conditionRaw }
-        guard !armed.isEmpty else { return String(localized: "Alerte de prix") }
+        guard !armed.isEmpty else {
+            return priceAlerts.isEmpty
+                ? String(localized: "Alerte de prix")
+                : String(localized: "Alerte de prix (désactivée)")
+        }
         let descriptions = armed.map { alert -> String in
             guard let threshold = alert.effectiveThresholdEUR else { return alert.condition.displayName }
             return String(localized: "\(alert.condition.displayName.lowercased()) sous \(Decimal(threshold).formatted(.currency(code: "EUR")))")

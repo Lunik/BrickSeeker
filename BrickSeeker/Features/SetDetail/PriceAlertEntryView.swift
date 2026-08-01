@@ -35,6 +35,10 @@ struct PriceAlertEntryView: View {
     @State private var mode: EntryMode = .amount
     @State private var amountText = ""
     @State private var percentText = ""
+    /// Local until "Enregistrer", like every other field here — flipping it and tapping "Annuler"
+    /// must leave the alert alone. That's the opposite of `PriceAlertsView`'s row toggle, which
+    /// applies immediately because that screen has no save step to hang it on.
+    @State private var isEnabled = true
     @State private var isAuthorized = true
     @State private var detent: PresentationDetent = .large
     @FocusState private var isInputFocused: Bool
@@ -181,7 +185,17 @@ struct PriceAlertEntryView: View {
                     }
                 }
 
+                // Only offered for an alert that already exists — "create it, but switched off"
+                // isn't a state worth being able to reach from here.
                 if existingAlert != nil {
+                    Section {
+                        Toggle("Alerte active", isOn: $isEnabled)
+                    } footer: {
+                        Text(isEnabled
+                             ? "Désactivez pour garder le seuil sans être prévenu — le set cesse alors d'être réactualisé en tâche de fond."
+                             : "Alerte désactivée : le seuil est conservé, mais le set n'est plus surveillé et aucune notification ne sera envoyée.")
+                    }
+
                     Section {
                         Button("Supprimer l'alerte", role: .destructive) {
                             deleteAlert()
@@ -227,8 +241,10 @@ struct PriceAlertEntryView: View {
             amountText = ""
             percentText = ""
             mode = .amount
+            isEnabled = true
             return
         }
+        isEnabled = existing.isEnabled
         if let percent = existing.discountPercent {
             mode = reference == nil ? .amount : .percentage
             percentText = trimmedNumber(percent)
@@ -257,10 +273,12 @@ struct PriceAlertEntryView: View {
             thresholdEUR: mode == .amount ? typedAmount : nil,
             discountPercent: mode == .percentage ? percent : nil,
             referencePriceEUR: mode == .percentage ? reference?.amountEUR : nil,
-            referenceSourceName: mode == .percentage ? reference?.sourceName : nil
+            referenceSourceName: mode == .percentage ? reference?.sourceName : nil,
+            isEnabled: isEnabled
         )
-        // A brand-new alert makes this set watched (#230); if it's the first one, there may be no
-        // pending wake-up request at all yet.
+        // A saved alert can add *or* remove this set from the watched scope (#230) — a first alert
+        // means there may be no pending wake-up request yet, and switching the last one off means
+        // there is nothing left to wake up for.
         BackgroundPriceRefresher.shared.scheduleIfNeeded(modelContext: modelContext)
     }
 

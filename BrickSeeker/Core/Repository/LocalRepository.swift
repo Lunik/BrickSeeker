@@ -218,6 +218,10 @@ final class LocalRepository {
     /// reference once, here it's only stored. Overwriting resets `wasBelowThreshold` — a new
     /// threshold is a new question, so the next evaluation must be free to fire even if the old one
     /// had already reported the price as low.
+    ///
+    /// `isEnabled` is a real parameter rather than a hardcoded `true`: the entry sheet now carries an
+    /// on/off toggle, and saving from it must be able to *disable* an alert. Forcing `true` here
+    /// would silently re-arm an alert the user had just switched off in the same sheet.
     @discardableResult
     func upsertPriceAlert(
         setNum: String,
@@ -227,7 +231,8 @@ final class LocalRepository {
         thresholdEUR: Double?,
         discountPercent: Double?,
         referencePriceEUR: Double?,
-        referenceSourceName: String?
+        referenceSourceName: String?,
+        isEnabled: Bool = true
     ) -> PriceAlert {
         let alert: PriceAlert
         if let existing = priceAlert(setNum: setNum, condition: condition) {
@@ -237,7 +242,7 @@ final class LocalRepository {
             existing.discountPercent = discountPercent
             existing.referencePriceEUR = referencePriceEUR
             existing.referenceSourceName = referenceSourceName
-            existing.isEnabled = true
+            existing.isEnabled = isEnabled
             existing.wasBelowThreshold = false
             existing.lastNotifiedAt = nil
             alert = existing
@@ -253,6 +258,7 @@ final class LocalRepository {
                 referenceSourceName: referenceSourceName,
                 nextRefreshDue: PriceWatchSchedule.nextDueDate()
             )
+            inserted.isEnabled = isEnabled
             modelContext.insert(inserted)
             alert = inserted
         }
