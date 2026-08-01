@@ -633,11 +633,21 @@ faire" list). The reversal is deliberate and narrow — read this before touchin
   alert UI so the feature doesn't read as capricious: an occasion alert is fully served by the
   background, a neuf alert only as far as BrickLink neuf.
 - **There is no cadence, so nothing counts wake-ups.** Each watched set carries a due date drawn
-  uniformly over 7 days (`PriceWatchSchedule`, stored on `CachedSet.nextPriceRefreshDue` *and*
-  `PriceAlert.nextRefreshDue` — an alert has to keep being served after its `CachedSet` row is
-  gone). A granted wake-up processes ≤3 overdue sets; `catchUpInForeground()` drains ≤15 on app
+  uniformly over `PriceWatchSchedule.window` (7 days), stored on `CachedSet.nextPriceRefreshDue`
+  *and* `PriceAlert.nextRefreshDue` — an alert has to keep being served after its `CachedSet` row is
+  gone. A granted wake-up processes ≤8 overdue sets; `catchUpInForeground()` drains ≤40 on app
   activation. **That foreground catch-up is what makes the feature work at all** on a device iOS
   never wakes — don't remove it as redundant.
+- **Batch size and `window` are different levers — don't confuse them when "it's not refreshing
+  often enough".** `window` alone sets how often *one* set is refreshed (7 days → each watched set
+  about weekly). The batch sizes only set how fast a *backlog* drains, i.e. worst-case latency after
+  the app has been closed a while. With ~150 watched sets the daily demand is ~21 sets against a
+  background capacity well above that, so raising the batch sizes cannot make any individual set
+  fresher — only shortening `window` can.
+- **`runWatchPass` has no inter-set delay, deliberately.** `BrickLinkClient` owns a
+  `RequestThrottler(minimumInterval: 1.0)`, so calls are already spaced ≥1 s (≥2 s per set: new +
+  used). The manual batch's 1.5 s `delayBetweenSets` is for the `WKWebView` scrapes and does not
+  apply here — adding it back would pay the same politeness twice and halve what fits in a wake-up.
 - **The watched scope is the gift list + sets with an enabled alert** (`priceWatchTargets()`), never
   the collection. That restricted scope is the whole answer to #5's "ça ne passe pas à l'échelle"
   objection; widening it re-opens the decision.

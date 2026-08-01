@@ -13,6 +13,9 @@
     "%" : {
 
     },
+    "%@" : {
+
+    },
     "%@ · %@" : {
       "localizations" : {
         "fr" : {
@@ -29,6 +32,16 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ · %2$@ pièces"
+          }
+        }
+      }
+    },
+    "%@ · %@ sets" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@ sets"
           }
         }
       }
@@ -120,6 +133,12 @@
     "Ajoutez un set à votre liste cadeaux depuis sa fiche, ou importez le CSV d'une liste Rebrickable avec le bouton en haut." : {
 
     },
+    "Alerte sous" : {
+
+    },
+    "Alertes de prix (seuils que vous créez) : sur l'appareil uniquement ; les notifications sont locales, aucun serveur ne les envoie" : {
+
+    },
     "Alimente la galerie « Mes minifigs » de l'accueil (~15 000 minifigs). Téléchargé depuis Rebrickable ; utilise aussi le catalogue de sets ci-dessus pour déterminer année/thème, et le télécharge d'abord si besoin. Les prix restent toujours en cache/en ligne, jamais chargés en masse ici." : {
 
     },
@@ -133,6 +152,12 @@
 
     },
     "Aucun catalogue téléchargé" : {
+
+    },
+    "Aucun passage en tâche de fond pour l'instant" : {
+
+    },
+    "Aucun prix de référence connu pour cette condition : seul un montant peut être saisi." : {
 
     },
     "Aucun set connu pour cette minifig" : {
@@ -217,7 +242,13 @@
     "Configurer le type (neuf/occasion) des listes" : {
 
     },
+    "Créez une alerte depuis la fiche d'un set pour être prévenu quand son prix passe sous un seuil. Les sets sous alerte et ceux de votre liste cadeaux sont réactualisés en tâche de fond quand iOS l'autorise — uniquement via l'API BrickLink (neuf/occasion) — puis rattrapés à l'ouverture de l'app. Les prix lego.com, Amazon et Cdiscount ne sont actualisés qu'au premier plan." : {
+
+    },
     "Déjà un compte ?" : {
+
+    },
+    "Dernier passage" : {
 
     },
     "Dernière actualisation : %@" : {
@@ -226,16 +257,7 @@
     "Dernière synchronisation : %@" : {
 
     },
-    "Disponibilité" : {
-
-    },
-    "Disponible à l'achat" : {
-
-    },
     "Données fournies par Rebrickable, Brickset et BrickLink." : {
-
-    },
-    "Elle est relevée en même temps que le prix lego.com : actualisez les prix pour la compléter." : {
 
     },
     "En attente (%@/%@)" : {
@@ -247,6 +269,9 @@
           }
         }
       }
+    },
+    "En tâche de fond, l'app contacte uniquement l'API BrickLink, et uniquement pour les sets de votre liste cadeaux ou sous alerte de prix. Aucune autre source n'est consultée hors utilisation directe." : {
+
     },
     "Enregistrer" : {
 
@@ -272,6 +297,9 @@
     "Exporter" : {
 
     },
+    "Filtres" : {
+
+    },
     "Générez ces 4 valeurs sur bricklink.com/v3/api.page (section « Register a Consumer », puis « Manage a Consumer » → générez un jeton) — les noms de champs ci-dessus reprennent ceux du site BrickLink. Utilisé pour afficher les prix neuf/occasion BrickLink officiels ; nécessaire uniquement pour cette fonctionnalité." : {
 
     },
@@ -279,9 +307,6 @@
 
     },
     "Hors-ligne" : {
-
-    },
-    "Inconnue" : {
 
     },
     "Indisponible" : {
@@ -306,10 +331,23 @@
         }
       }
     },
+    "Le pourcentage est appliqué au prix « %@ » (%@), figé à la création de l'alerte." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Le pourcentage est appliqué au prix « %1$@ » (%2$@), figé à la création de l'alerte."
+          }
+        }
+      }
+    },
     "Le type détermine la source de prix utilisée pour estimer la valeur de votre collection. Choisissez « Neuf » pour les sets encore scellés (lego.com en priorité) et « Occasion » pour les sets ouverts ou d'occasion (BrickLink occasion)." : {
 
     },
     "lego.com, amazon.fr et cdiscount.com : consultés pour afficher les prix du marché, sans identifiant transmis" : {
+
+    },
+    "Les prix des sets sous alerte et de la liste cadeaux sont actualisés en tâche de fond, quand iOS l'autorise, puis au lancement de l'app. Seuls les prix BrickLink peuvent être récupérés en tâche de fond." : {
 
     },
     "Les prochains scans seront ajoutés à une session, sans ouvrir la fiche du set." : {
@@ -345,10 +383,7 @@
     "Mode lot actif — scanne un set pour commencer" : {
 
     },
-    "n'a pas encore d'information de disponibilité lego.com." : {
-
-    },
-    "n'ont pas encore d'information de disponibilité lego.com." : {
+    "Montant" : {
 
     },
     "Nécessaire pour gérer votre liste cadeaux. Votre mot de passe n'est jamais stocké : il sert une seule fois à obtenir un token de session." : {
@@ -358,6 +393,9 @@
 
     },
     "Notice de montage" : {
+
+    },
+    "Ouvrez la fiche d'un set et touchez « Alerte de prix » pour être prévenu quand il descend sous un seuil." : {
 
     },
     "Permet d'identifier un set déjà connu même sans réseau. Téléchargé depuis Rebrickable (~25 000 sets) ; le statut collection et les prix restent toujours en ligne." : {
@@ -376,6 +414,9 @@
 
     },
     "Prix" : {
+
+    },
+    "Prix actuel" : {
 
     },
     "Prix calculé" : {
@@ -426,12 +467,6 @@
     "Répartition par thème" : {
 
     },
-    "Retiré de la vente" : {
-
-    },
-    "Rupture de stock" : {
-
-    },
     "Scanne plusieurs sets en mode lot pour les comparer ici." : {
 
     },
@@ -445,6 +480,9 @@
 
     },
     "Sets similaires" : {
+
+    },
+    "Sets surveillés" : {
 
     },
     "Seuil de €/pièce en dessous duquel un set est considéré comme un bon rapport qualité-prix. Affiché en vert sur la fiche set si le prix lego.com est inférieur à cette valeur, en rouge au-dessus." : {
@@ -463,6 +501,9 @@
 
     },
     "Sur la page de votre custom list Rebrickable, onglet Sets, téléchargez le CSV puis choisissez-le ici pour ajouter tous ses sets à votre liste cadeaux Brickset." : {
+
+    },
+    "Surveillance des prix" : {
 
     },
     "Synchronisation…" : {
@@ -531,91 +572,7 @@
     "Vous devrez ressaisir votre mot de passe pour relier ce compte." : {
 
     },
-    "Alerte : %@" : {
-
-    },
-    "Alerte active" : {
-
-    },
-    "Alerte de prix" : {
-
-    },
-    "Alerte de prix active" : {
-
-    },
-    "Alerte désactivée" : {
-
-    },
-    "Alerte sous" : {
-
-    },
-    "Alertes de prix" : {
-
-    },
-    "Aucun passage en tâche de fond pour l'instant" : {
-
-    },
-    "Aucune alerte de prix" : {
-
-    },
-    "Baisse de prix : %@" : {
-
-    },
-    "Créer une alerte de prix" : {
-
-    },
-    "Dernier passage" : {
-
-    },
-    "Dernier prix vu" : {
-
-    },
-    "Modifier l'alerte de prix" : {
-
-    },
-    "Montant" : {
-
-    },
-    "Prix actuel" : {
-
-    },
-    "Sets surveillés" : {
-
-    },
-    "Sous %@" : {
-
-    },
-    "Supprimer cette alerte ?" : {
-
-    },
-    "Supprimer l'alerte" : {
-
-    },
-    "Surveillance des prix" : {
-
-    },
-    "Type de seuil" : {
-
-    },
-    "Wi-Fi uniquement" : {
-
-    },
-    "lego.com (officiel)" : {
-
-    },
-    "prévenu le %@" : {
-
-    },
-    "valeur actuelle" : {
-
-    },
-    "%@ sous %@" : {
-
-    },
-    "%@ — %@ en %@, sous votre seuil de %@." : {
-
-    },
-    "−%@ %%" : {
+    "Vous serez prévenu dès que le prix passe sous ce montant, une seule fois par franchissement." : {
 
     }
   },

@@ -55,9 +55,8 @@ final class CollectionPriceUpdater {
     private var cancelRequested = false
     private var cancelWatchPassRequested = false
 
-    /// Delay between two sets, shared by both loops. It exists for the scraped sources; the signed
-    /// BrickLink API used by `runWatchPass` doesn't need it, but a few extra seconds spread over a
-    /// handful of sets costs nothing and keeps one rule instead of two.
+    /// Delay between two sets in the **manual** batch, which drives `WKWebView` scrapes of
+    /// lego.com/Amazon/Cdiscount. `runWatchPass` deliberately doesn't use it — see its doc.
     private static let delayBetweenSets: Duration = .seconds(1.5)
 
     private static let lastCompletedAtDefaultsKey = "CollectionPriceUpdateLastCompletedAt"
@@ -144,6 +143,13 @@ final class CollectionPriceUpdater {
     /// set's prices are written — that's where the caller re-draws the due date and evaluates the
     /// set's price alerts, so a pass cut short still leaves every *completed* set fully handled.
     ///
+    /// Deliberately **no** `delayBetweenSets` here, unlike `start()`. That delay exists to be polite
+    /// to *scraped* sites; this pass only ever calls the signed BrickLink API, and `BrickLinkClient`
+    /// already holds its own `RequestThrottler(minimumInterval: 1.0)` — so every call is spaced ≥1 s
+    /// one layer down (≥2 s per set, which fetches new + used). Sleeping again on top was paying the
+    /// same politeness twice and roughly halved how many sets fit in a 30 s wake-up. If a non-
+    /// throttled source is ever added here, the delay has to come back.
+    ///
     /// Returns how many sets were processed. Refuses to start (returning 0) while the manual batch
     /// is running, rather than interleaving two price loops over the same store.
     @discardableResult
@@ -167,10 +173,6 @@ final class CollectionPriceUpdater {
             await persist(legoSet, quotes, nil)
             onProcessed(legoSet)
             processed += 1
-
-            if index < sets.count - 1 {
-                try? await Task.sleep(for: Self.delayBetweenSets)
-            }
         }
         return processed
     }

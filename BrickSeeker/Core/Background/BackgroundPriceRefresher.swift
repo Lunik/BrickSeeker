@@ -58,13 +58,19 @@ final class BackgroundPriceRefresher {
     /// `nonisolated` because `registerTask()` has to read it from outside the main actor.
     nonisolated static let taskIdentifier = "com.lunik.brickseeker.priceRefresh"
 
-    /// A granted `BGAppRefreshTask` gets roughly 30 seconds. Each set costs two signed BrickLink
-    /// calls plus the politeness delay, so the batch stays small and the rest waits for the next
-    /// wake-up (or the foreground catch-up).
-    private static let backgroundBatchSize = 3
-    /// The foreground catch-up has no system deadline, but it runs while the user is using the app
-    /// — bounded so a week-long backlog doesn't turn into a minutes-long silent network run.
-    private static let foregroundBatchSize = 15
+    /// A granted `BGAppRefreshTask` gets roughly 30 seconds. A set costs two signed BrickLink calls,
+    /// spaced ≥1 s each by `BrickLinkClient`'s own throttler — so ≈2.5-3 s per set once latency is
+    /// counted, and 8 sets sits at ≈20-24 s, inside the budget with margin. Going higher isn't free:
+    /// overrunning means the expiration handler cuts the pass (already safe — every *completed* set
+    /// is persisted and rescheduled as it goes) but iOS also scores the app worse for missing its
+    /// deadline, which buys fewer wake-ups later. 8 is the point where the budget is used, not
+    /// exceeded.
+    private static let backgroundBatchSize = 8
+    /// The foreground catch-up has no system deadline, so it can be far larger — this is what
+    /// actually drains a backlog after the app has been closed for a while. Still bounded: at ≈2.5 s
+    /// per set, 40 is roughly a 100 s silent run, which is the most that's reasonable to keep going
+    /// while the user is actually using the app.
+    private static let foregroundBatchSize = 40
 
     private static let lastRunAtKey = "BackgroundPriceRefreshLastRunAt"
     private static let lastRunCountKey = "BackgroundPriceRefreshLastRunCount"
@@ -109,9 +115,12 @@ final class BackgroundPriceRefresher {
     /// both when the app backgrounds and at the end of every run.
     func schedule() {
         let request = BGAppRefreshTaskRequest(identifier: Self.taskIdentifier)
-        // The earliest the system may run it, not a promise that it will. An hour matches the
-        // user's "~1 set per hour" intent as closely as the platform allows.
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 60 * 60)
+        // A floor, not a promise: iOS decides when — and typically much later than this — from app
+        // usage, battery and network. Asking for 15 minutes rather than an hour doesn't make the
+        // system generous, it just stops *us* from being the thing that blocks an earlier slot the
+        // system was willing to give. There is no cost to asking early: a request that isn't
+        // granted simply stays pending.
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
         try? BGTaskScheduler.shared.submit(request)
     }
 
