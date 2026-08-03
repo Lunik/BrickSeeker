@@ -81,8 +81,22 @@ struct PriceAlertEntryView: View {
         return value
     }
 
+    /// Percentage mode is only real when there *is* a reference to apply it to — with none, the
+    /// picker is disabled and the sheet stays on amounts whatever `mode` happens to hold. Every
+    /// branch that used to spell out `mode == .percentage, reference != nil` goes through this, so
+    /// the field, the caption and `canSave` can't disagree about which mode is in effect.
+    private var isPercentageMode: Bool {
+        mode == .percentage && reference != nil
+    }
+
+    /// Routes the single shared `TextField` to the right storage. Two `@State` strings rather than
+    /// one, so switching modes back and forth doesn't make the user retype the other value.
+    private var entryText: Binding<String> {
+        isPercentageMode ? $percentText : $amountText
+    }
+
     private var canSave: Bool {
-        mode == .amount ? typedAmount != nil : calculatedThreshold != nil
+        isPercentageMode ? calculatedThreshold != nil : typedAmount != nil
     }
 
     /// Today's price for the selected condition, shown next to the field so a threshold can be
@@ -125,30 +139,26 @@ struct PriceAlertEntryView: View {
                     .pickerStyle(.segmented)
                     .disabled(reference == nil)
 
-                    if mode == .percentage, reference != nil {
+                    // ONE `TextField` for both modes, with only its binding, placeholder and unit
+                    // switching. It used to be two, one per branch of an `if` — which meant flipping
+                    // the picker destroyed the focused field and built a different one, so SwiftUI
+                    // dropped focus and the keyboard slid away on every switch. Keeping a single
+                    // field keeps its view identity stable across the change, so the caret and the
+                    // keyboard stay put. Don't split this back into two fields.
+                    HStack {
+                        TextField(isPercentageMode ? "0" : "0,00", text: entryText)
+                            .keyboardType(.decimalPad)
+                            .focused($isInputFocused)
+                            .multilineTextAlignment(.trailing)
+                        Text(isPercentageMode ? "%" : "€")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if isPercentageMode, let calculatedThreshold {
                         HStack {
-                            TextField("0", text: $percentText)
-                                .keyboardType(.decimalPad)
-                                .focused($isInputFocused)
-                                .multilineTextAlignment(.trailing)
-                            Text("%")
-                                .foregroundStyle(.secondary)
-                        }
-                        if let calculatedThreshold {
-                            HStack {
-                                Text("Alerte sous")
-                                Spacer()
-                                Text(Decimal(calculatedThreshold).formatted(.currency(code: "EUR")))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    } else {
-                        HStack {
-                            TextField("0,00", text: $amountText)
-                                .keyboardType(.decimalPad)
-                                .focused($isInputFocused)
-                                .multilineTextAlignment(.trailing)
-                            Text("€")
+                            Text("Alerte sous")
+                            Spacer()
+                            Text(Decimal(calculatedThreshold).formatted(.currency(code: "EUR")))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -164,7 +174,7 @@ struct PriceAlertEntryView: View {
                 } header: {
                     Text("\(setNum.baseSetNum) · \(setName)")
                 } footer: {
-                    if mode == .percentage, let reference {
+                    if isPercentageMode, let reference {
                         Text("Le pourcentage est appliqué au prix « \(reference.sourceName) » (\(Decimal(reference.amountEUR).formatted(.currency(code: "EUR")))), figé à la création de l'alerte.")
                     } else if reference == nil {
                         Text("Aucun prix de référence connu pour cette condition : seul un montant peut être saisi.")
@@ -270,10 +280,13 @@ struct PriceAlertEntryView: View {
             condition: condition,
             setName: setName,
             setImgUrl: setImgUrl,
-            thresholdEUR: mode == .amount ? typedAmount : nil,
-            discountPercent: mode == .percentage ? percent : nil,
-            referencePriceEUR: mode == .percentage ? reference?.amountEUR : nil,
-            referenceSourceName: mode == .percentage ? reference?.sourceName : nil,
+            // `isPercentageMode`, not `mode`, on all four: with `mode == .percentage` but no
+            // resolvable reference, the old spelling stored a percentage against a nil reference,
+            // which leaves `effectiveThresholdEUR` nil — an alert that can never be evaluated.
+            thresholdEUR: isPercentageMode ? nil : typedAmount,
+            discountPercent: isPercentageMode ? percent : nil,
+            referencePriceEUR: isPercentageMode ? reference?.amountEUR : nil,
+            referenceSourceName: isPercentageMode ? reference?.sourceName : nil,
             isEnabled: isEnabled
         )
         // A saved alert can add *or* remove this set from the watched scope (#230) — a first alert
