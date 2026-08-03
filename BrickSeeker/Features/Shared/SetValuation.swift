@@ -50,6 +50,20 @@ struct SetValuation: Equatable {
     var hasValue: Bool { currentValueEUR != nil }
 }
 
+/// `+12 %` / `−8 %`, with a real minus sign (U+2212) rather than a hyphen, and no sign at all on a
+/// rounded zero — `-0,4 %` must not render as a signless "0 %" in loss red.
+///
+/// Shared by everything that shows a percentage of gain or loss: the header card's growth (#211),
+/// the rolling trend on a set and on the collection (#217). One rounding rule, so two figures side
+/// by side can't disagree about what "0 %" means. Pair it with `Color.growth(_:)`, which colours
+/// the same rounded reading.
+func formattedGrowthPercent(_ percent: Double) -> String {
+    let rounded = Int(percent.rounded())
+    if rounded > 0 { return "+\(rounded) %" }
+    if rounded < 0 { return "−\(abs(rounded)) %" }
+    return "0 %"
+}
+
 enum SetValuationCalculator {
     /// Builds a `SetValuation` for one set or minifig.
     ///

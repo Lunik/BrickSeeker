@@ -96,4 +96,17 @@ extension Color {
     /// Fixed destructive/error red, independent of the selected brand color so error states
     /// stay recognizable even when the brand color is itself red.
     static let brickDanger = Color(hex: "D11A2A")
+
+    /// Colour for a gain/loss percentage — the set's growth (#211) and its rolling trend (#217),
+    /// on both `SetDetailView` and `StatisticsView`.
+    ///
+    /// Colours the *displayed* figure, not the raw one: a value that rounds to zero reads as
+    /// neutral, since painting "0 %" green would suggest a gain the number doesn't claim.
+    static func growth(_ percent: Double) -> Color {
+        switch Int(percent.rounded()) {
+        case let rounded where rounded > 0: return .green
+        case let rounded where rounded < 0: return .brickDanger
+        default: return .secondary
+        }
+    }
 }

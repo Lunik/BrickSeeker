@@ -121,6 +121,10 @@ struct BrickSeekerApp: App {
                 withAnimation(.easeOut(duration: 0.3)) {
                     isShowingSplash = false
                 }
+                // Deliberately after the splash comes down: the price-history sub-sampling (#217)
+                // is the one maintenance pass that can touch a lot of rows on the first launch
+                // following the retention change, and nothing on screen waits for it.
+                LocalRepository(modelContext: modelContainer.mainContext).sweepPriceHistoryRetention()
                 if !hasSeenOnboarding {
                     showOnboarding = true
                 }

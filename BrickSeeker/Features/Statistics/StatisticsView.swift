@@ -268,6 +268,9 @@ struct StatisticsView: View {
         if points.count >= 2 {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Valeur de la collection").font(.headline)
+
+                rollingTrendRow(RollingTrend.collection(snapshots: viewModel.valueSnapshots))
+
                 Chart(points) { point in
                     LineMark(
                         x: .value("Mois", point.date),
@@ -329,6 +332,51 @@ struct StatisticsView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .cardStyle()
+        }
+    }
+
+    /// « Tendance 12 mois » for the whole collection (#217) — this month's recorded value against
+    /// the one recorded a year ago, straight off the same snapshots the chart plots, so the line
+    /// and the percentage can't tell different stories.
+    ///
+    /// A distinct quantity from the "évolution" shown on a set's card, which measures value against
+    /// what was *paid*. Nothing here is a forecast: the trend looks backwards only.
+    @ViewBuilder
+    private func rollingTrendRow(_ trend: RollingTrend.Result) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(trend.title).font(.subheadline)
+                Text(Self.rollingTrendCaption(trend))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if let percent = trend.percent {
+                Text(formattedGrowthPercent(percent))
+                    .font(.title3.bold())
+                    .foregroundStyle(Color.growth(percent))
+            } else {
+                Text("—")
+                    .font(.title3.bold())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Names the month the comparison is made against — and, when there isn't one, says the
+    /// history is still too short rather than showing a bare "—". Months whose price coverage was
+    /// thin are excluded from the trend entirely (see `RollingTrend.collection`), so a chart with
+    /// enough points can still legitimately have no trend yet.
+    private static func rollingTrendCaption(_ trend: RollingTrend.Result) -> String {
+        switch trend {
+        case .percent(_, let since, _):
+            return "vs \(since.formatted(monthAxisStyle))"
+        case .insufficient(let oldest):
+            guard let oldest else { return "Historique insuffisant" }
+            return "Historique insuffisant — depuis \(oldest.formatted(monthAxisStyle))"
         }
     }
 

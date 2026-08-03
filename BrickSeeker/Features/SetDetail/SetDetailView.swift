@@ -18,6 +18,11 @@ struct SetDetailView: View {
     /// cached quotes/retail price/paid price — never fetched. Reloaded everywhere `priceHistory`
     /// is, since it is derived from exactly the same inputs.
     @State private var valuation: SetValuation = .empty
+    /// « Tendance 12 mois » (#217) — today's value against the value a year ago, replayed from
+    /// `priceHistory`. A different quantity from `valuation.growthPercent` ("évolution depuis
+    /// l'achat"), computed here rather than in `body` so a 400-day history isn't regrouped by day
+    /// on every render.
+    @State private var rollingTrend: RollingTrend.Result = .insufficient(oldest: nil)
     @State private var paidPriceEUR: Double?
     /// The owning list's condition, needed to value the set the way Collection/Statistics do.
     @State private var listCondition: ListCondition?
@@ -466,6 +471,14 @@ struct SetDetailView: View {
             condition: listCondition,
             quotes: viewModel.priceQuotes
         )
+        // Reads the `priceHistory` state the caller just refreshed (every call site reloads the
+        // history first) — and re-runs on a bare `reloadValuation()` too, since the trend replays
+        // the same `listCondition` that changed.
+        rollingTrend = RollingTrend.perSet(
+            history: priceHistory,
+            condition: listCondition,
+            isMinifig: setNum.isMinifig
+        )
     }
 
     /// The list this set currently sits in, when it's owned — the input the valuation needs to know
@@ -544,13 +557,16 @@ struct SetDetailView: View {
                     Spacer()
 
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text("Évolution")
+                        // "depuis l'achat" is load-bearing since #217 put a second percentage in
+                        // this card: this one measures the value against what the set *cost*, the
+                        // trend below measures it against what it was *worth* a year ago.
+                        Text("Évolution depuis l'achat")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         if let growth = valuation.growthPercent {
-                            Text(formattedGrowth(growth))
+                            Text(formattedGrowthPercent(growth))
                                 .font(.title2.bold())
-                                .foregroundStyle(growthColor(growth))
+                                .foregroundStyle(Color.growth(growth))
                         } else {
                             Text("—")
                                 .font(.title2.bold())
@@ -565,6 +581,10 @@ struct SetDetailView: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel(valuationAccessibilityLabel)
+
+            Divider()
+
+            rollingTrendRow
 
             if !valuation.hasValue {
                 Button {
@@ -607,24 +627,71 @@ struct SetDetailView: View {
         .cardStyle(padding: 12)
     }
 
-    /// `+12 %` / `−8 %`, with a real minus sign (U+2212) rather than a hyphen, and no sign at all
-    /// on a rounded zero — `-0,4 %` must not render as a signless "0 %" in loss red.
-    private func formattedGrowth(_ growth: Double) -> String {
-        let rounded = Int(growth.rounded())
-        if rounded > 0 { return "+\(rounded) %" }
-        if rounded < 0 { return "−\(abs(rounded)) %" }
-        return "0 %"
+    /// « Tendance 12 mois » (#217): what this set was worth a year ago against what it's worth now,
+    /// both ends replayed through `resolveCollectionPrice` from our own recorded history — never a
+    /// projection, and never the same thing as the "évolution depuis l'achat" just above it.
+    ///
+    /// Kept visible in the insufficient case rather than hidden: "—, historique insuffisant" tells
+    /// the user the trend exists and is still filling up, where an absent row reads as a feature
+    /// this set doesn't have. It is never rendered as "0 %", which would claim a flat year.
+    @ViewBuilder
+    private var rollingTrendRow: some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(rollingTrend.title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(rollingTrendCaption)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if let percent = rollingTrend.percent {
+                Text(formattedGrowthPercent(percent))
+                    .font(.title3.bold())
+                    .foregroundStyle(Color.growth(percent))
+            } else {
+                Text("—")
+                    .font(.title3.bold())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(rollingTrendAccessibilityLabel)
     }
 
-    /// Colours the *displayed* figure, not the raw one: a value that rounds to zero reads as
-    /// neutral, since painting "0 %" green would suggest a gain the number doesn't claim.
-    private func growthColor(_ growth: Double) -> Color {
-        switch Int(growth.rounded()) {
-        case let rounded where rounded > 0: return .green
-        case let rounded where rounded < 0: return Color.brickDanger
-        default: return .secondary
+    /// Names the reading the trend is measured against — the counterpart of
+    /// `valuationBasisCaption` for the other percentage in this card.
+    private var rollingTrendCaption: String {
+        switch rollingTrend {
+        case .percent(_, let since, _):
+            return "vs valeur de \(since.formatted(Self.trendMonthStyle))"
+        case .insufficient(let oldest):
+            guard let oldest else { return "Historique insuffisant" }
+            return "Historique insuffisant — depuis \(oldest.formatted(Self.trendMonthStyle))"
         }
     }
+
+    private var rollingTrendAccessibilityLabel: String {
+        guard let percent = rollingTrend.percent else {
+            return "\(rollingTrend.title), indisponible, \(rollingTrendCaption)"
+        }
+        let spoken: String
+        switch Int(percent.rounded()) {
+        case let rounded where rounded > 0: spoken = "plus \(rounded) pour cent"
+        case let rounded where rounded < 0: spoken = "moins \(abs(rounded)) pour cent"
+        default: spoken = "stable"
+        }
+        return "\(rollingTrend.title), \(spoken), \(rollingTrendCaption)"
+    }
+
+    /// Month + year only: the day a base reading happened to be recorded on is noise, and pinning
+    /// the locale matches the app's French-only UI (see `project.yml`).
+    private static let trendMonthStyle = Date.FormatStyle(locale: Locale(identifier: "fr_FR"))
+        .month(.wide)
+        .year()
 
     /// Names the reference the growth is measured against — without it, "+12 %" is meaningless —
     /// and, when there is no growth to show, says why rather than leaving a bare "—".

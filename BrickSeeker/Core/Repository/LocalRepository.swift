@@ -633,10 +633,17 @@ final class LocalRepository {
         return entries.sorted { $0.orderedAt < $1.orderedAt }
     }
 
+    /// Everything younger than this stays at full daily resolution — the window the `SetDetail`
+    /// chart actually shows in detail.
+    static let priceHistoryDailyRetentionDays = 90
+    /// Hard end of the history. 400 days rather than 365 so a 12-month trend still has a base
+    /// reading to sit on after a month with no refresh (`RollingTrend` looks a year back ±1 month).
+    static let priceHistoryMaximumRetentionDays = 400
+
     /// Appends a price reading for `setNum`+`source`, skipping the insert if one was already
     /// recorded today — keeps the history one point per day per source (see issue #5) instead of
-    /// stacking duplicates every time `SetDetail` is opened or refreshed. Also trims entries older
-    /// than 180 days so the table doesn't grow unbounded.
+    /// stacking duplicates every time `SetDetail` is opened or refreshed. Retention is applied by
+    /// `thinPriceHistory` right after, scoped to the same set+source.
     private func recordPriceHistory(setNum: String, source: String, amount: Decimal, currency: String) {
         // "Already recorded today?" needs only the most recent entry — sort + fetchLimit 1
         // instead of loading the set's whole history into memory to run max(by:) on it.
@@ -651,16 +658,94 @@ final class LocalRepository {
         }
 
         modelContext.insert(PriceHistoryEntry(setNum: setNum, source: source, amount: amount, currency: currency))
+        thinPriceHistory(setNum: setNum, source: source)
+    }
 
-        let cutoff = Date().addingTimeInterval(-180 * 24 * 60 * 60)
-        let staleEntries = (try? modelContext.fetch(
+    /// Sub-sampling, replacing the flat 180-day purge this used to do (#217).
+    ///
+    /// A 180-day window makes a 12-month trend *structurally* impossible, but simply raising the
+    /// cutoff to 400 days would multiply the table (~4 sources × 500 sets × a weekly refresh is
+    /// ~100 k rows a year). So the resolution is graded instead:
+    ///
+    /// - every daily point is kept up to 90 days — the range the chart is read at;
+    /// - between 90 and 400 days, one point per calendar week per source survives;
+    /// - past 400 days, nothing.
+    ///
+    /// That is ~134 rows per set+source covering 13 months, against 180 rows covering 6 months
+    /// before: **fewer rows and more coverage**, with the recent end of the chart still smooth.
+    ///
+    /// Scoped to the set+source being written, so the cost stays bounded per refresh. The flip side
+    /// is that a set which stops being refreshed is never revisited — `sweepPriceHistoryRetention`
+    /// is the pass that covers those.
+    private func thinPriceHistory(setNum: String, source: String, now: Date = Date(), calendar: Calendar = .current) {
+        let dailyCutoff = now.addingTimeInterval(-Double(Self.priceHistoryDailyRetentionDays) * 24 * 60 * 60)
+        let aged = (try? modelContext.fetch(
             FetchDescriptor<PriceHistoryEntry>(
-                predicate: #Predicate { $0.setNum == setNum && $0.source == source && $0.fetchedAt < cutoff }
+                predicate: #Predicate { $0.setNum == setNum && $0.source == source && $0.fetchedAt < dailyCutoff }
             )
         )) ?? []
-        for entry in staleEntries {
-            modelContext.delete(entry)
+        thinPriceHistoryEntries(aged, now: now, calendar: calendar)
+    }
+
+    /// Applies the weekly sub-sampling to rows **already filtered** to the aged window (older than
+    /// `priceHistoryDailyRetentionDays`). Buckets on the absolute calendar week rather than an
+    /// offset from `now`, so the survivor of a given week is the same on every run — a bucketing
+    /// that slid with the current date would keep re-merging weeks and erode the history one pass
+    /// at a time.
+    private func thinPriceHistoryEntries(_ aged: [PriceHistoryEntry], now: Date, calendar: Calendar) {
+        struct WeekBucket: Hashable {
+            let setNum: String
+            let source: String
+            let year: Int
+            let week: Int
         }
+
+        let hardCutoff = now.addingTimeInterval(-Double(Self.priceHistoryMaximumRetentionDays) * 24 * 60 * 60)
+        var survivorByWeek: [WeekBucket: PriceHistoryEntry] = [:]
+        for entry in aged {
+            guard entry.fetchedAt >= hardCutoff else {
+                modelContext.delete(entry)
+                continue
+            }
+            let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: entry.fetchedAt)
+            let bucket = WeekBucket(
+                setNum: entry.setNum,
+                source: entry.source,
+                year: components.yearForWeekOfYear ?? 0,
+                week: components.weekOfYear ?? 0
+            )
+            guard let survivor = survivorByWeek[bucket] else {
+                survivorByWeek[bucket] = entry
+                continue
+            }
+            // The week's latest reading wins — the one closest to what the following week opened at.
+            if entry.fetchedAt > survivor.fetchedAt {
+                modelContext.delete(survivor)
+                survivorByWeek[bucket] = entry
+            } else {
+                modelContext.delete(entry)
+            }
+        }
+    }
+
+    /// Launch-time maintenance pass over the **whole** history table (#217).
+    ///
+    /// `thinPriceHistory` only ever runs for the set+source currently being written, so a set that
+    /// stopped being refreshed keeps its old rows forever — a pre-existing gap, now worth closing
+    /// since it is also what carries every row written under the old flat 180-day purge across into
+    /// the new scheme.
+    ///
+    /// Cheap enough to run at launch: the predicate only ever loads rows already older than 90 days
+    /// (nothing at all on a young install), and the pass is idempotent, so a second run over an
+    /// already-thinned table deletes nothing.
+    func sweepPriceHistoryRetention(now: Date = Date(), calendar: Calendar = .current) {
+        let dailyCutoff = now.addingTimeInterval(-Double(Self.priceHistoryDailyRetentionDays) * 24 * 60 * 60)
+        let aged = (try? modelContext.fetch(
+            FetchDescriptor<PriceHistoryEntry>(predicate: #Predicate { $0.fetchedAt < dailyCutoff })
+        )) ?? []
+        guard !aged.isEmpty else { return }
+        thinPriceHistoryEntries(aged, now: now, calendar: calendar)
+        try? modelContext.save()
     }
 
     // MARK: - Collection value history (issue #216)
