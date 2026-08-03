@@ -23,6 +23,7 @@ struct PrivacyDetailView: View {
                     Text("API Key Rebrickable, clé/identifiants Brickset et identifiants API BrickLink (OAuth) : dans le Keychain iOS")
                     Text("Sets scannés récemment et cache de votre collection : dans la base SwiftData locale, sur l'appareil uniquement")
                     Text("Position des scans (si activée dans les paramètres) : approximative, sur l'appareil uniquement, supprimée dès qu'un set rejoint votre collection ou que l'historique est purgé")
+                    Text("Alertes de prix (seuils que vous créez) : sur l'appareil uniquement ; les notifications sont locales, aucun serveur ne les envoie")
                     Text("Vos mots de passe Rebrickable et Brickset ne sont jamais stockés : ils servent une seule fois à obtenir un jeton de session")
                 }
 
@@ -34,6 +35,7 @@ struct PrivacyDetailView: View {
                     Text("BrickLink (API officielle) : prix neuf/occasion, avec vos identifiants API BrickLink (si vous les renseignez)")
                     Text("lego.com, amazon.fr et cdiscount.com : consultés pour afficher les prix du marché, sans identifiant transmis")
                     Text("Apple (service de localisation) : conversion de la position en ville approximative, si l'enregistrement de position est activé")
+                    Text("En tâche de fond, l'app contacte uniquement l'API BrickLink, et uniquement pour les sets sur lesquels vous avez créé une alerte de prix. Sans alerte configurée, l'app ne s'exécute jamais en arrière-plan. Aucune autre source n'est consultée hors utilisation directe.")
                 }
 
                 Section {

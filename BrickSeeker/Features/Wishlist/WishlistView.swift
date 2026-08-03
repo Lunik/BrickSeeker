@@ -7,7 +7,15 @@ struct WishlistView: View {
     @Query(filter: #Predicate<CachedSet> { $0.isInWishlist }, sort: \CachedSet.name)
     private var cachedSets: [CachedSet]
     @Query private var allCachedPrices: [CachedSetPrice]
+    /// Drives `SetRowView`'s bell marker (#229). A whole-table `@Query` rather than a per-row
+    /// lookup: there are only ever a handful of alerts, and the rows must re-render when one is
+    /// added or removed elsewhere.
+    @Query private var priceAlerts: [PriceAlert]
     @Environment(\.modelContext) private var modelContext
+
+    private var alertedSetNums: Set<String> {
+        Set(priceAlerts.filter(\.isEnabled).map(\.setNum))
+    }
     @Bindable private var filter = WishlistFilterState.shared
     @State private var showImportSheet = false
     @State private var showFilters = false
@@ -224,7 +232,8 @@ struct WishlistView: View {
                                 name: cached.name,
                                 setImgUrl: cached.setImgUrl,
                                 resolvedPrice: resolvedPrice(for: cached),
-                                priceLabel: priceLabel(for: cached)
+                                priceLabel: priceLabel(for: cached),
+                                hasPriceAlert: alertedSetNums.contains(cached.setNum)
                             ) {
                                 if cached.isInCollection {
                                     Image(systemName: "checkmark.circle.fill")

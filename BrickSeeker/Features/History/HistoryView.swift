@@ -5,7 +5,15 @@ struct HistoryView: View {
     @Query(filter: #Predicate<CachedSet> { $0.wasScanned }, sort: \CachedSet.lastScannedAt, order: .reverse)
     private var cachedSets: [CachedSet]
     @Query private var allCachedPrices: [CachedSetPrice]
+    /// Drives `SetRowView`'s bell marker (#229). A whole-table `@Query` rather than a per-row
+    /// lookup: there are only ever a handful of alerts, and the rows must re-render when one is
+    /// added or removed elsewhere.
+    @Query private var priceAlerts: [PriceAlert]
     @Environment(\.modelContext) private var modelContext
+
+    private var alertedSetNums: Set<String> {
+        Set(priceAlerts.filter(\.isEnabled).map(\.setNum))
+    }
     @Bindable private var filter = HistoryFilterState.shared
     @State private var showFilters = false
     @State private var showScanMap = false
@@ -210,7 +218,8 @@ struct HistoryView: View {
                                 setImgUrl: cached.setImgUrl,
                                 resolvedPrice: resolvedPrice(for: cached),
                                 priceLabel: "Neuf",
-                                isInWishlist: cached.isInWishlist
+                                isInWishlist: cached.isInWishlist,
+                                hasPriceAlert: alertedSetNums.contains(cached.setNum)
                             ) {
                                 if cached.isInCollection {
                                     // Color-only signal before this (#143) — a green checkmark

@@ -33,6 +33,15 @@ targets:
         NSCameraUsageDescription: "BrickSeeker utilise la caméra pour scanner les boîtes et manuels LEGO"
         NSLocationWhenInUseUsageDescription: "BrickSeeker enregistre la position au moment d'un scan (si vous l'activez) pour retrouver le magasin où vous avez vu le meilleur prix. Position approximative, stockée uniquement sur l'appareil."
         ITSAppUsesNonExemptEncryption: false
+        # Background price refresh for watched sets (#230). Declared here, never in the generated
+        # Info.plist, which XcodeGen rewrites. `fetch` is what `BGAppRefreshTask` requires; the
+        # identifier must match `BackgroundPriceRefresher.taskIdentifier` or the registration
+        # traps at launch. The task only ever calls the official BrickLink API — no WKWebView, no
+        # scraping in the background (see the app-store-compliance skill's hard rule #1).
+        UIBackgroundModes:
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.lunik.brickseeker.priceRefresh
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UILaunchScreen: {}

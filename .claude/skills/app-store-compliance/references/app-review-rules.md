@@ -37,6 +37,12 @@ guideline revisions.
 > users and App Review."
 
 - **Applies to:** the invisible `WKWebView` (`alpha 0.01`) + spoofed Safari UA. Never reintroduce.
+- **Also applies to background execution (#230).** An app that fetches data while closed must be honest
+  about it: the `fetch` background mode and the `BGTaskSchedulerPermittedIdentifiers` entry are declared
+  in `project.yml`, the behaviour is described in Réglages → « Surveillance des prix », and the last
+  background pass is shown there. The background task calls **the BrickLink API only** — never a
+  `WKWebView` source, which would be hard rule #1 *and* 2.3.1(a) at once (and cannot work anyway: no
+  window in the background).
 
 ### 5.2.1 — Intellectual property
 
@@ -49,7 +55,11 @@ guideline revisions.
 - Privacy policy link required **both** in App Store Connect metadata **and** inside the app.
 - Disclose and, where needed, get consent before sending personal data to third parties.
 - **Applies to:** `PrivacyDetailView`, `PrivacyNoticeView`, `PRIVACY.md`, ASC nutrition labels — must all
-  match actual network behaviour.
+  match actual network behaviour, **including what happens while the app is closed** (#230's background
+  BrickLink pass is stated in all three in-app/repo surfaces).
+- **Notifications (#229):** local only (`UNUserNotificationCenter`, no push entitlement, no APNs, no
+  remote server). Nothing new to declare in the nutrition labels — no data leaves the device to produce
+  them — but the in-app copy must not claim the app never notifies you, and no longer does.
 
 ### 2.1 — App completeness / demo access
 
@@ -76,7 +86,11 @@ guideline revisions.
 
 - **Privacy manifest** (`PrivacyInfo.xcprivacy`) mandatory since May 2024. Required-reason API in this app:
   **UserDefaults → reason `CA92.1`**. No file-timestamp / disk-space / boot-time / active-keyboard APIs are
-  used (re-grep if that changes).
+  used (re-grep if that changes). `BGTaskScheduler` and `UNUserNotificationCenter` (#229/#230) are **not**
+  required-reason APIs — the manifest is unchanged by them.
+- **Background modes** declared: `fetch` only, for `BGAppRefreshTask` id `com.lunik.brickseeker.priceRefresh`
+  (#230). No `processing`, no location/audio background mode. Declared in `project.yml`, never in the
+  generated `Info.plist`.
 - **SDK floor:** uploads must be built with **Xcode 26 / iOS 26 SDK** (since April 2026). Deployment target
   may stay iOS 17.
 - **Age rating:** new questionnaire since Jan 2026; BrickSeeker expected **4+** (SFSafariViewController opening

@@ -30,6 +30,10 @@ struct SetDetailView: View {
     @State private var priceScanEventForPrompt: ScanEvent?
     @State private var showPricePrompt = false
     @State private var priceInputText = ""
+    @State private var showPriceAlertSheet = false
+    /// This set's alerts (#229), re-read whenever the sheet closes — a plain `LocalRepository` read
+    /// rather than a `@Query`, matching how `paidPriceEUR`/`priceHistory` are already sourced here.
+    @State private var priceAlerts: [PriceAlert] = []
     @State private var scanEventPendingDeletion: ScanEvent?
     /// Sets containing this minifig (issue #178) — only ever populated for a `fig-…` item, see
     /// `setsContainingMinifigSection`.
@@ -181,6 +185,8 @@ struct SetDetailView: View {
 
                     wishlistRow
 
+                    priceAlertRow
+
                     valuationCard
 
                     priceSection
@@ -309,6 +315,15 @@ struct SetDetailView: View {
                     onSave: savePricePrompt
                 )
             }
+            .sheet(isPresented: $showPriceAlertSheet, onDismiss: reloadPriceAlerts) {
+                PriceAlertEntryView(
+                    setNum: viewModel.legoSet.setNum,
+                    setName: viewModel.legoSet.name,
+                    setImgUrl: viewModel.legoSet.setImgUrl,
+                    storePriceEUR: viewModel.storePrice?.amount,
+                    quotes: viewModel.priceQuotes
+                )
+            }
             .sheet(isPresented: $showPaidPricePrompt) {
                 ScanPriceEntryView(
                     setNum: viewModel.legoSet.setNum,
@@ -350,6 +365,7 @@ struct SetDetailView: View {
         .task {
             reloadPriceHistory()
             reloadValuation()
+            reloadPriceAlerts()
         }
         .task {
             relatedSetLookupViewModel.localRepository = LocalRepository(modelContext: modelContext)
@@ -392,6 +408,7 @@ struct SetDetailView: View {
         LocalRepository(modelContext: modelContext).cacheStorePrice(setNum: viewModel.legoSet.setNum, price: storePrice)
         reloadPriceHistory()
         reloadValuation()
+        evaluatePriceAlerts()
     }
 
     private func refreshPrices() async {
@@ -401,6 +418,7 @@ struct SetDetailView: View {
         )
         reloadPriceHistory()
         reloadValuation()
+        evaluatePriceAlerts()
     }
 
     private func refreshPricesIfNeeded() async {
@@ -410,6 +428,20 @@ struct SetDetailView: View {
         )
         reloadPriceHistory()
         reloadValuation()
+        // Only after a genuine live fetch (#229): re-evaluating a cache-only read would let opening
+        // a set's sheet fire a notification about the very price already on screen.
+        if didFetch { evaluatePriceAlerts() }
+    }
+
+    /// Re-checks this set's alerts against the prices just written to the cache, and refreshes the
+    /// row so a threshold crossed while the sheet is open shows its new "dernier prix vu".
+    private func evaluatePriceAlerts() {
+        PriceAlertEvaluator.evaluate(setNum: viewModel.legoSet.setNum, in: modelContext)
+        reloadPriceAlerts()
+    }
+
+    private func reloadPriceAlerts() {
+        priceAlerts = LocalRepository(modelContext: modelContext).priceAlerts(setNum: viewModel.legoSet.setNum)
     }
 
     private func reloadPriceHistory() {
@@ -1628,6 +1660,51 @@ struct SetDetailView: View {
         .buttonStyle(.plain)
         .disabled(viewModel.isWishlistLoading)
         .accessibilityLabel(viewModel.isInWishlist ? "Retirer de la liste cadeaux" : "Ajouter à la liste cadeaux")
+    }
+
+    /// Opens the price-alert sheet, and doubles as this set's "an alert is armed" marker (#229) —
+    /// shown whatever the collection status, since wanting to be told about a price drop is
+    /// independent of owning the set (same reasoning as `wishlistRow`). Both conditions' alerts are
+    /// summarised on one line: they're two separate alerts, but two rows here would give a rarely
+    /// -used feature more of this screen than it's worth.
+    private var priceAlertRow: some View {
+        Button {
+            showPriceAlertSheet = true
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: priceAlertIconName)
+                Text(priceAlertLabel)
+            }
+            .foregroundStyle(enabledPriceAlerts.isEmpty ? AppTheme.shared.accent : .orange)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(priceAlerts.isEmpty ? "Créer une alerte de prix" : "Modifier l'alerte de prix")
+    }
+
+    private var enabledPriceAlerts: [PriceAlert] {
+        priceAlerts.filter(\.isEnabled)
+    }
+
+    /// Three states, not two: "no alert", "alert switched off", and "armed". A set whose only alert
+    /// is disabled used to render exactly like one with no alert at all, which hid the fact that a
+    /// threshold was still stored on it.
+    private var priceAlertIconName: String {
+        if !enabledPriceAlerts.isEmpty { return "bell.fill" }
+        return priceAlerts.isEmpty ? "bell" : "bell.slash"
+    }
+
+    private var priceAlertLabel: String {
+        let armed = enabledPriceAlerts.sorted { $0.conditionRaw < $1.conditionRaw }
+        guard !armed.isEmpty else {
+            return priceAlerts.isEmpty
+                ? String(localized: "Alerte de prix")
+                : String(localized: "Alerte de prix (désactivée)")
+        }
+        let descriptions = armed.map { alert -> String in
+            guard let threshold = alert.effectiveThresholdEUR else { return alert.condition.displayName }
+            return String(localized: "\(alert.condition.displayName.lowercased()) sous \(Decimal(threshold).formatted(.currency(code: "EUR")))")
+        }
+        return String(localized: "Alerte : \(descriptions.joined(separator: ", "))")
     }
 
     /// Floating button that opens the "quel prix as-tu vu ?" sheet on tap — never auto-presented

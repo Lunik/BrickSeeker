@@ -12,6 +12,8 @@ struct SettingsView: View {
     @Bindable private var wearableFilter = WearableFilter.shared
     @State private var preferredPPPText: String = ""
     @State private var showPrivacyDetail = false
+    @State private var showPriceAlerts = false
+    @State private var priceAlertCount = 0
     @State private var isAPIKeyVisible = false
     @State private var isBricksetAPIKeyVisible = false
     @State private var isBrickLinkCredentialsVisible = false
@@ -338,6 +340,29 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Button {
+                        showPriceAlerts = true
+                    } label: {
+                        HStack {
+                            Label("Alertes de prix", systemImage: "bell")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Text("\(priceAlertCount)")
+                                .foregroundStyle(.secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    BackgroundRefreshSection()
+                } header: {
+                    Text("Surveillance des prix")
+                } footer: {
+                    Text("Créez une alerte depuis la fiche d'un set pour être prévenu quand son prix passe sous un seuil. Seuls les sets sous alerte sont réactualisés en tâche de fond quand iOS l'autorise — uniquement via l'API BrickLink (neuf/occasion) — puis rattrapés à l'ouverture de l'app. Les prix lego.com, Amazon et Cdiscount ne sont actualisés qu'au premier plan. Sans aucune alerte, rien n'est surveillé et l'app ne s'exécute jamais en arrière-plan.")
+                }
+
+                Section {
                     PrivacyNoticeView()
 
                     Button {
@@ -389,6 +414,9 @@ struct SettingsView: View {
             .sheet(isPresented: $showPrivacyDetail) {
                 PrivacyDetailView()
             }
+            .sheet(isPresented: $showPriceAlerts, onDismiss: refreshPriceAlertCount) {
+                PriceAlertsView()
+            }
             .alert("Délier votre compte Rebrickable ?", isPresented: $showUnlinkConfirmation) {
                 Button("Délier", role: .destructive) {
                     viewModel.unlinkAccount()
@@ -426,6 +454,7 @@ struct SettingsView: View {
                 formatter.maximumFractionDigits = 4
                 formatter.decimalSeparator = ","
                 preferredPPPText = formatter.string(from: theme.preferredPricePerPart as NSNumber) ?? "0,12"
+                refreshPriceAlertCount()
             }
             .toast($toastMessage)
         }
@@ -520,6 +549,10 @@ struct SettingsView: View {
             return "Téléchargement en cours…"
         }
         return viewModel.minifigCatalogMetadata == nil ? "Télécharger le catalogue" : "Mettre à jour le catalogue"
+    }
+
+    private func refreshPriceAlertCount() {
+        priceAlertCount = LocalRepository(modelContext: modelContext).priceAlerts().count
     }
 
     private func clearCache() async {

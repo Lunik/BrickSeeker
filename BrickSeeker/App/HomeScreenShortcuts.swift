@@ -27,11 +27,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     // Wires up notification delegation once at launch so `PriceUpdateNotifier`'s completion
     // notification still shows a banner if the batch finishes while the app is foreground —
     // by default iOS suppresses foreground banners unless a delegate opts in via `willPresent`.
+    //
+    // The background-refresh task (#230) is registered here too, and it has to be: `BGTaskScheduler`
+    // rejects any registration made after launch finishes.
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        BackgroundPriceRefresher.registerTask()
         return true
     }
 
@@ -75,5 +79,23 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .sound, .list])
+    }
+
+    /// Tapping a price-drop alert opens the set it's about (#229). Only the set number travels in
+    /// `userInfo`; everything else is re-read from the local store by the normal lookup path.
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let setNum = response.notification.request.content.userInfo[PriceUpdateNotifier.setNumUserInfoKey] as? String
+        // Called back before hopping to the main actor: `completionHandler` is not `Sendable`, and
+        // it only means "I've read the response", which is already true here — nothing about
+        // opening the set has to finish first.
+        completionHandler()
+        guard let setNum else { return }
+        Task { @MainActor in
+            PriceAlertRouter.shared.pendingSetNum = setNum
+        }
     }
 }

@@ -4,7 +4,16 @@ import SwiftData
 struct CollectionView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var allCachedPrices: [CachedSetPrice]
+    /// Drives `SetRowView`'s bell marker (#229). A whole-table `@Query` rather than a per-row
+    /// lookup: there are only ever a handful of alerts, and the rows must re-render when one is
+    /// added or removed elsewhere.
+    @Query private var priceAlerts: [PriceAlert]
     @Query private var allCachedSetLists: [CachedSetList]
+
+    private var alertedSetNums: Set<String> {
+        Set(priceAlerts.filter(\.isEnabled).map(\.setNum))
+    }
+
     @State private var viewModel: CollectionViewModel?
     @State private var showFilters = false
     @State private var showSettings = false
@@ -229,6 +238,7 @@ struct CollectionView: View {
                                     resolvedPrice: resolvedPrice(for: cached),
                                     priceLabel: priceLabel(for: cached),
                                     isInWishlist: cached.isInWishlist,
+                                    hasPriceAlert: alertedSetNums.contains(cached.setNum),
                                     quantity: cached.quantity
                                 ) {
                                     EmptyView()
