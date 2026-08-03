@@ -204,6 +204,10 @@ final class CollectionPriceUpdater {
         )
         if result.completed {
             PriceUpdateNotifier.notifyCompleted(total: result.total)
+            // Same hook as `CollectionPriceUpdateSection.runUpdate`'s success branch (#216): a
+            // resumed queue that reaches the end is a complete batch, and the user may never open
+            // Statistiques to trigger the other capture path.
+            CollectionValueSnapshotRecorder.record(in: modelContext)
         }
         return result.completed
     }

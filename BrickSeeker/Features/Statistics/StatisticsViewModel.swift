@@ -79,6 +79,10 @@ struct CollectionStats {
 @MainActor
 final class StatisticsViewModel {
     var stats: CollectionStats = .empty
+    /// Monthly collection-value readings, oldest first (#216) — the "Valeur de la collection"
+    /// chart's series. Refreshed by `load()` only: a snapshot is at most one row per month, so
+    /// there's nothing for the per-`done` `recomputeStats()` to keep up with.
+    var valueSnapshots: [CollectionValueSnapshot] = []
 
     private var ownedSets: [CachedSet] = []
     private var conditionByListId: [Int: ListCondition] = [:]
@@ -97,9 +101,29 @@ final class StatisticsViewModel {
         ownedSets = localRepository.ownedSets()
         conditionByListId = localRepository.conditionByListId()
         recomputeStats()
+        recordValueSnapshot()
+        valueSnapshots = localRepository.collectionValueSnapshots()
         // Theme names are read straight off the (observable) ThemeNameStore by the view —
         // this just makes sure the table exists/refreshes.
         Task { await themeNameStore.refreshIfNeeded() }
+    }
+
+    /// "Opening Statistiques records this month's value" (#216). Deliberately hooked here rather
+    /// than behind a new trigger: it needs no extra fetch (the figures were just computed) and it
+    /// keeps working for a user who never runs a price batch.
+    ///
+    /// Passes `stats` straight through instead of going via `CollectionValueSnapshotRecorder`, which
+    /// would re-derive the same totals from the repository — the recorded value is then, by
+    /// construction, the one on screen. The repository method owns the idempotence and the coverage
+    /// guard that stops an expired-cache reading from overwriting a good month, so calling it on
+    /// every `load()` (appear, sheet dismissal, post-sync) is safe.
+    private func recordValueSnapshot() {
+        localRepository.recordCollectionValueSnapshot(
+            totalValueEUR: stats.totalValueEUR,
+            setsCount: stats.setCount,
+            unitsCount: stats.unitCount,
+            pricedSetsCount: stats.setsWithKnownPrice
+        )
     }
 
     /// Re-derives `stats` from the already-fetched `ownedSets`/`conditionByListId` without

@@ -509,7 +509,10 @@ final class LocalRepository {
     /// `SetPurchaseRecord` is kept too, and for the strongest version of that reason: a paid
     /// price is typed by hand and cannot be re-fetched from anywhere. `PriceAlert` (#229) is kept
     /// for exactly the same reason — a threshold is hand-typed and unrecoverable — which is also
-    /// why it lives in its own model rather than as a `CachedSet` column.
+    /// why it lives in its own model rather than as a `CachedSet` column. `CollectionValueSnapshot`
+    /// (#216) is kept on the `PriceHistoryEntry` reasoning taken to its limit: a past month's value
+    /// isn't merely expensive to re-fetch, it is *unobtainable* — no source can tell us today what
+    /// the collection was worth last March.
     func clearAll() {
         stripScanLocations(setNums: nil)
         if let sets = try? modelContext.fetch(FetchDescriptor<CachedSet>()) {
@@ -658,6 +661,82 @@ final class LocalRepository {
         for entry in staleEntries {
             modelContext.delete(entry)
         }
+    }
+
+    // MARK: - Collection value history (issue #216)
+
+    /// Records what the whole collection is worth this month — one `CollectionValueSnapshot` per
+    /// calendar month, updated in place while the month is current. Built on the same fetch-most-
+    /// recent-then-update-or-insert shape as `recordPriceHistory` above rather than an
+    /// `@Attribute(.unique)` on `monthKey`: SwiftData's behaviour on a uniqueness conflict is
+    /// subtler than this pattern, which is already proven here.
+    ///
+    /// Idempotent by design, because both callers fire freely — opening Statistiques and finishing a
+    /// price batch — and neither knows what the other already wrote today.
+    ///
+    /// **The coverage guard is the load-bearing part.** `CachedSetPrice.isExpired` is 7 days, so a
+    /// collection nobody has refreshed for a week resolves to a near-zero total; overwriting the
+    /// current month with that would destroy a good reading and put a fictional crash in the chart.
+    /// So: nothing is written at zero coverage, and an existing row for the current month is only
+    /// replaced by a reading that priced **at least as many** sets as it did.
+    func recordCollectionValueSnapshot(
+        totalValueEUR: Double,
+        setsCount: Int,
+        unitsCount: Int,
+        pricedSetsCount: Int,
+        now: Date = Date()
+    ) {
+        guard pricedSetsCount > 0 else { return }
+
+        let monthKey = CollectionValueSnapshot.monthKey(for: now)
+        // Only the newest row can be this month's — sort + fetchLimit 1 instead of loading all 48.
+        var latestDescriptor = FetchDescriptor<CollectionValueSnapshot>(
+            sortBy: [SortDescriptor(\.monthKey, order: .reverse)]
+        )
+        latestDescriptor.fetchLimit = 1
+        let latest = (try? modelContext.fetch(latestDescriptor))?.first
+
+        if let latest, latest.monthKey == monthKey {
+            guard pricedSetsCount >= latest.pricedSetsCount else { return }
+            latest.capturedAt = now
+            latest.totalValueEUR = totalValueEUR
+            latest.setsCount = setsCount
+            latest.unitsCount = unitsCount
+            latest.pricedSetsCount = pricedSetsCount
+        } else {
+            modelContext.insert(CollectionValueSnapshot(
+                monthKey: monthKey,
+                capturedAt: now,
+                totalValueEUR: totalValueEUR,
+                setsCount: setsCount,
+                unitsCount: unitsCount,
+                pricedSetsCount: pricedSetsCount
+            ))
+            purgeCollectionValueSnapshotsBeyondRetention()
+        }
+
+        try? modelContext.save()
+    }
+
+    /// Keeps the newest 48 months, matching the depth BrickEconomy's `periods` exposes. Only ever
+    /// runs right after an insert (an in-place update can't grow the table), and the table is ~48
+    /// rows, so the full fetch here is deliberate — a predicate on a computed cutoff key would buy
+    /// nothing.
+    private func purgeCollectionValueSnapshotsBeyondRetention() {
+        let all = (try? modelContext.fetch(
+            FetchDescriptor<CollectionValueSnapshot>(sortBy: [SortDescriptor(\.monthKey, order: .reverse)])
+        )) ?? []
+        for snapshot in all.dropFirst(48) {
+            modelContext.delete(snapshot)
+        }
+    }
+
+    /// The collection's monthly value readings, oldest first — the series behind the
+    /// "Valeur de la collection" chart.
+    func collectionValueSnapshots() -> [CollectionValueSnapshot] {
+        (try? modelContext.fetch(
+            FetchDescriptor<CollectionValueSnapshot>(sortBy: [SortDescriptor(\.monthKey, order: .forward)])
+        )) ?? []
     }
 
     /// All recorded price readings for a set, oldest first, for the history chart in `SetDetail`.

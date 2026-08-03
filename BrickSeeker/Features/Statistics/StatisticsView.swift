@@ -34,6 +34,7 @@ struct StatisticsView: View {
                         themeChartSection(viewModel.stats, viewModel)
                     }
                     valueSection(viewModel)
+                    valueHistorySection(viewModel)
                     superlativesSection(viewModel.stats)
                     exportSection(viewModel)
                 }
@@ -256,6 +257,100 @@ struct StatisticsView: View {
         }
     }
 
+    /// The monthly value series (#216) — one point per month the app took a reading, written by
+    /// `StatisticsViewModel.load()` and by every completed price batch.
+    ///
+    /// Hidden below two points on purpose: a single dot is not an evolution, and the first month a
+    /// user opens this screen would otherwise show an empty-looking chart with one mark in it.
+    @ViewBuilder
+    private func valueHistorySection(_ viewModel: StatisticsViewModel) -> some View {
+        let points = Self.valuePoints(viewModel.valueSnapshots)
+        if points.count >= 2 {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Valeur de la collection").font(.headline)
+                Chart(points) { point in
+                    LineMark(
+                        x: .value("Mois", point.date),
+                        y: .value("Valeur", point.valueEUR)
+                    )
+                    .foregroundStyle(Color.accentColor)
+                    .interpolationMethod(.monotone)
+
+                    // Greyed rather than dropped: the reading is genuine, it's the *coverage* that
+                    // was thin (prices expire after 7 days — see `recordCollectionValueSnapshot`),
+                    // so the point under-states the collection and shouldn't read like the others.
+                    PointMark(
+                        x: .value("Mois", point.date),
+                        y: .value("Valeur", point.valueEUR)
+                    )
+                    .foregroundStyle(point.isReliable ? Color.accentColor : Color.secondary)
+                }
+                .chartXAxis {
+                    AxisMarks { value in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel {
+                            if let date = value.as(Date.self) {
+                                Text(date.formatted(Self.monthAxisStyle)).font(.caption2)
+                            }
+                        }
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks { value in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel {
+                            if let amount = value.as(Double.self) {
+                                Text(amount.formatted(.currency(code: "EUR").precision(.fractionLength(0))))
+                                    .font(.caption2)
+                            }
+                        }
+                    }
+                }
+                // Without the padding the first and last `PointMark` sit exactly on the plot edges
+                // and get drawn half-clipped — confirmed on the simulator, not assumed.
+                .chartXScale(range: .plotDimension(startPadding: 8, endPadding: 8))
+                .frame(height: 200)
+                // Same plain-text summary approach as the other charts (#143) — Swift Charts draws
+                // no accessible content of its own.
+                .accessibilityLabel("Évolution de la valeur de la collection")
+                .accessibilityValue(
+                    points.map { point in
+                        "\(point.date.formatted(Self.monthAxisStyle)) : \(point.valueEUR.formatted(.currency(code: "EUR").precision(.fractionLength(0))))"
+                    }.joined(separator: ", ")
+                )
+
+                if points.contains(where: { !$0.isReliable }) {
+                    Text("Les points grisés reposent sur une couverture de prix partielle : tous les sets n'avaient pas de prix connu ce mois-là.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardStyle()
+        }
+    }
+
+    private static let monthAxisStyle = Date.FormatStyle(locale: Locale(identifier: "fr_FR"))
+        .month(.abbreviated)
+        .year(.twoDigits)
+
+    /// Chart-ready projection of the stored snapshots. A row whose `monthKey` doesn't parse is
+    /// dropped rather than plotted at a made-up date — nothing this app writes can produce one, but
+    /// the chart shouldn't be the thing that invents a value for it.
+    private static func valuePoints(_ snapshots: [CollectionValueSnapshot]) -> [CollectionValuePoint] {
+        snapshots.compactMap { snapshot in
+            guard let date = snapshot.monthStart() else { return nil }
+            return CollectionValuePoint(
+                id: snapshot.monthKey,
+                date: date,
+                valueEUR: snapshot.totalValueEUR,
+                isReliable: snapshot.coverage >= CollectionValueSnapshot.reliableCoverage
+            )
+        }
+    }
+
     @ViewBuilder
     private func superlativesSection(_ stats: CollectionStats) -> some View {
         // The header rendered even with all three rows absent, e.g. a collection with no priced
@@ -327,6 +422,17 @@ struct StatisticsView: View {
         .cardStyle()
     }
 
+}
+
+/// One plotted month of the collection-value chart (#216). A value type rather than the
+/// `CollectionValueSnapshot` itself: `monthStart()` is optional and `coverage` is a threshold
+/// question, and neither belongs inside a `Chart` content builder.
+private struct CollectionValuePoint: Identifiable {
+    /// The snapshot's `monthKey` — already unique per row by construction.
+    let id: String
+    let date: Date
+    let valueEUR: Double
+    let isReliable: Bool
 }
 
 /// Local `Identifiable` wrapper for `.sheet(item:)` — deliberately not a retroactive

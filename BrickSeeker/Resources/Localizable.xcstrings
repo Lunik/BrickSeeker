@@ -291,6 +291,9 @@
     "Évolution" : {
 
     },
+    "Évolution de la valeur de la collection" : {
+
+    },
     "Évolution des prix" : {
 
     },
@@ -345,6 +348,9 @@
 
     },
     "lego.com, amazon.fr et cdiscount.com : consultés pour afficher les prix du marché, sans identifiant transmis" : {
+
+    },
+    "Les points grisés reposent sur une couverture de prix partielle : tous les sets n'avaient pas de prix connu ce mois-là." : {
 
     },
     "Les prix des sets sous alerte et de la liste cadeaux sont actualisés en tâche de fond, quand iOS l'autorise, puis au lancement de l'app. Seuls les prix BrickLink peuvent être récupérés en tâche de fond." : {
@@ -543,6 +549,9 @@
 
     },
     "Valeur cible" : {
+
+    },
+    "Valeur de la collection" : {
 
     },
     "Valeur estimée" : {

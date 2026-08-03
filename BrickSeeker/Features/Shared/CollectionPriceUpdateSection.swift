@@ -169,6 +169,10 @@ struct CollectionPriceUpdateSection: View {
 
         if result.completed {
             PriceUpdateNotifier.notifyCompleted(total: result.total)
+            // A finished batch is the best-covered the collection will be all month — the moment
+            // worth filing as this month's value reading (#216). Only on the *completed* branch: a
+            // run the user paused halfway has priced an arbitrary prefix of the collection.
+            CollectionValueSnapshotRecorder.record(in: modelContext)
             onCompleted?()
         }
         // `isRunning` has already flipped back to `false` by the time this returns, so the
