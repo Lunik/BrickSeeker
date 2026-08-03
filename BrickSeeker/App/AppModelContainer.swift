@@ -18,6 +18,7 @@ enum AppModelContainer {
             ScanEvent.self,
             SetPurchaseRecord.self,
             PriceAlert.self,
+            CollectionValueSnapshot.self,
         ])
         let configuration = ModelConfiguration(schema: schema)
         return try! ModelContainer(for: schema, configurations: [configuration])

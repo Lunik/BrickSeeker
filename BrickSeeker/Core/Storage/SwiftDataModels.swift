@@ -263,6 +263,84 @@ final class PriceHistoryEntry {
     }
 }
 
+/// One month's reading of what the whole collection is worth (#216) — the local equivalent of
+/// BrickEconomy's `periods`, and the series behind the "Valeur de la collection" chart in
+/// Statistiques. One row per calendar month, at most 48 of them (four years, ~48 rows — the purge
+/// in `LocalRepository.recordCollectionValueSnapshot` keeps it there).
+///
+/// **Not** a cache, and never cleared by `clearAll()`: unlike a price quote, a past month cannot be
+/// re-fetched from anywhere. Same doctrine that already keeps `PriceHistoryEntry`/`ScanEvent` out of
+/// it — "vider le cache" purges what can be rebuilt, not history that can't.
+///
+/// `pricedSetsCount` is stored, not derived, because it is what makes the row trustworthy:
+/// `CachedSetPrice` expires after 7 days, so a collection left alone for a week values itself at
+/// nearly nothing. The writer refuses to overwrite a month with a worse-covered reading (and refuses
+/// to write at all at zero coverage), and the chart greys the months whose coverage was thin.
+@Model
+final class CollectionValueSnapshot {
+    /// `"2026-07"` — always built via `Self.monthKey(for:)`. Zero-padded so plain lexicographic
+    /// ordering is also chronological ordering, which is what the fetch sort and the 48-month purge
+    /// rely on.
+    var monthKey: String
+    /// When this row was last written — within the month, the reading can be refreshed several
+    /// times (see the coverage rule above), and this says which attempt won.
+    var capturedAt: Date
+    var totalValueEUR: Double
+    /// Distinct owned sets at capture time. Its `unitsCount` sibling is Σ `quantity`, the unit
+    /// `totalValueEUR` is actually denominated in — same pair as `CollectionStats.setCount`/
+    /// `unitCount`, and stored for the same reason: a value swing caused by buying sets should be
+    /// tellable apart from one caused by the market.
+    var setsCount: Int
+    var unitsCount: Int
+    /// How many of `setsCount` had a resolvable price when the reading was taken.
+    var pricedSetsCount: Int
+
+    init(
+        monthKey: String,
+        capturedAt: Date = Date(),
+        totalValueEUR: Double,
+        setsCount: Int,
+        unitsCount: Int,
+        pricedSetsCount: Int
+    ) {
+        self.monthKey = monthKey
+        self.capturedAt = capturedAt
+        self.totalValueEUR = totalValueEUR
+        self.setsCount = setsCount
+        self.unitsCount = unitsCount
+        self.pricedSetsCount = pricedSetsCount
+    }
+
+    /// `"YYYY-MM"` built from date components rather than a `DateFormatter` — a formatter would
+    /// render this key in the user's calendar/numbering system (Buddhist year, Arabic-Indic digits),
+    /// and the stored key has to stay a stable, comparable ASCII string.
+    static func monthKey(for date: Date, calendar: Calendar = .current) -> String {
+        let components = calendar.dateComponents([.year, .month], from: date)
+        return String(format: "%04d-%02d", components.year ?? 0, components.month ?? 0)
+    }
+
+    /// First instant of this row's month, for plotting on a `Date` axis. `nil` for a key that
+    /// doesn't parse — no such row is written by this app, but the chart shouldn't invent a date
+    /// for one that somehow exists.
+    func monthStart(calendar: Calendar = .current) -> Date? {
+        let parts = monthKey.split(separator: "-")
+        guard parts.count == 2, let year = Int(parts[0]), let month = Int(parts[1]) else { return nil }
+        return calendar.date(from: DateComponents(year: year, month: month, day: 1))
+    }
+
+    /// Share of the collection that carried a price when this reading was taken — `0...1`.
+    /// The chart greys a point below `CollectionValueSnapshot.reliableCoverage`.
+    var coverage: Double {
+        guard setsCount > 0 else { return 0 }
+        return Double(pricedSetsCount) / Double(setsCount)
+    }
+
+    /// Below this, a month is drawn greyed: the reading is real (it was the best coverage that month
+    /// achieved) but it under-states the collection, and a chart that plotted it like any other point
+    /// would show a crash that never happened.
+    static let reliableCoverage = 0.8
+}
+
 /// "Préviens-moi si ce set descend sous X" (#229) — one threshold the user set by hand on one set,
 /// for one condition (neuf **or** occasion, never both: the two are priced by different sources and
 /// a single alert covering them would be ambiguous about which one crossed).
