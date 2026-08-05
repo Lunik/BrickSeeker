@@ -131,10 +131,11 @@ enum NewSetsFilterState {
 }
 
 extension Array where Element == CachedSet {
-    /// Note for #224: this pass-through deliberately does **not** hide "Gear" merchandise. Its
+    /// Note for #224: this pass-through deliberately does **not** hide the catalog entries that
+    /// aren't sets (merchandise, books, internal exclusives, Rebrickable's own artifacts). Its
     /// callers are Collection/Historique/Liste cadeaux — sets the user owns or scanned, which stay
     /// visible and counted whatever the Réglages toggle says. Hiding happens only on screens that
-    /// *suggest* sets (see `WearableFilter`).
+    /// *suggest* sets (see `NonSetFilter`).
     ///
     /// - Parameters:
     ///   - resolvedPrice: closure used only for `.price` sort — each screen passes its own rule

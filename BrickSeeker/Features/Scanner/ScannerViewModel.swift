@@ -239,11 +239,11 @@ final class ScannerViewModel {
     }
 
     /// The disambiguation list is a *search result* — Rebrickable's catalog answers a bare set
-    /// number with keychains and T-shirts alongside the actual set — so merchandise is dropped
-    /// from it when the user asked for that in Réglages (#224).
+    /// number with keychains, books and T-shirts alongside the actual set — so entries that aren't
+    /// sets are dropped from it (#224; always for catalog artifacts, otherwise per Réglages).
     ///
     /// Two guards keep this from ever making things worse than they were:
-    /// - if every candidate is merchandise, the unfiltered list is shown instead. A number the
+    /// - if no candidate survives, the unfiltered list is shown instead. A number the
     ///   user deliberately pointed the camera at that only matches a cap should show that cap,
     ///   not an unexplained "Set non trouvé";
     /// - if exactly one candidate survives, it's presented as a normal result — the same thing
@@ -258,7 +258,7 @@ final class ScannerViewModel {
         source: LookupSource,
         wasFromCache: Bool
     ) async {
-        let visible = sets.filter { !WearableFilter.shared.shouldHide(themeId: $0.themeId) }
+        let visible = sets.filter { !NonSetFilter.shared.shouldHide(themeId: $0.themeId) }
         guard visible.count == 1, let legoSet = visible.first else {
             state = .ambiguous(visible.isEmpty ? sets : visible)
             return

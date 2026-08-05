@@ -9,7 +9,7 @@ struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
     @Bindable private var theme = AppTheme.shared
     @Bindable private var scanLocation = ScanLocationService.shared
-    @Bindable private var wearableFilter = WearableFilter.shared
+    @Bindable private var nonSetFilter = NonSetFilter.shared
     @State private var preferredPPPText: String = ""
     @State private var showPrivacyDetail = false
     @State private var showPriceAlerts = false
@@ -204,11 +204,11 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Toggle("Masquer les produits dérivés", isOn: $wearableFilter.isEnabled)
+                    Toggle("Masquer les entrées qui ne sont pas des sets", isOn: $nonSetFilter.isEnabled)
                 } header: {
                     Text("Catalogue")
                 } footer: {
-                    Text("Le catalogue Rebrickable référence aussi des produits dérivés (vêtements, sacs, porte-clés, montres…) qui n'ont rien à voir avec une collection de sets. Ils sont masqués des suggestions : résultats de recherche, nouveaux sets, sets où apparaît une minifig. Votre collection, votre historique et vos statistiques ne sont jamais filtrés, et un produit dérivé que vous scannez reste consultable.")
+                    Text("Le catalogue Rebrickable ne référence pas que des sets : environ un quart de ses entrées sont des produits dérivés (vêtements, sacs, porte-clés, montres…), des livres, ou des exclusivités internes LEGO jamais commercialisées. Elles sont masquées des suggestions : résultats de recherche, nouveaux sets, sets où apparaît une minifig. Votre collection, votre historique et vos statistiques ne sont jamais filtrés, et une entrée que vous scannez reste consultable. Les entrées techniques de Rebrickable (« Database Sets ») sont toujours masquées, ce ne sont pas des produits.")
                 }
 
                 Section {

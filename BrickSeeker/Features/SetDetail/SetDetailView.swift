@@ -168,15 +168,8 @@ struct SetDetailView: View {
                     // `OfflineMinifigCatalogStore` borrows one from a set it appears in — and for
                     // a figure sold in a magnet set or a watch that borrowed theme lands inside
                     // "Gear", which badged Chewbacca as a derived product (seen on device).
-                    if !isMinifig, WearableFilter.shared.isWearable(themeId: viewModel.legoSet.themeId) {
-                        Label(
-                            WearableFilter.shared.isEnabled
-                                ? "Produit dérivé — masqué des suggestions de sets"
-                                : "Produit dérivé — ce n'est pas un set de briques",
-                            systemImage: "tshirt"
-                        )
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    if !isMinifig, let kind = NonSetFilter.shared.kind(themeId: viewModel.legoSet.themeId) {
+                        nonSetBadge(for: kind)
                     }
 
                     statusBadge
@@ -913,15 +906,59 @@ struct SetDetailView: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    /// Drops merchandise entries from a "sets containing this minifig" page (#224). Returns the
-    /// list untouched when the toggle is off, so a disabled filter costs nothing — not even the
-    /// offline catalogue's first decode.
-    private func filteringWearables(_ entries: [MinifigSetEntry]) async -> [MinifigSetEntry] {
-        guard WearableFilter.shared.isEnabled else { return entries }
+    /// Says what this entry is instead of a set, and whether that's currently hiding it from the
+    /// suggestion lists — the whole point of showing it here is to explain an absence elsewhere.
+    /// Catalog artifacts get no "si vous le souhaitez" phrasing because the toggle doesn't reach
+    /// them (see `NonSetFilter.shouldHide`).
+    @ViewBuilder
+    private func nonSetBadge(for kind: NonSetFilter.Kind) -> some View {
+        let isHidden = NonSetFilter.shared.isEnabled
+        Group {
+            switch kind {
+            case .merchandise:
+                Label(
+                    isHidden
+                        ? "Produit dérivé — masqué des suggestions de sets"
+                        : "Produit dérivé — ce n'est pas un set de briques",
+                    systemImage: "tshirt"
+                )
+            case .book:
+                Label(
+                    isHidden
+                        ? "Livre ou publication — masqué des suggestions de sets"
+                        : "Livre ou publication — ce n'est pas un set de briques",
+                    systemImage: "book"
+                )
+            case .exclusive:
+                Label(
+                    isHidden
+                        ? "Exclusivité interne LEGO — masquée des suggestions de sets"
+                        : "Exclusivité interne LEGO — jamais commercialisée",
+                    systemImage: "lock.circle"
+                )
+            case .catalogArtifact:
+                Label(
+                    "Entrée technique Rebrickable — ce n'est pas un produit",
+                    systemImage: "wrench.and.screwdriver"
+                )
+            }
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+    }
+
+    /// Drops non-set entries from a "sets containing this minifig" page (#224).
+    ///
+    /// Runs even when the toggle is off, unlike before: "Database Sets" are Rebrickable's own
+    /// bookkeeping rows, they do list minifigs, and they're hidden unconditionally. That costs the
+    /// offline catalogue's decode on a screen that previously skipped it — acceptable because
+    /// `BrickSeekerApp` already calls `OfflineCatalogStore.warmUp()` at launch, so by the time a
+    /// minifig sheet is open the snapshot is memoized and these are dictionary hits.
+    private func filteringNonSets(_ entries: [MinifigSetEntry]) async -> [MinifigSetEntry] {
         var visible: [MinifigSetEntry] = []
         for entry in entries {
             let themeId = await OfflineCatalogStore.shared.lookup(setNum: entry.setNum)?.themeId
-            if let themeId, WearableFilter.shared.shouldHide(themeId: themeId) { continue }
+            if let themeId, NonSetFilter.shared.shouldHide(themeId: themeId) { continue }
             visible.append(entry)
         }
         return visible
@@ -946,7 +983,7 @@ struct SetDetailView: View {
             // its first read, so these are dictionary hits, not one decode per card — and a set
             // it doesn't know (or the whole catalogue not being downloaded) simply stays visible,
             // the same fail-open direction as the rest of the filter.
-            let results = await filteringWearables(response.results)
+            let results = await filteringNonSets(response.results)
             setsContainingMinifig = results
             setsContainingMinifigTotalCount = response.count
             let repository = LocalRepository(modelContext: modelContext)
