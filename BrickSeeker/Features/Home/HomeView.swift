@@ -150,7 +150,7 @@ struct HomeView: View {
             consumePendingAction()
             consumePendingPriceAlert()
             Task { await viewModel.loadOwnedMinifigsCount() }
-            // The scan disambiguator filters out merchandise (#224) from the theme hierarchy, and
+            // The scan disambiguator filters out non-set entries (#224) from the theme hierarchy, and
             // it can be reached without ever opening a list screen — those are where the theme
             // table already gets refreshed. No-ops unless it's missing or stale.
             Task { await ThemeNameStore.shared.refreshIfNeeded() }

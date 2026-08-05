@@ -321,7 +321,31 @@
     "L'accès à la position est refusé dans les réglages iOS — aucune position ne sera enregistrée." : {
 
     },
-    "Le catalogue Rebrickable référence aussi des produits dérivés (vêtements, sacs, porte-clés, montres…) qui n'ont rien à voir avec une collection de sets. Ils sont masqués des suggestions : résultats de recherche, nouveaux sets, sets où apparaît une minifig. Votre collection, votre historique et vos statistiques ne sont jamais filtrés, et un produit dérivé que vous scannez reste consultable." : {
+    "Entrée technique Rebrickable — ce n'est pas un produit" : {
+
+    },
+    "Exclusivité interne LEGO — jamais commercialisée" : {
+
+    },
+    "Exclusivité interne LEGO — masquée des suggestions de sets" : {
+
+    },
+    "Le catalogue Rebrickable ne référence pas que des sets : environ un quart de ses entrées sont des produits dérivés (vêtements, sacs, porte-clés, montres…), des livres, ou des exclusivités internes LEGO jamais commercialisées. Elles sont masquées des suggestions : résultats de recherche, nouveaux sets, sets où apparaît une minifig. Votre collection, votre historique et vos statistiques ne sont jamais filtrés, et une entrée que vous scannez reste consultable. Les entrées techniques de Rebrickable (« Database Sets ») sont toujours masquées, ce ne sont pas des produits." : {
+
+    },
+    "Livre ou publication — ce n'est pas un set de briques" : {
+
+    },
+    "Livre ou publication — masqué des suggestions de sets" : {
+
+    },
+    "Masquer les entrées qui ne sont pas des sets" : {
+
+    },
+    "Produit dérivé — ce n'est pas un set de briques" : {
+
+    },
+    "Produit dérivé — masqué des suggestions de sets" : {
 
     },
     "Le pourcentage est appliqué au prix « %@ » (%@) pour calculer le prix final." : {

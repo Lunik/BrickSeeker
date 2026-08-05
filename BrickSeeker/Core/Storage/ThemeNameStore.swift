@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 /// Caches Rebrickable's theme table — id → name, plus the `parent_id` hierarchy those names hang
-/// off (`isDescendant(_:of:)`, used to hide the whole "Gear" merchandise sub-tree, #224) —
+/// off (`isDescendant(_:of:)`, used to hide whole non-set sub-trees — "Gear", "Books"… — #224) —
 /// downloaded from the same unauthenticated
 /// static-downloads source as `OfflineCatalogStore`'s sets dump (`cdn.rebrickable.com/media/
 /// downloads/`). Unlike that dump this file is tiny (~5 KB compressed, ~700 rows) and the data
@@ -29,7 +29,7 @@ final class ThemeNameStore {
     /// rather than by a hardcoded list of ids that Rebrickable can invalidate at any time (#224).
     private(set) var parentsByThemeId: [Int: Int]
     /// Bumped every time the table is replaced. Consumers that derive something expensive from it
-    /// (`WearableFilter`'s "Gear" root lookup, which scans the whole table) use this as a cache
+    /// (`NonSetFilter`'s hidden-root lookups, which scan the whole table) use this as a cache
     /// key — an exact one, unlike comparing the table's size, and observable like the table itself
     /// so a refresh still invalidates the cache and re-renders whatever depends on it.
     private(set) var generation = 0
@@ -100,6 +100,20 @@ final class ThemeNameStore {
             .filter { parentsByThemeId[$0.key] == nil && $0.value == name }
             .keys
             .min()
+    }
+
+    /// Every theme with this exact name, at any depth — the counterpart to `rootThemeId(named:)`
+    /// for sub-trees that legitimately hang off another root. "Database Sets" (Rebrickable's own
+    /// catalogue artifacts, #224) is the case that needs it: it sits under "Other" alongside real
+    /// sets, so the roots-only lookup can't see it.
+    ///
+    /// Returns *all* matches rather than one, deliberately. The roots-only rule exists because a
+    /// name can repeat in an unrelated branch ("Gear" vs "Gears"); relaxing it means accepting that
+    /// risk, so the caller hides every match instead of guessing which one was meant — a second
+    /// theme Rebrickable ever names "Database Sets" would be database sets too. Empty while the
+    /// table isn't loaded, which makes callers fail open.
+    func themeIds(named name: String) -> [Int] {
+        namesByThemeId.filter { $0.value == name }.keys.sorted()
     }
 
     /// Downloads/refreshes the table if it's never been fetched or is stale; no-ops otherwise, so
