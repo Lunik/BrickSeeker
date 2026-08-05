@@ -242,7 +242,10 @@
     "Configurer le type (neuf/occasion) des listes" : {
 
     },
-    "Créez une alerte depuis la fiche d'un set pour être prévenu quand son prix passe sous un seuil. Les sets sous alerte et ceux de votre liste cadeaux sont réactualisés en tâche de fond quand iOS l'autorise — uniquement via l'API BrickLink (neuf/occasion) — puis rattrapés à l'ouverture de l'app. Les prix lego.com, Amazon et Cdiscount ne sont actualisés qu'au premier plan." : {
+    "Créer une alerte est ce qui met ce set sous surveillance : lui seul sera réactualisé en tâche de fond." : {
+
+    },
+    "Créez une alerte depuis la fiche d'un set pour être prévenu quand son prix passe sous un seuil. Seuls les sets sous alerte sont réactualisés en tâche de fond quand iOS l'autorise — uniquement via l'API BrickLink (neuf/occasion) — puis rattrapés à l'ouverture de l'app. Les prix lego.com, Amazon et Cdiscount ne sont actualisés qu'au premier plan. Sans aucune alerte, rien n'est surveillé et l'app ne s'exécute jamais en arrière-plan." : {
 
     },
     "Déjà un compte ?" : {
@@ -270,7 +273,7 @@
         }
       }
     },
-    "En tâche de fond, l'app contacte uniquement l'API BrickLink, et uniquement pour les sets de votre liste cadeaux ou sous alerte de prix. Aucune autre source n'est consultée hors utilisation directe." : {
+    "En tâche de fond, l'app contacte uniquement l'API BrickLink, et uniquement pour les sets sur lesquels vous avez créé une alerte de prix. Sans alerte configurée, l'app ne s'exécute jamais en arrière-plan. Aucune autre source n'est consultée hors utilisation directe." : {
 
     },
     "Enregistrer" : {
@@ -289,9 +292,6 @@
 
     },
     "Évolution" : {
-
-    },
-    "Évolution de la valeur de la collection" : {
 
     },
     "Évolution des prix" : {
@@ -353,7 +353,7 @@
     "Les points grisés reposent sur une couverture de prix partielle : tous les sets n'avaient pas de prix connu ce mois-là." : {
 
     },
-    "Les prix des sets sous alerte et de la liste cadeaux sont actualisés en tâche de fond, quand iOS l'autorise, puis au lancement de l'app. Seuls les prix BrickLink peuvent être récupérés en tâche de fond." : {
+    "Les prix des sets sous alerte sont actualisés en tâche de fond, quand iOS l'autorise, puis au lancement de l'app. Seuls les prix BrickLink peuvent être récupérés en tâche de fond." : {
 
     },
     "Les prochains scans seront ajoutés à une session, sans ouvrir la fiche du set." : {
@@ -582,99 +582,6 @@
 
     },
     "Vous serez prévenu dès que le prix passe sous ce montant, une seule fois par franchissement." : {
-
-    },
-    "Alerte active" : {
-
-    },
-    "Alerte de prix (désactivée)" : {
-
-    },
-    "Disponibilité" : {
-
-    },
-    "Disponible à l'achat" : {
-
-    },
-    "Elle est relevée en même temps que le prix lego.com : actualisez les prix pour la compléter." : {
-
-    },
-    "Inconnue" : {
-
-    },
-    "n'a pas encore d'information de disponibilité lego.com." : {
-
-    },
-    "n'ont pas encore d'information de disponibilité lego.com." : {
-
-    },
-    "Retiré de la vente" : {
-
-    },
-    "Rupture de stock" : {
-
-    },
-    "Alerte : %@" : {
-
-    },
-    "Alerte de prix" : {
-
-    },
-    "Alerte de prix active" : {
-
-    },
-    "Alerte désactivée" : {
-
-    },
-    "Alertes de prix" : {
-
-    },
-    "Aucune alerte de prix" : {
-
-    },
-    "Baisse de prix : %@" : {
-
-    },
-    "Créer une alerte de prix" : {
-
-    },
-    "Dernier prix vu" : {
-
-    },
-    "Modifier l'alerte de prix" : {
-
-    },
-    "Sous %@" : {
-
-    },
-    "Supprimer cette alerte ?" : {
-
-    },
-    "Supprimer l'alerte" : {
-
-    },
-    "Type de seuil" : {
-
-    },
-    "Wi-Fi uniquement" : {
-
-    },
-    "lego.com (officiel)" : {
-
-    },
-    "prévenu le %@" : {
-
-    },
-    "valeur actuelle" : {
-
-    },
-    "%@ sous %@" : {
-
-    },
-    "%@ — %@ en %@, sous votre seuil de %@." : {
-
-    },
-    "−%@ %%" : {
 
     }
   },
