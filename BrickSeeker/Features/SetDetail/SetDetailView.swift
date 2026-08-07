@@ -1523,28 +1523,46 @@ struct SetDetailView: View {
             }
 
             if let quote, let range = priceRange(quote) {
+                // Orange on a thin sample (#240) so "sur 1 vente" reads as the caveat it is rather
+                // than as one more grey decoration — same signal as the unknown-status warning.
                 Text(range.text)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(quote.isThinSample ? .orange : .secondary)
                     .accessibilityLabel(range.accessibilityLabel)
             }
         }
     }
 
-    /// "12,00 € – 30,00 € (7 lots)" — the spread the source's average was drawn from, plus how many
-    /// sales it spans. Nil unless both bounds are known: a single bound would suggest a range we
-    /// don't have. The lot count is dropped rather than shown as "(1 lot)" when the sample is a
-    /// single sale — min and max are then the same number and there is no spread to qualify.
+    /// "12,00 € – 30,00 € (7 ventes)", or just "sur 1 vente" when there is no spread to show.
+    ///
+    /// The spread and the sample size are two independent facts, and the previous single guard tied
+    /// them together: it bailed out entirely when `minAmount == maxAmount`, which is *exactly* the
+    /// one-sale case (#240). A quote drawn from a single transaction therefore rendered as a bare
+    /// number — cleaner, and so more credible, than the nine-sale quote right above it. That was
+    /// backwards: the thinnest sample is the one that most needs qualifying.
+    ///
+    /// A missing bound still yields no range — a lone bound would imply a spread we don't have —
+    /// but it no longer suppresses the lot count.
     private func priceRange(_ quote: PriceQuote) -> (text: String, accessibilityLabel: String)? {
-        guard let minAmount = quote.minAmount, let maxAmount = quote.maxAmount, minAmount < maxAmount else {
-            return nil
+        let spread: (low: String, high: String)? = {
+            guard let minAmount = quote.minAmount, let maxAmount = quote.maxAmount, minAmount < maxAmount else {
+                return nil
+            }
+            return (minAmount.formatted(.currency(code: quote.currency)),
+                    maxAmount.formatted(.currency(code: quote.currency)))
+        }()
+        // `unit_quantity` counts distinct sales on the `sold` guide the app reads — "lots" was the
+        // `stock` guide's word for the same field, and read as inventory rather than sample size.
+        guard let lots = quote.lotCount, lots > 0 else {
+            guard let spread else { return nil }
+            return ("\(spread.low) – \(spread.high)", "Fourchette de \(spread.low) à \(spread.high)")
         }
-        let low = minAmount.formatted(.currency(code: quote.currency))
-        let high = maxAmount.formatted(.currency(code: quote.currency))
-        guard let lots = quote.lotCount, lots > 1 else {
-            return ("\(low) – \(high)", "Fourchette de \(low) à \(high)")
+        let sample = lots == 1 ? "1 vente" : "\(lots) ventes"
+        guard let spread else {
+            return ("sur \(sample)", "Cote établie sur \(sample)")
         }
-        return ("\(low) – \(high) (\(lots) lots)", "Fourchette de \(low) à \(high), sur \(lots) lots")
+        return ("\(spread.low) – \(spread.high) (\(sample))",
+                "Fourchette de \(spread.low) à \(spread.high), sur \(sample)")
     }
 
     /// Shared trailing for a row with no value yet: a spinner while its source
