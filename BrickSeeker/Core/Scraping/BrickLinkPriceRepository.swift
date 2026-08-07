@@ -184,6 +184,40 @@ struct BrickLinkPriceRepository: Sendable {
         return quotes
     }
 
+    /// One condition's Price Guide quote.
+    ///
+    /// **There is deliberately no completeness filter here, because the API has none** — verified
+    /// against live signed calls (#240, skill `check-bricklink-endpoint`). `completeness` is not a
+    /// parameter this endpoint recognises: `S`, `C`, `B` and even `BOGUS` all return byte-identical
+    /// data, while `region`, `country_code`, `vat` and `currency_code` visibly move the numbers on
+    /// the same call — so the endpoint does read its query string, it simply has no such knob.
+    /// `price_detail[]` carries no completeness field on either guide type, and neither does the
+    /// catalog item itself.
+    ///
+    /// It is also unnecessary: BrickLink already excludes incomplete lots from the guide. On
+    /// `10356-1` the `stock` guide's `min_price` came back as `256.2343`, matching to the cent the
+    /// site's `Sealed + Complete` floor of 256,23 €, while the four "New (Incomplete)" lots listed
+    /// between 169,99 € and 207,94 € were absent from the response. The `sold` guide has no
+    /// equivalent ground truth to check against — the site exposes no completeness filter on
+    /// realised sales — but a sweep of 30 sets / ~600 sales found no cheap cluster anywhere: sets
+    /// that are traded incomplete constantly (`928-1`, 1979) bottom out at complete-set prices.
+    ///
+    /// So don't re-add a `completeness` parameter, and above all don't reach for the *Items For
+    /// Sale* page to obtain one — that is precisely the scrape #104/#111 removed (App Store 5.2.2).
+    ///
+    /// **`region=europe` + `vat=Y` changed what this number means, on purpose (#240).** Measured on
+    /// `10356-1`: new went 310,92 € → 336,97 € (9 sales → 4), used 196,27 € → 237,49 €. Two
+    /// consequences to keep in mind rather than "fix" later:
+    ///
+    /// - **Price history is discontinuous at this change.** Every `PriceHistoryEntry` written before
+    ///   it is a worldwide, ex-VAT average; everything after is European and VAT-inclusive. The
+    ///   series is not comparable across that boundary — same class of break as switching
+    ///   `guide_type`, and the reason that switch is forbidden elsewhere in this file.
+    /// - **Samples get much smaller**, so `PriceQuote.isThinSample` fires far more often: `42143-1`
+    ///   new drops from 51 sales to 28, used from 13 to 7. That is the honest trade — a European
+    ///   VAT-inclusive price computed from fewer sales beats a worldwide one that doesn't describe
+    ///   what a French buyer would actually pay — but it makes the thin-sample caveat load-bearing
+    ///   rather than decorative.
     private func fetchQuote(
         apiType: String,
         id: String,
@@ -196,9 +230,19 @@ struct BrickLinkPriceRepository: Sendable {
             queryItems: [
                 URLQueryItem(name: "guide_type", value: "sold"),
                 URLQueryItem(name: "new_or_used", value: newOrUsed),
-                // No region setting exists yet (#40) — EUR matches this app's other price
-                // sources (lego.com, amazon.fr), which already assume the French/EUR market.
-                URLQueryItem(name: "currency_code", value: "EUR")
+                // Every other row of the price card (lego.com, Amazon, Cdiscount) is French retail:
+                // euros, VAT included, sold in Europe. These three put BrickLink on those same terms
+                // so the rows compare like with like (#240) — before, a worldwide ex-VAT average sat
+                // next to three VAT-inclusive French prices and the `±%` between them was noise.
+                URLQueryItem(name: "currency_code", value: "EUR"),
+                // NOT validated by BrickLink: `region=BOGUS` returns HTTP 200 and silently falls
+                // back to worldwide. A typo here fails open, quietly restoring the old meaning —
+                // so never edit this string without re-probing. (`eu` and `europe` are near
+                // identical: 27 vs 28 lots on `42143-1`; `europe` is the wider, steadier sample.)
+                URLQueryItem(name: "region", value: "europe"),
+                // `vat` *is* validated (`vat=BOGUS` → HTTP 400), so a typo here fails loudly.
+                // `N` and `O` both behave as "exclude"; only `Y` includes it.
+                URLQueryItem(name: "vat", value: "Y")
             ]
         )
         guard let amount = Decimal(string: data.avgPrice), amount > 0 else {
@@ -229,15 +273,35 @@ struct BrickLinkPriceRepository: Sendable {
     /// about the current price.
     private static let maxStoredSales = 50
 
+    /// How far back a sale may be dated and still belong to the "6 derniers mois" window BrickLink
+    /// advertises for `guide_type=sold`. 183 days rather than a hard six months, so a legitimate
+    /// sale isn't dropped over timezone skew or posting lag on the boundary.
+    ///
+    /// BrickLink does not honour its own window. `75192-1` came back with sales dated 2023-10-12
+    /// and 2025-05-25 among 22 sales from 2026 (#240) — the latter at 26,54 € against a 485,78 €
+    /// median, dragging the reported average from ~473,68 € down to 455,05 €. A row that old says
+    /// nothing about today's price, and has no business on a chart titled "6 derniers mois".
+    private static let salesWindow: TimeInterval = 60 * 60 * 24 * 183
+
     /// Maps `price_detail[]` to the app's own value type, newest first and capped. Entries missing
     /// a price or a date are dropped rather than guessed at: a sale with no `date_ordered` has no
-    /// x-coordinate, so there is nowhere honest to plot it.
+    /// x-coordinate, so there is nowhere honest to plot it. Sales older than `salesWindow` are
+    /// dropped too — see that constant for the live evidence that BrickLink returns them.
+    ///
+    /// Note the asymmetry this creates, and leave it alone: `amount` remains BrickLink's own
+    /// `avg_price`, which *does* include those stale sales, so the scatter and the average can
+    /// disagree slightly. Recomputing the average from the filtered rows would swap the meaning of
+    /// every stored `PriceHistoryEntry` for a home-made number — the "à ne pas faire" of #213, and
+    /// the option #240 itself rejects as inventing a cote. Showing honest points under an
+    /// imperfect average beats fabricating a consistent one.
     private static func sales(from details: [PriceGuideData.PriceDetail]) -> [SoldSale] {
-        details.compactMap { detail -> SoldSale? in
+        let cutoff = Date().addingTimeInterval(-salesWindow)
+        return details.compactMap { detail -> SoldSale? in
             guard let unitPrice = detail.unitPrice,
                   let unitAmount = Decimal(string: unitPrice), unitAmount > 0,
                   let dateOrdered = detail.dateOrdered,
-                  let orderedAt = Self.parseDate(dateOrdered) else { return nil }
+                  let orderedAt = Self.parseDate(dateOrdered),
+                  orderedAt >= cutoff else { return nil }
             return SoldSale(unitAmount: unitAmount, quantity: max(1, detail.quantity ?? 1), orderedAt: orderedAt)
         }
         // Newest-first to pick which survive the cap, then back to chronological order for storage.

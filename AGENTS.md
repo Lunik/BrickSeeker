@@ -499,6 +499,22 @@ lego.com price.
   (6-month sold average) matches what the old scraper read, not `guide_type=stock` (current
   listings) — keep using `sold` if this is touched again, or `DealVerdict`/history numbers change
   meaning silently.
+  - **The call is pinned to the French market**: `currency_code=EUR&region=europe&vat=Y` (#240), so
+    BrickLink is quoted on the same terms as the lego.com/Amazon/Cdiscount rows beside it (euros,
+    VAT in, European sellers). Note the asymmetry when editing: `vat` is validated by BrickLink
+    (`vat=BOGUS` → HTTP 400, fails loudly) but **`region` is not** (`region=BOGUS` → HTTP 200,
+    silently worldwide again) — a typo there restores the old meaning without any error. This
+    change also **broke the history series**: entries written before it are worldwide/ex-VAT
+    (`10356-1` new: 310,92 € → 336,97 €), and it shrinks samples a lot (`42143-1` new: 51 sales →
+    28), so `PriceQuote.isThinSample` matters more than it looks.
+  - **There is no completeness filter, and there cannot be one** — verified on live signed calls
+    (#240): `completeness` is not a recognised parameter (`S`/`C`/`B`/`BOGUS` all return identical
+    data, while `region`/`vat`/`country_code`/`currency_code` visibly move the numbers), and no
+    completeness field exists on `price_detail[]` or the catalog item. It is also unnecessary:
+    BrickLink already excludes incomplete lots (on `10356-1` the `stock` guide's `min_price` is
+    `256.2343`, matching the site's Sealed+Complete floor to the cent while the "New (Incomplete)"
+    lots at 169,99–207,94 € are absent; a 30-set/~600-sale sweep of the `sold` guide found no cheap
+    cluster either). Don't re-open this, and above all don't scrape *Items For Sale* to "fix" it.
   - **The response's verified shape** (probed live, #213/#214 — see the `check-bricklink-endpoint`
     skill, which has a signed `probe.py` for re-checking any BrickLink endpoint):
     `currency_code`, `min_price`, `max_price`, `avg_price`, `qty_avg_price` (money as decimal

@@ -80,6 +80,19 @@ struct PriceQuote: Codable, Hashable {
     /// that has no such concept), while `[]` is a live fetch that found **no** sale — the only one
     /// of the two allowed to clear previously stored rows.
     var sales: [SoldSale]? = nil
+
+    /// Whether the average rests on so few sales that one atypical transaction *is* the quote.
+    /// Verified on #240: `10356-1` used quotes 196,27 € — a single sale, DE → NL — which is what
+    /// produced the "−48 % vs retail" that opened the issue, while the same set's current used
+    /// listings sit at 260–270 €. On used, `n ≤ 3` is the common case rather than the exception
+    /// (`trek001` used: 1 lot; `10356-1` used listings: 3), so this is a routine caveat.
+    ///
+    /// Nil `lotCount` is *not* thin: every non-BrickLink source quotes one listing rather than an
+    /// average over sales, and has no sample size to be small in the first place.
+    var isThinSample: Bool {
+        guard let lotCount else { return false }
+        return lotCount > 0 && lotCount <= 2
+    }
 }
 
 /// One real, completed sale behind a `PriceQuote` — BrickLink's `price_detail[]` under
