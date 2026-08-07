@@ -174,12 +174,17 @@ the unpaged sheet is exactly what it was.
   galleries plus the sheet's own interactive dismissal; UIKit paging arbitrates all of that
   natively (innermost scroll view wins, so a swipe on a gallery scrolls the gallery) and gives the
   no-wrap rubber-band at both ends for free.
-- **Only one page is ever a real `SetDetailView`.** Opening a set fires the lego.com WKWebView
-  Cloudflare scrape plus BrickLink/Amazon/Cdiscount and the minifig/similar-set galleries — a
-  normal paged `TabView` keeps neighbours alive and would double all of it per swipe. Neighbours
-  render `inertPage` (the same header, cache-only image, no `.task`), far pages render
-  `Color.clear`, and `liveIndex` trails `index` by 350 ms so a fast flick loads only the set the
-  user stopped on. **Don't "simplify" this to rendering every page.**
+- **The split is rendering vs *loading*, not placeholder vs real view.** Opening a set fires the
+  lego.com WKWebView Cloudflare scrape plus BrickLink/Amazon/Cdiscount and the minifig/similar-set
+  galleries, and a paged `TabView` keeps neighbours alive — so neighbours build the **complete**
+  `SetDetailView` from the local cache with `SetDetailView.loadsLiveData: false`, which gates every
+  network-touching `.task(id: loadsLiveData)` and costs no request at all. Becoming the current page
+  only flips that flag: same view, nothing rebuilt, so the swipe lands on a page that already looks
+  finished. Pages past ±1 are `Color.clear`, and `liveIndex` trails `index` by 400 ms so a fast
+  flick issues one round of requests, not five. **Don't render every page** (that's the request
+  storm), and **don't go back to a placeholder page** — the first take did, and it visibly jumped:
+  two view types means SwiftUI tears one down and lays the other out, so the content popped in a
+  beat after the gesture ended.
 - `SetDetailView.embedsNavigationChrome: false` drops its own `NavigationStack`/"Fermer" so the
   pager owns the bar and it stays put while pages slide. The prev/next toolbar buttons are not
   decoration: a gesture alone isn't an affordance, and VoiceOver eats horizontal swipes (#143).

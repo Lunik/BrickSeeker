@@ -87,6 +87,13 @@ struct SetDetailView: View {
     /// stays put while the pages slide underneath it instead of sliding along with them. Every
     /// other presenter gets the self-contained view it always had.
     private let embedsNavigationChrome: Bool
+    /// `false` while the pager is holding this page ready one swipe away (#239): the view renders
+    /// its complete self from the local cache — image, status, quantity, valuation, cached quotes,
+    /// history chart, scans — but fires **no** network work (lego.com's WKWebView scrape above all).
+    /// Flipping it to `true` when the page becomes current starts exactly those requests, without
+    /// rebuilding anything: the swipe lands on a page that already looks finished, which is the
+    /// whole point. Always `true` for a sheet presented on its own.
+    private let loadsLiveData: Bool
     /// Only used by `setsContainingMinifigSection` (issue #178) — a plain repository call kept
     /// at the View level, same as `scanHistorySection`'s direct `LocalRepository` reads just
     /// below, rather than growing `SetDetailViewModel` for a section unrelated to its existing
@@ -103,7 +110,8 @@ struct SetDetailView: View {
         reconcileOnAppear: Bool = false,
         isOfflineResult: Bool = false,
         pendingPriceScanEvent: ScanEvent? = nil,
-        embedsNavigationChrome: Bool = true
+        embedsNavigationChrome: Bool = true,
+        loadsLiveData: Bool = true
     ) {
         _viewModel = State(initialValue: SetDetailViewModel(
             legoSet: legoSet,
@@ -122,6 +130,7 @@ struct SetDetailView: View {
         self.reconcileOnAppear = reconcileOnAppear
         self.isOfflineResult = isOfflineResult
         self.embedsNavigationChrome = embedsNavigationChrome
+        self.loadsLiveData = loadsLiveData
     }
 
     private var isMinifig: Bool { viewModel.legoSet.setNum.isMinifig }
@@ -158,17 +167,25 @@ struct SetDetailView: View {
         .onChange(of: viewModel.isInWishlist) { _, isInWishlist in
             LocalRepository(modelContext: modelContext).setWishlistStatus(setNum: viewModel.legoSet.setNum, isInWishlist: isInWishlist)
         }
-        .task {
-            if reconcileOnAppear {
-                await viewModel.silentlyReconcileCollectionStatus()
-            }
+        // Every network-touching `.task` is keyed on `loadsLiveData` rather than plain `.task`, so a
+        // page the pager is holding ready (#239) builds its whole cached self without firing a
+        // single request, and starts them the moment it becomes the current page. Purely local
+        // work below stays on an unkeyed `.task` — it's what makes a held page look finished.
+        .task(id: loadsLiveData) {
+            guard loadsLiveData, reconcileOnAppear else { return }
+            await viewModel.silentlyReconcileCollectionStatus()
         }
-        .task {
+        .task(id: loadsLiveData) {
+            guard loadsLiveData else { return }
             await viewModel.loadStorePriceIfNeeded()
         }
-        .task {
+        .task(id: loadsLiveData) {
+            // The cache seed runs either way (and is a cheap, idempotent local read) — it has to
+            // stay in the same task as the refresh below, which reads the quotes it just seeded to
+            // decide whether anything is stale enough to re-fetch.
             let setNum = viewModel.legoSet.setNum
             viewModel.setCachedPrices(LocalRepository(modelContext: modelContext).cachedPrices(setNum: setNum))
+            guard loadsLiveData else { return }
             await refreshPricesIfNeeded()
         }
         .task {
@@ -180,13 +197,16 @@ struct SetDetailView: View {
             relatedSetLookupViewModel.localRepository = LocalRepository(modelContext: modelContext)
             relatedSetLookupViewModel.playsFeedbackSounds = false
         }
-        .task {
+        .task(id: loadsLiveData) {
+            guard loadsLiveData else { return }
             await loadSetsContainingMinifigIfNeeded()
         }
-        .task {
+        .task(id: loadsLiveData) {
+            guard loadsLiveData else { return }
             await loadMinifigsInSetIfNeeded()
         }
-        .task {
+        .task(id: loadsLiveData) {
+            guard loadsLiveData else { return }
             await loadSimilarSetsIfNeeded()
         }
     }

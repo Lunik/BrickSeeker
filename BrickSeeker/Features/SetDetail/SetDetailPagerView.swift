@@ -13,13 +13,26 @@ import SwiftData
 /// never changes set. It also gives the expected rubber-band at both ends, which is the whole of
 /// the "no wrap-around, just a small bounce" requirement.
 ///
-/// **Why only one page is ever real.** Opening a set is expensive: `SetDetailView`'s `.task`s fetch
-/// the lego.com price through a hidden `WKWebView` that solves a Cloudflare challenge (seconds),
-/// plus BrickLink/Amazon/Cdiscount quotes and the minifig/similar-set galleries. A paged `TabView`
-/// normally keeps its neighbours alive, which would double every one of those on each swipe — so
-/// neighbours render `inertPage`, a static header with no network path at all, and the real view is
-/// only built for `liveIndex`. `liveIndex` additionally trails `index` by `settleDelay`, so flicking
-/// through five sets loads the one the user stopped on, not five.
+/// **Why only one page ever loads, and why that isn't visible.** Opening a set is expensive:
+/// `SetDetailView`'s `.task`s fetch the lego.com price through a hidden `WKWebView` that solves a
+/// Cloudflare challenge (seconds), plus BrickLink/Amazon/Cdiscount quotes and the minifig/
+/// similar-set galleries. A paged `TabView` normally keeps its neighbours alive, which would fire
+/// every one of those on each swipe.
+///
+/// The split is therefore between *rendering* and *loading*, not between a placeholder and the real
+/// thing. Neighbours build the **complete** `SetDetailView` — image, status, quantity, valuation,
+/// cached quotes, history chart, scans, all of it local — with `loadsLiveData: false`, so they cost
+/// no network at all; becoming the current page only flips that flag, which starts the requests
+/// without rebuilding a single view. A swipe lands on a page that already looks finished.
+///
+/// The first take rendered a spinner-and-header placeholder instead and swapped it for the real
+/// view once the page settled. It jumped, visibly: two different view types means SwiftUI tears the
+/// first one down and lays the second one out, so the whole page popped into place a beat after the
+/// gesture ended. Don't reintroduce a placeholder page here.
+///
+/// `liveIndex` still trails `index` by `settleDelay`, so flicking through five sets issues one
+/// round of requests rather than five — but that delay is now invisible, since what it gates is
+/// network work rather than content.
 struct SetDetailPagerView: View {
     let context: SetNavigationContext
 
@@ -28,14 +41,14 @@ struct SetDetailPagerView: View {
 
     /// The page the `TabView` is showing. Moves with the swipe (and with the toolbar buttons).
     @State private var index: Int
-    /// The page whose `SetDetailView` is actually instantiated — see the type doc. Starts equal to
-    /// `index` so the set the user tapped loads immediately, with no settle delay.
+    /// The page allowed to hit the network — see the type doc. Starts equal to `index` so the set
+    /// the user tapped loads immediately, with no settle delay.
     @State private var liveIndex: Int
 
-    /// How long a page has to stay put before it starts loading. Just longer than the paging
-    /// animation, so a deliberate one-set swipe barely shows the placeholder while a fast flick
-    /// through several never materialises the ones in between.
-    private static let settleDelay = Duration.milliseconds(350)
+    /// How long a page has to stay put before it starts *loading*. It gates requests, not content,
+    /// so it costs nothing visually: long enough that flicking through several sets doesn't fire a
+    /// round of requests for each one passed through.
+    private static let settleDelay = Duration.milliseconds(400)
 
     init(context: SetNavigationContext) {
         self.context = context
@@ -97,10 +110,21 @@ struct SetDetailPagerView: View {
         }
     }
 
+    /// True for the pages worth keeping built: the current one and its immediate neighbours, plus
+    /// whichever one is still live while `liveIndex` catches up after a fast flick. Everything else
+    /// is `Color.clear` — a several-hundred-set collection can't afford a built page each.
+    private func isMaterialised(_ pageIndex: Int) -> Bool {
+        abs(pageIndex - index) <= 1 || abs(pageIndex - liveIndex) <= 1
+    }
+
     @ViewBuilder
     private func page(at pageIndex: Int) -> some View {
         let entry = context.entries[pageIndex]
-        if pageIndex == liveIndex {
+        if isMaterialised(pageIndex) {
+            // One expression, not a placeholder/real-view branch: promoting a page to live only
+            // flips `loadsLiveData`, so SwiftUI keeps the very same view — nothing is torn down,
+            // rebuilt or re-laid-out under the user. The page slid in already looking finished
+            // (its whole content comes from the local cache) and simply stays there.
             SetDetailSheetContent(
                 legoSet: entry.legoSet,
                 // The local cache is the freshest thing we have here: the resolve flow writes the
@@ -111,52 +135,12 @@ struct SetDetailPagerView: View {
                 // Same contract as any other cache-first display in this app: show what's known
                 // instantly, reconcile silently against the live status once on screen.
                 reconcileOnAppear: true,
-                embedsNavigationChrome: false
+                embedsNavigationChrome: false,
+                loadsLiveData: pageIndex == liveIndex
             )
-        } else if abs(pageIndex - index) <= 1 {
-            inertPage(for: entry.legoSet)
         } else {
-            // Far-away pages exist only so the `TabView` has something to tag — building even a
-            // placeholder for all of them would mean hundreds of image loads on a large collection.
             Color.clear
         }
-    }
-
-    /// What a neighbouring page shows: the exact header `SetDetailView` opens with — hero image,
-    /// number, name, year and part count, all of which the snapshot already carries — so the swap
-    /// to the real view reads as the rest of the page filling in rather than a different screen.
-    /// Deliberately inert: no view model, no `.task`, and a cache-only image (`refreshesLive:
-    /// false`), so sliding past a set costs nothing.
-    private func inertPage(for legoSet: LegoSet) -> some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                CachedRemoteImage(url: URL(string: legoSet.setImgUrl ?? ""), refreshesLive: false) {
-                    Image(systemName: "shippingbox")
-                        .resizable()
-                        .scaledToFit()
-                        .foregroundStyle(.secondary)
-                        .padding(40)
-                }
-                .frame(height: 220)
-
-                VStack(spacing: 4) {
-                    Text(legoSet.setNum.baseSetNum)
-                        .font(.title2.bold())
-                    Text(legoSet.name)
-                        .font(.title3)
-                        .multilineTextAlignment(.center)
-                    Text("\(legoSet.year) · \(legoSet.numParts) pièces")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                ProgressView()
-                    .padding(.top, 24)
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity)
-        }
-        .scrollDisabled(true)
     }
 
     private func move(by offset: Int) {

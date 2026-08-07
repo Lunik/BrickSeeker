@@ -96,6 +96,8 @@ struct SetDetailSheetContent: View {
     var pendingPriceScanEvent: ScanEvent?
     /// See `SetDetailView.embedsNavigationChrome` — `false` when the pager owns the nav bar.
     var embedsNavigationChrome: Bool = true
+    /// See `SetDetailView.loadsLiveData` — `false` for a pager page held ready one swipe away.
+    var loadsLiveData: Bool = true
 
     var body: some View {
         let cached = LocalRepository(modelContext: modelContext).cachedSet(setNum: legoSet.setNum)
@@ -109,7 +111,8 @@ struct SetDetailSheetContent: View {
             reconcileOnAppear: reconcileOnAppear,
             isOfflineResult: isOfflineResult,
             pendingPriceScanEvent: pendingPriceScanEvent,
-            embedsNavigationChrome: embedsNavigationChrome
+            embedsNavigationChrome: embedsNavigationChrome,
+            loadsLiveData: loadsLiveData
         )
     }
 }
