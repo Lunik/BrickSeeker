@@ -82,6 +82,11 @@ struct SetDetailView: View {
 
     private let reconcileOnAppear: Bool
     private let isOfflineResult: Bool
+    /// `false` only when `SetDetailPagerView` hosts this view as one page of a swipeable sequence
+    /// (#239): the pager owns the `NavigationStack`, the title and the "Fermer" button, so the bar
+    /// stays put while the pages slide underneath it instead of sliding along with them. Every
+    /// other presenter gets the self-contained view it always had.
+    private let embedsNavigationChrome: Bool
     /// Only used by `setsContainingMinifigSection` (issue #178) — a plain repository call kept
     /// at the View level, same as `scanHistorySection`'s direct `LocalRepository` reads just
     /// below, rather than growing `SetDetailViewModel` for a section unrelated to its existing
@@ -97,7 +102,8 @@ struct SetDetailView: View {
         initialIsInWishlist: Bool = false,
         reconcileOnAppear: Bool = false,
         isOfflineResult: Bool = false,
-        pendingPriceScanEvent: ScanEvent? = nil
+        pendingPriceScanEvent: ScanEvent? = nil,
+        embedsNavigationChrome: Bool = true
     ) {
         _viewModel = State(initialValue: SetDetailViewModel(
             legoSet: legoSet,
@@ -115,6 +121,7 @@ struct SetDetailView: View {
         _priceScanEventForPrompt = State(initialValue: pendingPriceScanEvent)
         self.reconcileOnAppear = reconcileOnAppear
         self.isOfflineResult = isOfflineResult
+        self.embedsNavigationChrome = embedsNavigationChrome
     }
 
     private var isMinifig: Bool { viewModel.legoSet.setNum.isMinifig }
@@ -130,208 +137,17 @@ struct SetDetailView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    CachedRemoteImage(url: URL(string: viewModel.legoSet.setImgUrl ?? ""), refreshesLive: true) {
-                        Image(systemName: "shippingbox")
-                            .resizable()
-                            .scaledToFit()
-                            .foregroundStyle(.secondary)
-                            .padding(40)
-                    }
-                    .frame(height: 220)
-
-                    VStack(spacing: 4) {
-                        Text(viewModel.legoSet.setNum.baseSetNum)
-                            .font(.title2.bold())
-                        Text(viewModel.legoSet.name)
-                            .font(.title3)
-                            .multilineTextAlignment(.center)
-                        Text("\(viewModel.legoSet.year) · \(viewModel.legoSet.numParts) pièces")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if isOfflineResult {
-                        Label("Résultat hors-ligne — identification depuis le catalogue embarqué", systemImage: "wifi.slash")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    // Shown whatever the Réglages toggle says (#224): this sheet is only ever
-                    // reached by an explicit action — a scan, a manual entry, a row tap — and
-                    // hiding what the user just pointed the camera at would be the confusing
-                    // outcome. The label explains why the same item is missing from the
-                    // suggestion lists instead of leaving that unexplained.
-                    // `!isMinifig` matters: a minifig has no theme of its own, so
-                    // `OfflineMinifigCatalogStore` borrows one from a set it appears in — and for
-                    // a figure sold in a magnet set or a watch that borrowed theme lands inside
-                    // "Gear", which badged Chewbacca as a derived product (seen on device).
-                    if !isMinifig, let kind = NonSetFilter.shared.kind(themeId: viewModel.legoSet.themeId) {
-                        nonSetBadge(for: kind)
-                    }
-
-                    statusBadge
-
-                    quantityRow
-
-                    wishlistRow
-
-                    priceAlertRow
-
-                    valuationCard
-
-                    priceSection
-
-                    priceHistoryChart
-
-                    scanHistorySection
-
-                    setsContainingMinifigSection
-
-                    minifigsInSetSection
-
-                    similarSetsSection
-
-                    if viewModel.isLoading {
-                        ProgressView()
-                    }
-
-                    if let errorMessage = viewModel.errorMessage {
-                        DismissibleErrorLabel(message: errorMessage) {
-                            viewModel.errorMessage = nil
-                        }
-                    }
-
-                    actionButtons
-
-                    // `.subheadline` + vertical padding (not the previous bare `.footnote` text,
-                    // a ~16 pt tap target) and a trailing "opens in browser" icon on each (#150) —
-                    // both leave the app, which nothing on screen used to signal before the tap.
-                    HStack(spacing: 24) {
-                        if let url = rebrickableURL {
-                            Link(destination: url) {
-                                HStack(spacing: 4) {
-                                    Text("Voir sur Rebrickable")
-                                    ExternalLinkIcon()
-                                }
-                            }
-                            .font(.subheadline)
-                        }
-                        // lego.com has no building-instructions page for a minifig (issue #173) —
-                        // only shown for a real set.
-                        if !isMinifig, let url = LegoStoreRepository.instructionsUrl(setNum: viewModel.legoSet.setNum) {
-                            Link(destination: url) {
-                                HStack(spacing: 4) {
-                                    Text("Notice de montage")
-                                    ExternalLinkIcon()
-                                }
-                            }
-                            .font(.subheadline)
-                        }
-                    }
-                    .padding(.vertical, 6)
-                }
-                .padding(16)
+        // The `NavigationStack` is conditional, not the whole view: `SetDetailPagerView` provides
+        // one of its own around the whole pager (#239) so the nav bar doesn't slide with the pages.
+        // Everything below — including the nested `.sheet`s and the `.toolbar` — is identical
+        // either way; a `.toolbar` declared on a descendant resolves against whichever stack is
+        // above it.
+        Group {
+            if embedsNavigationChrome {
+                NavigationStack { content }
+            } else {
+                content
             }
-            .overlay(alignment: .bottomTrailing) {
-                if !viewModel.isInCollection, priceScanEventForPrompt != nil {
-                    storePriceCheckFAB
-                }
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    // Just closes the sheet (#153) — it used to also unconditionally call an
-                    // `onScanAgain` closure that reset the presenting `ScannerViewModel` back to
-                    // `.scanning`, worded and modeled as "resume the camera" even when this sheet
-                    // was opened from History/Collection/Wishlist/Statistics (`.listReopen`),
-                    // where there's no camera to resume. `dismiss()` alone already flips the
-                    // presenter's `isPresented` binding to `false`, and `LookupResultSheetsModifier`
-                    // already resets that same view model's state from its binding's `set` — the
-                    // one place that actually knows what dismissal should mean for a given
-                    // presenter, rather than this view guessing via a second, redundant call.
-                    Button("Fermer") {
-                        dismiss()
-                    }
-                }
-            }
-            .sheet(isPresented: $showSettings) {
-                SettingsView()
-            }
-            .sheet(isPresented: $showScanMap) {
-                ScanMapView(setNum: viewModel.legoSet.setNum)
-            }
-            .sheet(isPresented: $showListPicker) {
-                ListPickerView { listId, listName in
-                    Task { await viewModel.addToList(listId: listId, listName: listName) }
-                }
-            }
-            .sheet(isPresented: $showMoveListPicker) {
-                ListPickerView(
-                    excludeListId: {
-                        if case .inCollection(let userSet) = viewModel.collectionStatus { return userSet.listId }
-                        return nil
-                    }()
-                ) { listId, listName in
-                    Task { await viewModel.moveToList(toListId: listId, toListName: listName) }
-                }
-            }
-            .alert("Retirer de la collection ?", isPresented: $showRemoveConfirmation) {
-                Button("Retirer", role: .destructive) {
-                    Task { await viewModel.removeFromCollection() }
-                }
-                Button("Annuler", role: .cancel) {}
-            }
-            .alert(
-                "Supprimer ce scan ?",
-                isPresented: Binding(
-                    get: { scanEventPendingDeletion != nil },
-                    set: { if !$0 { scanEventPendingDeletion = nil } }
-                )
-            ) {
-                Button("Supprimer", role: .destructive) {
-                    if let event = scanEventPendingDeletion {
-                        LocalRepository(modelContext: modelContext).deleteScanEvent(event)
-                    }
-                }
-                Button("Annuler", role: .cancel) {}
-            }
-            .sheet(isPresented: $showPricePrompt) {
-                ScanPriceEntryView(
-                    setNum: viewModel.legoSet.setNum,
-                    setName: viewModel.legoSet.name,
-                    referencePriceEUR: viewModel.storePrice?.amount,
-                    referenceCurrency: viewModel.storePrice?.currency ?? "EUR",
-                    quotes: viewModel.priceQuotes,
-                    priceText: $priceInputText,
-                    onSave: savePricePrompt
-                )
-            }
-            .sheet(isPresented: $showPriceAlertSheet, onDismiss: reloadPriceAlerts) {
-                PriceAlertEntryView(
-                    setNum: viewModel.legoSet.setNum,
-                    setName: viewModel.legoSet.name,
-                    setImgUrl: viewModel.legoSet.setImgUrl,
-                    storePriceEUR: viewModel.storePrice?.amount,
-                    quotes: viewModel.priceQuotes
-                )
-            }
-            .sheet(isPresented: $showPaidPricePrompt) {
-                ScanPriceEntryView(
-                    setNum: viewModel.legoSet.setNum,
-                    setName: viewModel.legoSet.name,
-                    referencePriceEUR: viewModel.storePrice?.amount,
-                    referenceCurrency: viewModel.storePrice?.currency ?? "EUR",
-                    quotes: viewModel.priceQuotes,
-                    priceText: $paidPriceInputText,
-                    purpose: .paidPrice,
-                    onSave: savePaidPrice
-                )
-            }
-            .toast($viewModel.toastMessage)
-            // Nested, not the presenter's shared instance — see `relatedSetLookupViewModel`'s doc.
-            .lookupResultSheets(for: relatedSetLookupViewModel)
         }
         .onChange(of: viewModel.collectionStatus) { _, _ in
             syncCache()
@@ -373,6 +189,216 @@ struct SetDetailView: View {
         .task {
             await loadSimilarSetsIfNeeded()
         }
+    }
+
+    private var content: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                CachedRemoteImage(url: URL(string: viewModel.legoSet.setImgUrl ?? ""), refreshesLive: true) {
+                    Image(systemName: "shippingbox")
+                        .resizable()
+                        .scaledToFit()
+                        .foregroundStyle(.secondary)
+                        .padding(40)
+                }
+                .frame(height: 220)
+
+                VStack(spacing: 4) {
+                    Text(viewModel.legoSet.setNum.baseSetNum)
+                        .font(.title2.bold())
+                    Text(viewModel.legoSet.name)
+                        .font(.title3)
+                        .multilineTextAlignment(.center)
+                    Text("\(viewModel.legoSet.year) · \(viewModel.legoSet.numParts) pièces")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                if isOfflineResult {
+                    Label("Résultat hors-ligne — identification depuis le catalogue embarqué", systemImage: "wifi.slash")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                // Shown whatever the Réglages toggle says (#224): this sheet is only ever
+                // reached by an explicit action — a scan, a manual entry, a row tap — and
+                // hiding what the user just pointed the camera at would be the confusing
+                // outcome. The label explains why the same item is missing from the
+                // suggestion lists instead of leaving that unexplained.
+                // `!isMinifig` matters: a minifig has no theme of its own, so
+                // `OfflineMinifigCatalogStore` borrows one from a set it appears in — and for
+                // a figure sold in a magnet set or a watch that borrowed theme lands inside
+                // "Gear", which badged Chewbacca as a derived product (seen on device).
+                if !isMinifig, let kind = NonSetFilter.shared.kind(themeId: viewModel.legoSet.themeId) {
+                    nonSetBadge(for: kind)
+                }
+
+                statusBadge
+
+                quantityRow
+
+                wishlistRow
+
+                priceAlertRow
+
+                valuationCard
+
+                priceSection
+
+                priceHistoryChart
+
+                scanHistorySection
+
+                setsContainingMinifigSection
+
+                minifigsInSetSection
+
+                similarSetsSection
+
+                if viewModel.isLoading {
+                    ProgressView()
+                }
+
+                if let errorMessage = viewModel.errorMessage {
+                    DismissibleErrorLabel(message: errorMessage) {
+                        viewModel.errorMessage = nil
+                    }
+                }
+
+                actionButtons
+
+                // `.subheadline` + vertical padding (not the previous bare `.footnote` text,
+                // a ~16 pt tap target) and a trailing "opens in browser" icon on each (#150) —
+                // both leave the app, which nothing on screen used to signal before the tap.
+                HStack(spacing: 24) {
+                    if let url = rebrickableURL {
+                        Link(destination: url) {
+                            HStack(spacing: 4) {
+                                Text("Voir sur Rebrickable")
+                                ExternalLinkIcon()
+                            }
+                        }
+                        .font(.subheadline)
+                    }
+                    // lego.com has no building-instructions page for a minifig (issue #173) —
+                    // only shown for a real set.
+                    if !isMinifig, let url = LegoStoreRepository.instructionsUrl(setNum: viewModel.legoSet.setNum) {
+                        Link(destination: url) {
+                            HStack(spacing: 4) {
+                                Text("Notice de montage")
+                                ExternalLinkIcon()
+                            }
+                        }
+                        .font(.subheadline)
+                    }
+                }
+                .padding(.vertical, 6)
+            }
+            .padding(16)
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if !viewModel.isInCollection, priceScanEventForPrompt != nil {
+                storePriceCheckFAB
+            }
+        }
+        .toolbar {
+            // Omitted when the pager owns the chrome (#239) — it declares the one "Fermer"
+            // button for the whole sequence, so pages don't each contribute a duplicate.
+            if embedsNavigationChrome {
+                ToolbarItem(placement: .topBarTrailing) {
+                    // Just closes the sheet (#153) — it used to also unconditionally call an
+                    // `onScanAgain` closure that reset the presenting `ScannerViewModel` back to
+                    // `.scanning`, worded and modeled as "resume the camera" even when this sheet
+                    // was opened from History/Collection/Wishlist/Statistics (`.listReopen`),
+                    // where there's no camera to resume. `dismiss()` alone already flips the
+                    // presenter's `isPresented` binding to `false`, and `LookupResultSheetsModifier`
+                    // already resets that same view model's state from its binding's `set` — the
+                    // one place that actually knows what dismissal should mean for a given
+                    // presenter, rather than this view guessing via a second, redundant call.
+                    Button("Fermer") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+        }
+        .sheet(isPresented: $showScanMap) {
+            ScanMapView(setNum: viewModel.legoSet.setNum)
+        }
+        .sheet(isPresented: $showListPicker) {
+            ListPickerView { listId, listName in
+                Task { await viewModel.addToList(listId: listId, listName: listName) }
+            }
+        }
+        .sheet(isPresented: $showMoveListPicker) {
+            ListPickerView(
+                excludeListId: {
+                    if case .inCollection(let userSet) = viewModel.collectionStatus { return userSet.listId }
+                    return nil
+                }()
+            ) { listId, listName in
+                Task { await viewModel.moveToList(toListId: listId, toListName: listName) }
+            }
+        }
+        .alert("Retirer de la collection ?", isPresented: $showRemoveConfirmation) {
+            Button("Retirer", role: .destructive) {
+                Task { await viewModel.removeFromCollection() }
+            }
+            Button("Annuler", role: .cancel) {}
+        }
+        .alert(
+            "Supprimer ce scan ?",
+            isPresented: Binding(
+                get: { scanEventPendingDeletion != nil },
+                set: { if !$0 { scanEventPendingDeletion = nil } }
+            )
+        ) {
+            Button("Supprimer", role: .destructive) {
+                if let event = scanEventPendingDeletion {
+                    LocalRepository(modelContext: modelContext).deleteScanEvent(event)
+                }
+            }
+            Button("Annuler", role: .cancel) {}
+        }
+        .sheet(isPresented: $showPricePrompt) {
+            ScanPriceEntryView(
+                setNum: viewModel.legoSet.setNum,
+                setName: viewModel.legoSet.name,
+                referencePriceEUR: viewModel.storePrice?.amount,
+                referenceCurrency: viewModel.storePrice?.currency ?? "EUR",
+                quotes: viewModel.priceQuotes,
+                priceText: $priceInputText,
+                onSave: savePricePrompt
+            )
+        }
+        .sheet(isPresented: $showPriceAlertSheet, onDismiss: reloadPriceAlerts) {
+            PriceAlertEntryView(
+                setNum: viewModel.legoSet.setNum,
+                setName: viewModel.legoSet.name,
+                setImgUrl: viewModel.legoSet.setImgUrl,
+                storePriceEUR: viewModel.storePrice?.amount,
+                quotes: viewModel.priceQuotes
+            )
+        }
+        .sheet(isPresented: $showPaidPricePrompt) {
+            ScanPriceEntryView(
+                setNum: viewModel.legoSet.setNum,
+                setName: viewModel.legoSet.name,
+                referencePriceEUR: viewModel.storePrice?.amount,
+                referenceCurrency: viewModel.storePrice?.currency ?? "EUR",
+                quotes: viewModel.priceQuotes,
+                priceText: $paidPriceInputText,
+                purpose: .paidPrice,
+                onSave: savePaidPrice
+            )
+        }
+        .toast($viewModel.toastMessage)
+        // Nested, not the presenter's shared instance — see `relatedSetLookupViewModel`'s doc.
+        // No navigation context is passed: a set opened from one of this sheet's own galleries
+        // stacks a *second* sheet, and paging inside it was deliberately left out (#239).
+        .lookupResultSheets(for: relatedSetLookupViewModel)
     }
 
     /// Opens the "quel prix as-tu vu ?" sheet — only ever on an explicit FAB tap, never

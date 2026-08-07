@@ -155,9 +155,30 @@ struct MinifigGalleryView: View {
     /// fires immediately with complete data (image/name/theme/year/parts) instead of falling
     /// through to a live `/lego/sets/…` lookup, which 404s for a `fig-…` id (see `AGENTS.md`'s
     /// note on this exact case).
-    private func openDetail(for entry: OfflineMinifigCatalogStore.MinifigCatalogEntry, ownedQuantity: Int) {
+    ///
+    /// `displayed` is the tile order currently on the grid — it becomes the sheet's swipe context
+    /// (#239). Each entry carries its owned quantity, which the sheet couldn't otherwise recover:
+    /// a minifig's ownership is derived here from the sets containing it, and until this screen
+    /// caches it, most catalogue entries have no `CachedSet` row at all.
+    private func openDetail(
+        for entry: OfflineMinifigCatalogStore.MinifigCatalogEntry,
+        ownedQuantity: Int,
+        in displayed: [OfflineMinifigCatalogStore.MinifigCatalogEntry],
+        ownedQuantityByFigNum: [String: Int]
+    ) {
         cacheEntryIfNeeded(entry, ownedQuantity: ownedQuantity)
-        lookupViewModel.lookupSetNumber(entry.figNum, source: .listReopen)
+        let context = SetNavigationContext(
+            entries: displayed.map { candidate in
+                let quantity = ownedQuantityByFigNum[candidate.figNum, default: 0]
+                return SetNavigationContext.Entry(
+                    legoSet: syntheticLegoSet(for: candidate),
+                    isInCollection: quantity > 0,
+                    quantity: max(quantity, 1)
+                )
+            },
+            startingAt: entry.figNum
+        )
+        lookupViewModel.lookupSetNumber(entry.figNum, source: .listReopen, navigationContext: context)
     }
 
     private func toggleSelection(_ figNum: String) {
@@ -290,7 +311,16 @@ struct MinifigGalleryView: View {
                                             if isSelecting {
                                                 toggleSelection(entry.figNum)
                                             } else {
-                                                openDetail(for: entry, ownedQuantity: ownedQuantityByFigNum[entry.figNum, default: 0])
+                                                // `windowed`, not `filteredSorted` — the swipe
+                                                // follows what's actually paged onto the grid
+                                                // (#239), the same scope "Tout sélectionner" uses
+                                                // against this ~15 000-entry catalogue.
+                                                openDetail(
+                                                    for: entry,
+                                                    ownedQuantity: ownedQuantityByFigNum[entry.figNum, default: 0],
+                                                    in: windowed,
+                                                    ownedQuantityByFigNum: ownedQuantityByFigNum
+                                                )
                                             }
                                         } label: {
                                             MinifigThumbnailView(

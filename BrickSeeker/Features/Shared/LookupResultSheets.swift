@@ -22,18 +22,23 @@ struct LookupResultSheetsModifier: ViewModifier {
         content
             .sheet(isPresented: setDetailBinding) {
                 if case .found(let legoSet, let collectionStatus) = viewModel.state {
-                    let cached = LocalRepository(modelContext: modelContext).cachedSet(setNum: legoSet.setNum)
-                    SetDetailView(
-                        legoSet: legoSet,
-                        collectionStatus: collectionStatus,
-                        initialListName: viewModel.lastFoundWasFromCache ? cached?.currentListName : nil,
-                        initialStorePrice: cached?.storePriceEUR.map { StorePrice(amount: $0, currency: "EUR", availability: cached?.storeAvailability) },
-                        initialStorePriceFetchedAt: cached?.storePriceFetchedAt,
-                        initialIsInWishlist: cached?.isInWishlist ?? false,
-                        reconcileOnAppear: viewModel.lastFoundWasFromCache,
-                        isOfflineResult: viewModel.lastFoundWasOffline,
-                        pendingPriceScanEvent: viewModel.pendingPriceScanEvent
-                    )
+                    // A list/gallery screen supplied the list it was showing (#239) → the sheet
+                    // pages between its sets. Everything else — camera, manual entry, photo
+                    // import, price-drop notification, the galleries inside the sheet itself —
+                    // has no list behind it and gets the single, unpaged sheet it always had.
+                    if let navigationContext = viewModel.navigationContext,
+                       navigationContext.entries[navigationContext.startIndex].legoSet.setNum == legoSet.setNum {
+                        SetDetailPagerView(context: navigationContext)
+                    } else {
+                        SetDetailSheetContent(
+                            legoSet: legoSet,
+                            collectionStatus: collectionStatus,
+                            seedsListNameFromCache: viewModel.lastFoundWasFromCache,
+                            reconcileOnAppear: viewModel.lastFoundWasFromCache,
+                            isOfflineResult: viewModel.lastFoundWasOffline,
+                            pendingPriceScanEvent: viewModel.pendingPriceScanEvent
+                        )
+                    }
                 }
             }
             .sheet(isPresented: ambiguousBinding) {
@@ -70,6 +75,41 @@ struct LookupResultSheetsModifier: ViewModifier {
             set: { newValue in
                 if !newValue { viewModel.resumeScanning() }
             }
+        )
+    }
+}
+
+/// One set's `SetDetailView`, seeded with what the local cache already knows about it (its list
+/// name, the last lego.com price fetched for it, whether it's on the gift list). Used both by
+/// `LookupResultSheetsModifier` for a lone result and by `SetDetailPagerView` for each of its
+/// pages (#239), so the two can't drift apart on what a freshly-opened sheet starts with.
+struct SetDetailSheetContent: View {
+    @Environment(\.modelContext) private var modelContext
+
+    let legoSet: LegoSet
+    let collectionStatus: CollectionStatus
+    /// `false` only for a result resolved live rather than from the cache — the cached list name
+    /// would then be the stale half of an answer the network is about to give in full.
+    var seedsListNameFromCache: Bool = true
+    var reconcileOnAppear: Bool = false
+    var isOfflineResult: Bool = false
+    var pendingPriceScanEvent: ScanEvent?
+    /// See `SetDetailView.embedsNavigationChrome` — `false` when the pager owns the nav bar.
+    var embedsNavigationChrome: Bool = true
+
+    var body: some View {
+        let cached = LocalRepository(modelContext: modelContext).cachedSet(setNum: legoSet.setNum)
+        SetDetailView(
+            legoSet: legoSet,
+            collectionStatus: collectionStatus,
+            initialListName: seedsListNameFromCache ? cached?.currentListName : nil,
+            initialStorePrice: cached?.storePriceEUR.map { StorePrice(amount: $0, currency: "EUR", availability: cached?.storeAvailability) },
+            initialStorePriceFetchedAt: cached?.storePriceFetchedAt,
+            initialIsInWishlist: cached?.isInWishlist ?? false,
+            reconcileOnAppear: reconcileOnAppear,
+            isOfflineResult: isOfflineResult,
+            pendingPriceScanEvent: pendingPriceScanEvent,
+            embedsNavigationChrome: embedsNavigationChrome
         )
     }
 }

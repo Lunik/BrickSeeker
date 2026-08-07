@@ -23,7 +23,9 @@ struct HistoryView: View {
     // .toggleWishlist()`) — needed for the "Ajouter à ma liste de cadeaux" bulk action (#166).
     var bricksetRepository: BricksetRepositoryProtocol = BricksetRepository()
     let lookupViewModel: ScannerViewModel
-    let onSelect: (String) -> Void
+    /// The `SetNavigationContext` is the list the sheet should let the user swipe through (#239) —
+    /// `nil` from the scan map, where the tapped pin has no list order behind it.
+    let onSelect: (String, SetNavigationContext?) -> Void
 
     /// Memoized from `allCachedPrices` (see the `.onChange` in `body`) — rebuilding this
     /// dictionary was previously a computed property re-run on every keystroke in the search bar.
@@ -208,7 +210,9 @@ struct HistoryView: View {
                             // like Collection/Wishlist (#141) — Home's own (ungated)
                             // lookupResultSheets presents SetDetail on top of the whole stack, so
                             // closing it reveals History again, not Home.
-                            onSelect(cached.setNum)
+                            // `filteredSets`, not `cachedSets` — the sheet's swipe must follow the
+                            // order actually on screen, filters and sort included (#239).
+                            onSelect(cached.setNum, SetNavigationContext(cachedSets: filteredSets, startingAt: cached.setNum))
                         }
                     } label: {
                         HStack(spacing: 12) {
@@ -399,7 +403,8 @@ struct HistoryView: View {
                 // as BatchSessionSummaryView).
                 showScanMap = false
                 DispatchQueue.main.async {
-                    onSelect(setNum)
+                    // No context: a pin on the map isn't a position in an ordered list (#239).
+                    onSelect(setNum, nil)
                 }
             }
         }
