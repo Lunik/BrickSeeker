@@ -174,6 +174,16 @@ the unpaged sheet is exactly what it was.
   galleries plus the sheet's own interactive dismissal; UIKit paging arbitrates all of that
   natively (innermost scroll view wins, so a swipe on a gallery scrolls the gallery) and gives the
   no-wrap rubber-band at both ends for free.
+- **Nothing that changes mid-gesture may drive which pages are built.** A paged `TabView` writes
+  its `selection` binding the moment a drag passes the halfway point — *with the finger still
+  down*. `SetDetailPagerView.isMaterialised` is therefore keyed on `liveIndex` (which only moves
+  once a page has settled), **never on `index`**, and keeps a radius of 2 so the window never has
+  to move during a gesture. Keyed on `index` it did, and the symptom was exactly the one a user
+  reports as "ça saute": measured on a slow drag, the content tracked the finger 1:1 to 57%, then
+  snapped back 32 pt in 11 ms and jumped straight to the next set 1.7 s before the finger lifted.
+  Verified fixed the same way — the content now tracks out to 57% and all the way back, 40 pt of
+  content per 40 pt of finger. If you touch this, re-measure; the effect is invisible in
+  screenshots (see "measuring animations" below).
 - **The split is rendering vs *loading*, not placeholder vs real view.** Opening a set fires the
   lego.com WKWebView Cloudflare scrape plus BrickLink/Amazon/Cdiscount and the minifig/similar-set
   galleries, and a paged `TabView` keeps neighbours alive — so neighbours build the **complete**
@@ -190,6 +200,26 @@ the unpaged sheet is exactly what it was.
   decoration: a gesture alone isn't an affordance, and VoiceOver eats horizontal swipes (#143).
 - Second-level sheets (a set opened from "sets similaires"/"minifigs de ce set", via
   `relatedSetLookupViewModel`) deliberately get **no** context — decided when #239 was scoped.
+
+### Measuring an animation (screenshots can't see these bugs)
+
+Two #239 regressions were invisible to screenshots and to "looks fine to me" — both were only
+found by measuring. The Simulator MCP tools serialise, so you cannot screenshot mid-gesture; record
+instead, and note that `simctl` records **only frames that changed**, so `ffmpeg`'s `fps=` filter
+duplicates frames and will fake a "frozen" screen. Use `-fps_mode passthrough`.
+
+```bash
+nohup xcrun simctl io <UDID> recordVideo --codec h264 --force /tmp/drag.mov & disown
+#  ...drive the gesture with the simulator MCP's `touch_path` (dt_ms per point — it does hold
+#     the touch down, so an out-and-back path proves whether tracking is real)...
+pkill -INT -f "simctl io.*recordVideo"
+ffmpeg -i /tmp/drag.mov -vf "crop=iw:300:0:800,scale=402:24,format=gray" -fps_mode passthrough f%03d.pgm
+```
+
+Scaling width to 402 makes 1 px = 1 pt, so cross-correlating each frame's column profile against
+frame 0 gives the content offset in points per frame. Against a known `touch_path`, that says
+directly whether the view tracks the finger 1:1, where it stops, and whether anything moves while
+the finger is still down.
 
 ## Auth model — read this before touching anything credential-related
 

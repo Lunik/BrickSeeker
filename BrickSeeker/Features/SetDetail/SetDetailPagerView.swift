@@ -41,13 +41,17 @@ struct SetDetailPagerView: View {
 
     /// The page the `TabView` is showing. Moves with the swipe (and with the toolbar buttons).
     @State private var index: Int
-    /// The page allowed to hit the network — see the type doc. Starts equal to `index` so the set
-    /// the user tapped loads immediately, with no settle delay.
+    /// The settled page: the one allowed to hit the network, and the centre of the built window.
+    /// Starts equal to `index` so the set the user tapped loads immediately, with no settle delay.
+    ///
+    /// The point of it being *separate* from `index` is that it does not move during a gesture —
+    /// see `isMaterialised`, which is why the window is keyed on this and not on `index`.
     @State private var liveIndex: Int
 
-    /// How long a page has to stay put before it starts *loading*. It gates requests, not content,
-    /// so it costs nothing visually: long enough that flicking through several sets doesn't fire a
-    /// round of requests for each one passed through.
+    /// How long a page has to stay put before it counts as settled. It gates requests and the
+    /// window, never the content, so it costs nothing visually: long enough that flicking through
+    /// several sets doesn't fire a round of requests for each one passed through, and that a
+    /// gesture is comfortably over before the window is allowed to move.
     private static let settleDelay = Duration.milliseconds(400)
 
     init(context: SetNavigationContext) {
@@ -110,11 +114,21 @@ struct SetDetailPagerView: View {
         }
     }
 
-    /// True for the pages worth keeping built: the current one and its immediate neighbours, plus
-    /// whichever one is still live while `liveIndex` catches up after a fast flick. Everything else
-    /// is `Color.clear` — a several-hundred-set collection can't afford a built page each.
+    /// How far either side of `liveIndex` pages stay built. Two, not one, so that whichever way the
+    /// next swipe goes — and the one after it, before `settleDelay` has elapsed — the page is
+    /// already there and this window never has to move mid-gesture. Everything outside is
+    /// `Color.clear`: a several-hundred-set collection can't afford a built page each.
+    private static let materialisedRadius = 2
+
+    /// **Deliberately keyed on `liveIndex`, never on `index`.** A paged `TabView` writes its
+    /// selection binding the moment a drag passes the halfway point, *while the finger is still
+    /// down* — so a window keyed on `index` would shift mid-gesture, tearing one page down and
+    /// building another underneath the user. Measured, on a slow drag: the content tracked the
+    /// finger 1:1 to 57%, then snapped back 32 pt in 11 ms and jumped straight to the next set,
+    /// 1.7 s before the finger lifted. That was the "ça saute". `liveIndex` only moves once a page
+    /// has settled, so during a gesture this window is frozen and nothing is rebuilt.
     private func isMaterialised(_ pageIndex: Int) -> Bool {
-        abs(pageIndex - index) <= 1 || abs(pageIndex - liveIndex) <= 1
+        abs(pageIndex - liveIndex) <= Self.materialisedRadius
     }
 
     @ViewBuilder
