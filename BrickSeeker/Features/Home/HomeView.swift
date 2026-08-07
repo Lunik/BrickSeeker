@@ -93,8 +93,8 @@ struct HomeView: View {
                 case .wishlist:
                     WishlistView(lookupViewModel: lookupViewModel)
                 case .history:
-                    HistoryView(lookupViewModel: lookupViewModel) { setNum in
-                        lookupViewModel.lookupSetNumber(setNum, source: .listReopen)
+                    HistoryView(lookupViewModel: lookupViewModel) { setNum, navigationContext in
+                        lookupViewModel.lookupSetNumber(setNum, source: .listReopen, navigationContext: navigationContext)
                     }
                 case .minifigs:
                     MinifigGalleryView(lookupViewModel: lookupViewModel)

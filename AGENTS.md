@@ -152,6 +152,40 @@ below already exists and has a paid-for reason to be the way it is.
   (`MinifigThumbnailView` / `MinifigGalleryView`); everything else above (filter-state singleton,
   `.searchable`, filter sheet, multi-select, context menu, cache-only prices) is identical.
 
+## SetDetail paging — the sheet swipes through the list it came from (#239)
+
+Opening a set from a list/gallery gives the sheet a `SetNavigationContext`
+(`Features/Shared/SetNavigationContext.swift`), and `LookupResultSheetsModifier` then presents
+`SetDetailPagerView` instead of a lone `SetDetailView`. Without a context (camera scan, manual
+entry, photo import, price-drop notification, the galleries *inside* the sheet) nothing changes —
+the unpaged sheet is exactly what it was.
+
+- **The context is a snapshot of the array the screen was displaying**, i.e. `filteredSets` /
+  `windowed`, never the raw data source: "suivant" only means anything in the current filter/sort
+  order. Snapshotting (value-type `LegoSet`s, not a live query) is also what keeps the sequence
+  stable while the sheet is open — removing the current set from the collection is an action the
+  sheet itself offers, and it must not renumber what's under the user's finger.
+- **Entries carry their own collection status**, not just a `set_num`. `NewSetsView`/
+  `MinifigGalleryView` browse catalogues where most items have no `CachedSet` row until they're
+  opened once (their `ensureCached`/`cacheEntryIfNeeded`) — re-deriving "owned" from the cache
+  alone showed an owned minifig as missing. `SetDetailPagerView.ensureCachedRow` creates the
+  missing row on activation for the same reason those two screens do it on tap.
+- **A paged `TabView`, not a `DragGesture`.** The sheet already has three horizontal `ScrollView`
+  galleries plus the sheet's own interactive dismissal; UIKit paging arbitrates all of that
+  natively (innermost scroll view wins, so a swipe on a gallery scrolls the gallery) and gives the
+  no-wrap rubber-band at both ends for free.
+- **Only one page is ever a real `SetDetailView`.** Opening a set fires the lego.com WKWebView
+  Cloudflare scrape plus BrickLink/Amazon/Cdiscount and the minifig/similar-set galleries — a
+  normal paged `TabView` keeps neighbours alive and would double all of it per swipe. Neighbours
+  render `inertPage` (the same header, cache-only image, no `.task`), far pages render
+  `Color.clear`, and `liveIndex` trails `index` by 350 ms so a fast flick loads only the set the
+  user stopped on. **Don't "simplify" this to rendering every page.**
+- `SetDetailView.embedsNavigationChrome: false` drops its own `NavigationStack`/"Fermer" so the
+  pager owns the bar and it stays put while pages slide. The prev/next toolbar buttons are not
+  decoration: a gesture alone isn't an affordance, and VoiceOver eats horizontal swipes (#143).
+- Second-level sheets (a set opened from "sets similaires"/"minifigs de ce set", via
+  `relatedSetLookupViewModel`) deliberately get **no** context — decided when #239 was scoped.
+
 ## Auth model — read this before touching anything credential-related
 
 There is **no login screen**. The app opens directly into the scanner. Two independent pieces

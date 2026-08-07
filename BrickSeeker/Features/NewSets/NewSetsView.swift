@@ -128,11 +128,29 @@ struct NewSetsView: View {
     /// `wasScanned` — see `ScannerViewModel.LookupSource`). Seeds the `CachedSet` row first so the
     /// cache-hit path shows it instantly from already-known offline data instead of waiting on a
     /// live round-trip.
-    private func openDetail(for legoSet: LegoSet) {
+    /// `displayed` is the array the screen is showing, in its current filter/sort order — it
+    /// becomes the sheet's swipe context (#239). Each entry carries the locally-known collection
+    /// status the same way `ensureCached` preserves it, since most catalogue entries have no
+    /// `CachedSet` row for the sheet to read one from.
+    private func openDetail(for legoSet: LegoSet, in displayed: [LegoSet]) {
         if let localRepository = lookupViewModel.localRepository {
             ensureCached(legoSet, using: localRepository)
         }
-        lookupViewModel.lookupSetNumber(legoSet.setNum, source: .listReopen)
+        let cachedByNum = cachedByNum
+        let context = SetNavigationContext(
+            entries: displayed.map { set in
+                let existing = cachedByNum[set.setNum]
+                return SetNavigationContext.Entry(
+                    legoSet: set,
+                    isInCollection: existing?.isInCollection ?? false,
+                    listId: existing?.currentListId,
+                    listName: existing?.currentListName,
+                    quantity: existing?.quantity ?? 1
+                )
+            },
+            startingAt: legoSet.setNum
+        )
+        lookupViewModel.lookupSetNumber(legoSet.setNum, source: .listReopen, navigationContext: context)
     }
 
     /// Reuses `CollectionPriceUpdater.shared`, same singleton every other list screen's bulk/
@@ -273,7 +291,10 @@ struct NewSetsView: View {
                             if isSelecting {
                                 toggleSelection(legoSet.setNum)
                             } else {
-                                openDetail(for: legoSet)
+                                // `windowed`, not `filteredSorted` — the swipe follows what's
+                                // actually paged onto the screen (#239), the same scope
+                                // "Tout sélectionner" uses against this catalogue-sized dataset.
+                                openDetail(for: legoSet, in: windowed)
                             }
                         } label: {
                             HStack(spacing: 12) {

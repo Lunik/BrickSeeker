@@ -226,7 +226,14 @@ struct CollectionView: View {
                             if isSelecting {
                                 toggleSelection(cached.setNum)
                             } else {
-                                lookupViewModel.lookupSetNumber(cached.setNum, source: .listReopen)
+                                // `filteredSets`, not `viewModel.cachedSets` — the sheet's swipe
+                                // must follow the order actually on screen, filters and sort
+                                // included (#239).
+                                lookupViewModel.lookupSetNumber(
+                                    cached.setNum,
+                                    source: .listReopen,
+                                    navigationContext: SetNavigationContext(cachedSets: filteredSets, startingAt: cached.setNum)
+                                )
                             }
                         } label: {
                             HStack(spacing: 12) {

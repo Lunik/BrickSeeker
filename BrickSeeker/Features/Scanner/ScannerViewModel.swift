@@ -84,6 +84,12 @@ final class ScannerViewModel {
     /// "quel prix as-tu vu ?" for that scan. Nil for lookups, live reconciles, and re-views of a
     /// set already captured earlier in the same batch session.
     var pendingPriceScanEvent: ScanEvent?
+    /// The list the current `.found` state was opened from (#239), when there is one — read once by
+    /// `LookupResultSheetsModifier` to decide whether the sheet pages between sets. Only ever
+    /// non-nil for a `lookupSetNumber` call that explicitly passed one (the list/gallery screens);
+    /// every other path — camera, photo import, ambiguity resolution — goes through `resolveSet`'s
+    /// default `nil` and therefore clears it.
+    private(set) var navigationContext: SetNavigationContext?
 
     /// "Mode lot": while true, a resolved candidate is added to `batchSession` instead of opening
     /// the blocking detail sheet, so the camera keeps running across several sets — see issue #13.
@@ -171,13 +177,17 @@ final class ScannerViewModel {
         candidateDetected = false
         candidateThumbnail = nil
         pendingPriceScanEvent = nil
+        navigationContext = nil
     }
 
-    func lookupSetNumber(_ setNum: String, source: LookupSource) {
+    /// `navigationContext` (#239) is the list this lookup came from, when it came from one — pass
+    /// the array the screen is *displaying* (filtered/sorted), not its raw data source. Omit it
+    /// (the default) for anything that isn't a list: the detail sheet then has no previous/next.
+    func lookupSetNumber(_ setNum: String, source: LookupSource, navigationContext: SetNavigationContext? = nil) {
         cancelAllDebounceTasks()
         isPaused = true
         Task {
-            await resolveSet(setNum, source: source)
+            await resolveSet(setNum, source: source, navigationContext: navigationContext)
         }
     }
 
@@ -366,10 +376,18 @@ final class ScannerViewModel {
     }
 
     @MainActor
-    private func resolveSet(_ setNum: String, source: LookupSource) async {
+    private func resolveSet(
+        _ setNum: String,
+        source: LookupSource,
+        navigationContext: SetNavigationContext? = nil
+    ) async {
         let bypassBatch = forceDetailNextResolution
         forceDetailNextResolution = false
         lastLookupSource = source
+        // Assigned unconditionally, before anything can present a sheet: this is the one funnel
+        // every resolution goes through, so defaulting the parameter to `nil` is also what clears
+        // a stale context left by a previous list-originated lookup (#239).
+        self.navigationContext = navigationContext
         // While batch-capturing, identification of one box must not hold up the next: don't pause
         // frame processing for it, so several boxes can resolve concurrently in the background.
         // Outside batch mode (or when explicitly opening a detail sheet) the camera still pauses
